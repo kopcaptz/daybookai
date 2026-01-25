@@ -27,6 +27,7 @@ const ReceiptScanPage = lazy(() => import("./pages/ReceiptScanPage"));
 const ReceiptReviewPage = lazy(() => import("./pages/ReceiptReviewPage"));
 const ReceiptDetailPage = lazy(() => import("./pages/ReceiptDetailPage"));
 const ReceiptAnalyticsPage = lazy(() => import("./pages/ReceiptAnalyticsPage"));
+const ReminderDetailPage = lazy(() => import("./pages/ReminderDetailPage"));
 
 const queryClient = new QueryClient();
 
@@ -70,6 +71,7 @@ function AppContent() {
               <Route path="/receipts/review" element={<ReceiptReviewPage />} />
               <Route path="/receipts/analytics" element={<ReceiptAnalyticsPage />} />
               <Route path="/receipts/:id" element={<ReceiptDetailPage />} />
+              <Route path="/reminder/:id" element={<ReminderDetailPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
