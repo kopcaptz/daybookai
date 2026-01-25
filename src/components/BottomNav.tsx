@@ -1,14 +1,20 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Scroll, Calendar, Search, Hexagon, Settings, Feather } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
+import { getPendingReminderCount } from '@/lib/db';
+import { Badge } from '@/components/ui/badge';
 
 export function BottomNav() {
   const location = useLocation();
   const { t } = useI18n();
+  
+  // Reactive pending reminders count for badge
+  const pendingCount = useLiveQuery(() => getPendingReminderCount(), [], 0);
 
   const navItems = [
-    { path: '/', icon: Scroll, label: t('nav.today') },
+    { path: '/', icon: Scroll, label: t('nav.today'), showBadge: true },
     { path: '/calendar', icon: Calendar, label: t('nav.calendar') },
     { path: '/new', icon: Feather, label: '', isCenter: true },
     { path: '/chat', icon: Hexagon, label: t('nav.chat') },
@@ -73,6 +79,15 @@ export function BottomNav() {
                   )} 
                   strokeWidth={1.5}
                 />
+                {/* Pending reminders badge */}
+                {item.showBadge && pendingCount > 0 && (
+                  <Badge 
+                    variant="destructive" 
+                    className="absolute -top-2 -right-3 h-4 min-w-4 px-1 text-[10px] font-bold flex items-center justify-center"
+                  >
+                    {pendingCount > 9 ? '9+' : pendingCount}
+                  </Badge>
+                )}
                 {isActive && (
                   <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-5 h-0.5 rounded-full bg-gradient-to-r from-cyber-sigil/60 via-cyber-sigil to-cyber-sigil/60" />
                 )}
