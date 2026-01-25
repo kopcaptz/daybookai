@@ -4,11 +4,14 @@
  */
 
 import { useState } from 'react';
-import { format } from 'date-fns';
-import { Bell, X } from 'lucide-react';
+import { format, setHours, setMinutes } from 'date-fns';
+import { ru, enUS } from 'date-fns/locale';
+import { Bell, CalendarIcon, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Sheet,
   SheetContent,
@@ -33,8 +36,34 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
   const { language } = useI18n();
   
   const [actionText, setActionText] = useState('');
-  const [selectedTime, setSelectedTime] = useState<SuggestedTime>('tomorrow_morning');
+  const [selectedChip, setSelectedChip] = useState<SuggestedTime | null>('tomorrow_morning');
   const [isCreating, setIsCreating] = useState(false);
+  
+  // Custom date/time picker state
+  const [customDate, setCustomDate] = useState<Date | undefined>();
+  const [customTime, setCustomTime] = useState('09:00');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  // Compute final dueAt from either chip or custom selection
+  const computeDueAt = (): number | null => {
+    if (customDate) {
+      const [hours, minutes] = customTime.split(':').map(Number);
+      const timestamp = setMinutes(setHours(customDate, hours), minutes).getTime();
+      
+      // Validate not in the past
+      if (timestamp <= Date.now()) {
+        return null; // Will trigger validation error
+      }
+      return timestamp;
+    }
+    
+    if (selectedChip) {
+      const chip = TIME_CHIPS.find(c => c.id === selectedChip);
+      return chip?.getTimestamp() ?? Date.now() + 24 * 60 * 60 * 1000;
+    }
+    
+    return null;
+  };
   
   const handleCreate = async () => {
     if (!actionText.trim()) {
@@ -42,12 +71,16 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
       return;
     }
     
+    const dueAt = computeDueAt();
+    if (dueAt === null) {
+      toast.error(language === 'ru' ? 'Выберите время в будущем' : 'Select a future time');
+      return;
+    }
+    
     setIsCreating(true);
     
     try {
       const today = format(new Date(), 'yyyy-MM-dd');
-      const chip = TIME_CHIPS.find(c => c.id === selectedTime);
-      const dueAt = chip?.getTimestamp() ?? Date.now() + 24 * 60 * 60 * 1000;
       
       // Step 1: Create minimal diary entry to serve as source
       const entryId = await createEntry({
@@ -73,9 +106,7 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
       toast.success(language === 'ru' ? 'Напоминание создано' : 'Reminder created');
       
       // Reset and close
-      setActionText('');
-      setSelectedTime('tomorrow_morning');
-      onOpenChange(false);
+      resetAndClose();
     } catch (error) {
       console.error('Failed to create reminder:', error);
       toast.error(language === 'ru' ? 'Ошибка создания' : 'Creation failed');
@@ -84,11 +115,42 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
     }
   };
   
-  const handleClose = () => {
+  const resetAndClose = () => {
     setActionText('');
-    setSelectedTime('tomorrow_morning');
+    setSelectedChip('tomorrow_morning');
+    setCustomDate(undefined);
+    setCustomTime('09:00');
     onOpenChange(false);
   };
+  
+  // Handle chip selection (clears custom)
+  const handleChipSelect = (chipId: SuggestedTime) => {
+    setSelectedChip(chipId);
+    setCustomDate(undefined);
+  };
+  
+  // Handle custom date selection (clears chip)
+  const handleCustomDateSelect = (date: Date | undefined) => {
+    setCustomDate(date);
+    if (date) {
+      setSelectedChip(null);
+    }
+  };
+  
+  // Format custom selection for display
+  const formatCustomSelection = (): string | null => {
+    if (!customDate) return null;
+    const dateStr = format(customDate, language === 'ru' ? 'd MMM' : 'MMM d', { 
+      locale: language === 'ru' ? ru : enUS 
+    });
+    const timeStr = customTime;
+    return language === 'ru' 
+      ? `Выбрано: ${dateStr}, ${timeStr}`
+      : `Selected: ${dateStr}, ${timeStr}`;
+  };
+  
+  const customSelectionLabel = formatCustomSelection();
+  const hasSelection = selectedChip !== null || customDate !== undefined;
   
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -131,11 +193,11 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
                 <button
                   key={chip.id}
                   type="button"
-                  onClick={() => setSelectedTime(chip.id)}
+                  onClick={() => handleChipSelect(chip.id)}
                   disabled={isCreating}
                   className={cn(
                     "px-3 py-1.5 text-sm rounded-full border transition-colors",
-                    selectedTime === chip.id
+                    selectedChip === chip.id
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-background border-border hover:bg-accent hover:text-accent-foreground"
                   )}
@@ -144,13 +206,63 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
                 </button>
               ))}
             </div>
+            
+            {/* Custom time picker */}
+            <div className="flex items-center gap-2 pt-2">
+              <Popover open={showDatePicker} onOpenChange={setShowDatePicker}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isCreating}
+                    className={cn(
+                      "flex-1 justify-start text-left font-normal",
+                      customDate && "border-primary"
+                    )}
+                  >
+                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    {customDate 
+                      ? format(customDate, 'dd.MM.yyyy')
+                      : (language === 'ru' ? 'Выбрать время…' : 'Pick time…')}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={customDate}
+                    onSelect={handleCustomDateSelect}
+                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+              
+              {customDate && (
+                <Input
+                  type="time"
+                  value={customTime}
+                  onChange={(e) => setCustomTime(e.target.value)}
+                  disabled={isCreating}
+                  className="w-24"
+                />
+              )}
+            </div>
+            
+            {/* Custom selection label */}
+            {customSelectionLabel && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {customSelectionLabel}
+              </p>
+            )}
           </div>
           
           {/* Action buttons */}
           <div className="flex gap-2 pt-2">
             <Button
               variant="outline"
-              onClick={handleClose}
+              onClick={resetAndClose}
               disabled={isCreating}
               className="flex-1"
             >
@@ -158,7 +270,7 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
             </Button>
             <Button
               onClick={handleCreate}
-              disabled={isCreating || !actionText.trim()}
+              disabled={isCreating || !actionText.trim() || !hasSelection}
               className="flex-1"
             >
               {isCreating 
