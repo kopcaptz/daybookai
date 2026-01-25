@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Check, Clock, X, ChevronDown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Check, Clock, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -29,6 +30,7 @@ interface ReminderCardProps {
 }
 
 export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps) {
+  const navigate = useNavigate();
   const { language } = useI18n();
   const [isActioning, setIsActioning] = useState(false);
   
@@ -66,15 +68,22 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
   const dueLabel = formatDueDate(reminder.dueAt, language);
   const overdueStyle = variant === 'overdue';
   
+  const handleCardClick = () => {
+    if (reminder.id) {
+      navigate(`/reminder/${reminder.id}`);
+    }
+  };
+  
   return (
     <div 
       className={cn(
-        'group relative panel-glass p-3 transition-all',
+        'group relative panel-glass p-3 transition-all cursor-pointer hover:ring-1',
         overdueStyle 
-          ? 'border-destructive/40 bg-destructive/5' 
-          : 'border-amber-500/30 bg-amber-500/5',
+          ? 'border-destructive/40 bg-destructive/5 hover:ring-destructive/50' 
+          : 'border-amber-500/30 bg-amber-500/5 hover:ring-amber-500/50',
         isActioning && 'opacity-50 pointer-events-none'
       )}
+      onClick={handleCardClick}
     >
       {/* Content */}
       <div className="flex items-start gap-3">
@@ -103,8 +112,7 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
           </p>
         </div>
         
-        {/* Actions */}
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           {/* Done */}
           <Button
             variant="ghost"
