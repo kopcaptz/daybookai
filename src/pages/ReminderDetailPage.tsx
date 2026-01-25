@@ -78,6 +78,9 @@ export default function ReminderDetailPage() {
   // Source text collapsible
   const [sourceOpen, setSourceOpen] = useState(false);
   
+  // Skip next confirmation dialog
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  
   // Load reminder
   useEffect(() => {
     async function load() {
@@ -439,20 +442,59 @@ export default function ReminderDetailPage() {
             
             {/* Skip next toggle (only for repeating) */}
             {reminder.repeat && reminder.repeat !== 'none' && (
-              <button
-                type="button"
-                onClick={() => handleSkipNextChange(!reminder.skipNext)}
-                disabled={isSaving}
-                className={cn(
-                  "flex items-center gap-2 px-3 py-2 text-sm rounded-lg border transition-colors w-full",
-                  reminder.skipNext
-                    ? "bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400"
-                    : "bg-background border-border hover:bg-accent"
-                )}
-              >
-                <SkipForward className="h-4 w-4" />
-                {language === 'ru' ? 'Пропустить следующее' : 'Skip next'}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (reminder.skipNext) {
+                      // Disable without confirmation
+                      handleSkipNextChange(false);
+                    } else {
+                      // Show confirmation dialog
+                      setShowSkipConfirm(true);
+                    }
+                  }}
+                  disabled={isSaving}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 text-sm rounded-lg border transition-colors w-full",
+                    reminder.skipNext
+                      ? "bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400"
+                      : "bg-background border-border hover:bg-accent"
+                  )}
+                >
+                  <SkipForward className="h-4 w-4" />
+                  {language === 'ru' ? 'Пропустить следующее' : 'Skip next'}
+                </button>
+                
+                {/* Skip next confirmation dialog */}
+                <AlertDialog open={showSkipConfirm} onOpenChange={setShowSkipConfirm}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        {language === 'ru' ? 'Пропустить следующее?' : 'Skip next?'}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {language === 'ru' 
+                          ? 'Следующее повторение не будет создано при выполнении.'
+                          : 'The next occurrence will not be created when you complete this reminder.'}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>
+                        {language === 'ru' ? 'Отмена' : 'Cancel'}
+                      </AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={() => {
+                          handleSkipNextChange(true);
+                          setShowSkipConfirm(false);
+                        }}
+                      >
+                        {language === 'ru' ? 'Подтвердить' : 'Confirm'}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
             )}
             
             {/* Next occurrence preview */}
