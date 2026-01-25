@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ChevronDown, AlertCircle, Clock } from 'lucide-react';
+import { ChevronDown, AlertCircle, Clock, CalendarClock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { db, type Reminder } from '@/lib/db';
-import { getStartOfTodayTimestamp, getEndOfTodayTimestamp } from '@/lib/reminderUtils';
+import { 
+  getStartOfTodayTimestamp, 
+  getEndOfTodayTimestamp,
+  getUpcoming24hEndTimestamp 
+} from '@/lib/reminderUtils';
 import { ReminderCard } from './ReminderCard';
 import {
   Collapsible,
@@ -58,20 +62,46 @@ function useTodayReminders() {
   }, []);
 }
 
+/**
+ * Query upcoming reminders (due within 24h after today ends, pending, not snoozed).
+ */
+function useUpcomingReminders() {
+  return useLiveQuery(async () => {
+    const endOfToday = getEndOfTodayTimestamp();
+    const upcoming24hEnd = getUpcoming24hEndTimestamp();
+    const now = Date.now();
+    
+    const reminders = await db.reminders
+      .where('status')
+      .equals('pending')
+      .filter(r => 
+        r.dueAt > endOfToday && 
+        r.dueAt <= upcoming24hEnd &&
+        (!r.snoozedUntil || r.snoozedUntil <= now)
+      )
+      .toArray();
+    
+    // Sort by dueAt ascending (soonest first)
+    return reminders.sort((a, b) => a.dueAt - b.dueAt);
+  }, []);
+}
+
 export function RemindersSection() {
-  const { t, language } = useI18n();
+  const { language } = useI18n();
   const overdue = useOverdueReminders();
   const today = useTodayReminders();
+  const upcoming = useUpcomingReminders();
   
   const [overdueOpen, setOverdueOpen] = useState(true);
+  const [upcomingOpen, setUpcomingOpen] = useState(true);
   
   // Loading state
-  if (overdue === undefined || today === undefined) {
+  if (overdue === undefined || today === undefined || upcoming === undefined) {
     return null;
   }
   
   // Nothing to show
-  if (overdue.length === 0 && today.length === 0) {
+  if (overdue.length === 0 && today.length === 0 && upcoming.length === 0) {
     return null;
   }
   
@@ -133,6 +163,39 @@ export function RemindersSection() {
             ))}
           </div>
         </div>
+      )}
+      
+      {/* Upcoming section - collapsible with cyan accent */}
+      {upcoming.length > 0 && (
+        <Collapsible open={upcomingOpen} onOpenChange={setUpcomingOpen}>
+          <CollapsibleTrigger className="flex items-center gap-2 w-full group">
+            <div className="flex items-center gap-2 flex-1">
+              <CalendarClock className="h-4 w-4 text-cyan-500" />
+              <span className="text-sm font-medium text-cyan-600 dark:text-cyan-400">
+                {language === 'ru' ? 'Скоро' : 'Upcoming'}
+              </span>
+              <span className="text-xs text-cyan-600/70 dark:text-cyan-400/70 bg-cyan-500/10 px-1.5 py-0.5 rounded">
+                {upcoming.length}
+              </span>
+            </div>
+            <ChevronDown 
+              className={cn(
+                'h-4 w-4 text-cyan-500/60 transition-transform',
+                upcomingOpen && 'rotate-180'
+              )} 
+            />
+          </CollapsibleTrigger>
+          
+          <CollapsibleContent className="mt-2 space-y-2">
+            {upcoming.map((reminder) => (
+              <ReminderCard
+                key={reminder.id}
+                reminder={reminder}
+                variant="upcoming"
+              />
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
       )}
     </div>
   );
