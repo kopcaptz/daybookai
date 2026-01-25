@@ -1,9 +1,9 @@
 /**
  * Utility functions for reminder time calculations.
- * MVP: Smart defaults for time chip presets.
+ * MVP: Smart defaults for time chip presets and snooze options.
  */
 
-import { format, addDays, setHours, setMinutes, nextSaturday, nextMonday, isAfter, startOfDay, endOfDay } from 'date-fns';
+import { format, addDays, addHours, setHours, setMinutes, nextSaturday, nextMonday, startOfDay, endOfDay } from 'date-fns';
 import type { SuggestedTime } from './reminderDetection';
 
 /**
@@ -17,6 +17,20 @@ export interface TimeChip {
 }
 
 /**
+ * Snooze preset configuration.
+ */
+export interface SnoozePreset {
+  id: string;
+  labelRu: string;
+  labelEn: string;
+  getTimestamp: () => number;
+}
+
+// ============================================
+// INTERNAL TIMESTAMP GENERATORS
+// ============================================
+
+/**
  * Get timestamp for "Later today" - 18:00 or +3h if after 15:00.
  */
 function getLaterTodayTimestamp(): number {
@@ -24,11 +38,9 @@ function getLaterTodayTimestamp(): number {
   const hours = now.getHours();
   
   if (hours >= 15) {
-    // After 15:00, add 3 hours
-    return now.getTime() + 3 * 60 * 60 * 1000;
+    return addHours(now, 3).getTime();
   }
   
-  // Default to 18:00 today
   return setMinutes(setHours(now, 18), 0).getTime();
 }
 
@@ -57,6 +69,17 @@ function getNextWeekTimestamp(): number {
   const monday = nextMonday(now);
   return setMinutes(setHours(monday, 9), 0).getTime();
 }
+
+/**
+ * Get timestamp for "1 hour from now".
+ */
+function getOneHourTimestamp(): number {
+  return addHours(new Date(), 1).getTime();
+}
+
+// ============================================
+// TIME CHIP PRESETS (for creating reminders)
+// ============================================
 
 /**
  * All available time chip presets.
@@ -102,6 +125,46 @@ export function getTimestampForPreset(preset: SuggestedTime): number {
   const chip = getTimeChip(preset);
   return chip ? chip.getTimestamp() : getTomorrowMorningTimestamp();
 }
+
+// ============================================
+// SNOOZE PRESETS (for postponing reminders)
+// ============================================
+
+/**
+ * Available snooze presets.
+ */
+export const SNOOZE_PRESETS: SnoozePreset[] = [
+  {
+    id: '1h',
+    labelRu: 'Через 1 час',
+    labelEn: 'In 1 hour',
+    getTimestamp: getOneHourTimestamp,
+  },
+  {
+    id: 'later_today',
+    labelRu: 'Позже сегодня',
+    labelEn: 'Later today',
+    getTimestamp: getLaterTodayTimestamp,
+  },
+  {
+    id: 'tomorrow_9am',
+    labelRu: 'Завтра в 9:00',
+    labelEn: 'Tomorrow 9am',
+    getTimestamp: getTomorrowMorningTimestamp,
+  },
+];
+
+/**
+ * Get snooze timestamp by preset ID.
+ */
+export function getSnoozeTimestamp(presetId: string): number {
+  const preset = SNOOZE_PRESETS.find(p => p.id === presetId);
+  return preset ? preset.getTimestamp() : getOneHourTimestamp();
+}
+
+// ============================================
+// DATE/TIME HELPERS
+// ============================================
 
 /**
  * Check if a reminder is overdue (due before start of today).
