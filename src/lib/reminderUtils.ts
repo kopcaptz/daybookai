@@ -225,3 +225,10 @@ export function getEndOfTodayTimestamp(): number {
 export function getStartOfTodayTimestamp(): number {
   return startOfDay(new Date()).getTime();
 }
+
+/**
+ * Get end of upcoming 24h window (endOfToday + 24 hours).
+ */
+export function getUpcoming24hEndTimestamp(): number {
+  return endOfDay(new Date()).getTime() + 24 * 60 * 60 * 1000;
+}

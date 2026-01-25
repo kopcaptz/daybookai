@@ -26,7 +26,7 @@ import { reconcileReminderNotifications } from '@/lib/reminderNotifications';
 
 interface ReminderCardProps {
   reminder: Reminder;
-  variant: 'overdue' | 'today';
+  variant: 'overdue' | 'today' | 'upcoming';
   onAction?: () => void;
 }
 
@@ -70,7 +70,9 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
   };
   
   const dueLabel = formatDueDate(reminder.dueAt, language);
-  const overdueStyle = variant === 'overdue';
+  const isOverdueVariant = variant === 'overdue';
+  const isTodayVariant = variant === 'today';
+  const isUpcomingVariant = variant === 'upcoming';
   
   const handleCardClick = () => {
     if (reminder.id) {
@@ -82,9 +84,9 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
     <div 
       className={cn(
         'group relative panel-glass p-3 transition-all cursor-pointer hover:ring-1',
-        overdueStyle 
-          ? 'border-destructive/40 bg-destructive/5 hover:ring-destructive/50' 
-          : 'border-amber-500/30 bg-amber-500/5 hover:ring-amber-500/50',
+        isOverdueVariant && 'border-destructive/40 bg-destructive/5 hover:ring-destructive/50',
+        isTodayVariant && 'border-amber-500/30 bg-amber-500/5 hover:ring-amber-500/50',
+        isUpcomingVariant && 'border-cyan-500/30 bg-cyan-500/5 hover:ring-cyan-500/50',
         isActioning && 'opacity-50 pointer-events-none'
       )}
       onClick={handleCardClick}
@@ -95,7 +97,9 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
         <div 
           className={cn(
             'mt-1 h-2 w-2 rounded-full flex-shrink-0',
-            overdueStyle ? 'bg-destructive animate-pulse' : 'bg-amber-500'
+            isOverdueVariant && 'bg-destructive animate-pulse',
+            isTodayVariant && 'bg-amber-500',
+            isUpcomingVariant && 'bg-cyan-500'
           )} 
         />
         
@@ -109,7 +113,9 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
           <p 
             className={cn(
               'text-xs mt-1',
-              overdueStyle ? 'text-destructive' : 'text-amber-600 dark:text-amber-400'
+              isOverdueVariant && 'text-destructive',
+              isTodayVariant && 'text-amber-600 dark:text-amber-400',
+              isUpcomingVariant && 'text-cyan-600 dark:text-cyan-400'
             )}
           >
             {dueLabel}
