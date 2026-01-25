@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bell, Check, Clock, X, Trash2, ChevronDown, CalendarIcon, Save } from 'lucide-react';
+import { ArrowLeft, Bell, Check, Clock, X, Trash2, ChevronDown, CalendarIcon, Save, FileText, ExternalLink } from 'lucide-react';
 import { format, setHours, setMinutes } from 'date-fns';
+import { ru, enUS } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,7 +32,9 @@ import { useI18n } from '@/lib/i18n';
 import { toast } from 'sonner';
 import {
   type Reminder,
+  type DiaryEntry,
   getReminderById,
+  getEntryById,
   updateReminderText,
   rescheduleReminder,
   markReminderDone,
@@ -53,6 +56,7 @@ export default function ReminderDetailPage() {
   const { language, t } = useI18n();
   
   const [reminder, setReminder] = useState<Reminder | null>(null);
+  const [sourceEntry, setSourceEntry] = useState<DiaryEntry | null | undefined>(undefined); // undefined = loading, null = not found
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   
@@ -98,6 +102,14 @@ export default function ReminderDetailPage() {
       const dueDate = new Date(found.dueAt);
       setSelectedDate(dueDate);
       setSelectedTime(format(dueDate, 'HH:mm'));
+      
+      // Load source entry if entryId exists
+      if (found.entryId) {
+        const entry = await getEntryById(found.entryId);
+        setSourceEntry(entry ?? null);
+      } else {
+        setSourceEntry(null);
+      }
       
       setLoading(false);
     }
@@ -390,6 +402,45 @@ export default function ReminderDetailPage() {
             </CollapsibleContent>
           </Card>
         </Collapsible>
+        
+        {/* Source diary entry */}
+        <Card className="panel-glass">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              {language === 'ru' ? 'Источник' : 'Source'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {sourceEntry === undefined ? (
+              <div className="h-12 animate-pulse rounded bg-muted" />
+            ) : sourceEntry === null ? (
+              <p className="text-sm text-muted-foreground italic">
+                {language === 'ru' ? 'Источник не найден' : 'Source not found'}
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  {format(new Date(sourceEntry.date), 'd MMMM yyyy', { locale: language === 'ru' ? ru : enUS })}
+                </p>
+                <p className="text-sm text-foreground/90 whitespace-pre-wrap">
+                  {sourceEntry.text.length > 150 
+                    ? sourceEntry.text.slice(0, 150).trim() + '…' 
+                    : sourceEntry.text}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/entry/${sourceEntry.id}`)}
+                  className="w-full"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  {language === 'ru' ? 'Открыть запись' : 'Open entry'}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
         
         {/* Quick actions */}
         <div className="grid grid-cols-3 gap-2 pt-4">
