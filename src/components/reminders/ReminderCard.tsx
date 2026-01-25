@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Clock, X } from 'lucide-react';
+import { Check, Clock, X, Repeat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -293,10 +293,15 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
           />
           
           <div className="flex-1 min-w-0">
-            {/* Action text */}
-            <p className="font-medium text-sm leading-snug break-words">
-              {reminder.actionText}
-            </p>
+            {/* Action text with repeat badge */}
+            <div className="flex items-start gap-1.5">
+              <p className="font-medium text-sm leading-snug break-words flex-1">
+                {reminder.actionText}
+              </p>
+              {isRepeating && (
+                <Repeat className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
+              )}
+            </div>
             
             {/* Due label */}
             <p 
