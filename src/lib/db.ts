@@ -184,6 +184,7 @@ export interface Reminder {
   status: ReminderStatus;
   snoozedUntil?: number;        // For snooze feature (timestamp)
   repeat: ReminderRepeat;       // Repeat schedule (default 'none')
+  skipNext?: boolean;           // Skip next occurrence (one-time skip)
   createdAt: number;
   updatedAt: number;
 }
@@ -316,6 +317,26 @@ class DaybookDatabase extends Dexie {
       return tx.table('reminders').toCollection().modify(reminder => {
         if (reminder.repeat === undefined) {
           reminder.repeat = 'none';
+        }
+      });
+    });
+
+    // Version 9: Add skipNext field to reminders for skip-next-occurrence feature
+    this.version(9).stores({
+      entries: '++id, date, mood, *tags, isPrivate, aiAllowed, createdAt, updatedAt',
+      attachments: '++id, entryId, kind, createdAt',
+      drafts: 'id, updatedAt',
+      biographies: 'date, status, generatedAt',
+      attachmentInsights: 'attachmentId, createdAt',
+      receipts: '++id, entryId, date, storeName, createdAt, updatedAt',
+      receiptItems: '++id, receiptId, category',
+      scanLogs: '++id, timestamp',
+      reminders: '++id, entryId, status, dueAt, createdAt',
+    }).upgrade(tx => {
+      // Add skipNext=false to existing reminders
+      return tx.table('reminders').toCollection().modify(reminder => {
+        if (reminder.skipNext === undefined) {
+          reminder.skipNext = false;
         }
       });
     });
@@ -888,6 +909,12 @@ export async function completeReminder(id: number): Promise<number | null> {
     return null;
   }
   
+  // If skipNext is true, reset it and don't create next occurrence
+  if (reminder.skipNext) {
+    await db.reminders.update(id, { skipNext: false, updatedAt: Date.now() });
+    return null;
+  }
+  
   // Compute next due date
   const nextDueAt = computeNextDueAt(reminder.dueAt, reminder.repeat);
   if (!nextDueAt) return null;
@@ -920,6 +947,13 @@ export async function completeReminder(id: number): Promise<number | null> {
  */
 export async function updateReminderRepeat(id: number, repeat: ReminderRepeat): Promise<void> {
   await db.reminders.update(id, { repeat, updatedAt: Date.now() });
+}
+
+/**
+ * Update reminder skipNext flag.
+ */
+export async function updateReminderSkipNext(id: number, skipNext: boolean): Promise<void> {
+  await db.reminders.update(id, { skipNext, updatedAt: Date.now() });
 }
 
 /**
