@@ -7,9 +7,26 @@
 import { showInAppNotification } from '@/components/NotificationBanner';
 
 // Check if we're running in Capacitor native
-function isCapacitorNative(): boolean {
+export function isCapacitorNative(): boolean {
   return typeof (window as any).Capacitor !== 'undefined' && 
          (window as any).Capacitor.isNativePlatform?.();
+}
+
+// Navigation callback for deep-links (set by App.tsx)
+let navigationCallback: ((path: string) => void) | null = null;
+
+export function setNavigationCallback(callback: (path: string) => void): void {
+  navigationCallback = callback;
+}
+
+function navigateToPath(path: string): void {
+  if (navigationCallback) {
+    navigationCallback(path);
+  } else {
+    // Fallback to history API if callback not set
+    window.history.pushState({}, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }
 }
 
 // Permission state for native notifications
@@ -256,9 +273,16 @@ export function initNotificationListeners(): void {
   import('@capacitor/local-notifications').then(({ LocalNotifications }) => {
     LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
       const data = action.notification.extra;
+      
+      // Handle reminder notification tap
+      if (data?.type === 'reminder' && data?.reminderId) {
+        navigateToPath(`/reminder/${data.reminderId}`);
+        return;
+      }
+      
+      // Handle other notifications with deepLink
       if (data?.deepLink) {
-        // Use history API to navigate without full reload
-        window.location.href = data.deepLink;
+        navigateToPath(data.deepLink);
       }
     });
   }).catch(() => {

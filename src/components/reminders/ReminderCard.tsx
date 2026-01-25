@@ -22,6 +22,7 @@ import {
   SNOOZE_PRESETS, 
   getSnoozeTimestamp 
 } from '@/lib/reminderUtils';
+import { reconcileReminderNotifications } from '@/lib/reminderNotifications';
 
 interface ReminderCardProps {
   reminder: Reminder;
@@ -38,6 +39,7 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
     setIsActioning(true);
     try {
       await markReminderDone(reminder.id!);
+      await reconcileReminderNotifications(language);
       onAction?.();
     } finally {
       setIsActioning(false);
@@ -48,6 +50,7 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
     setIsActioning(true);
     try {
       await dismissReminder(reminder.id!);
+      await reconcileReminderNotifications(language);
       onAction?.();
     } finally {
       setIsActioning(false);
@@ -59,6 +62,7 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
     try {
       const snoozedUntil = getSnoozeTimestamp(presetId);
       await snoozeReminder(reminder.id!, snoozedUntil);
+      await reconcileReminderNotifications(language);
       onAction?.();
     } finally {
       setIsActioning(false);

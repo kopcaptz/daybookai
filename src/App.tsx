@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { BottomNav } from "@/components/BottomNav";
 import { InstallPrompt } from "@/components/InstallPrompt";
@@ -11,7 +11,8 @@ import { PageTransition } from "@/components/PageTransition";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { GlobalAIPinDialog } from "@/components/GlobalAIPinDialog";
 import { I18nProvider } from "@/lib/i18n";
-import { initNotificationListeners } from "@/lib/notifications";
+import { initNotificationListeners, setNavigationCallback } from "@/lib/notifications";
+import { reconcileReminderNotifications } from "@/lib/reminderNotifications";
 
 // Lazy load pages to reduce initial bundle size
 const Today = lazy(() => import("./pages/Today"));
@@ -42,11 +43,20 @@ function PageLoader() {
 
 function AppContent() {
   const location = useLocation();
+  const navigate = useNavigate();
   
-  // Initialize notification listeners on mount
+  // Initialize notification listeners and navigation callback on mount
   useEffect(() => {
+    // Set navigation callback for deep-links (uses react-router navigate)
+    setNavigationCallback((path: string) => navigate(path));
+    
     initNotificationListeners();
-  }, []);
+    
+    // Reconcile reminder notifications on app start
+    // Get language from localStorage or default to 'ru'
+    const storedLang = localStorage.getItem('daybook-language') || 'ru';
+    reconcileReminderNotifications(storedLang as 'ru' | 'en');
+  }, [navigate]);
   
   // Hide bottom nav on entry editor and receipt pages
   const hideNav = location.pathname === '/new' || location.pathname.startsWith('/entry/') || location.pathname === '/receipts' || location.pathname.startsWith('/receipts/');

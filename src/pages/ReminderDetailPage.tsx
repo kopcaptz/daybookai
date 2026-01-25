@@ -45,6 +45,7 @@ import {
   SNOOZE_PRESETS,
   getSnoozeTimestamp,
 } from '@/lib/reminderUtils';
+import { reconcileReminderNotifications } from '@/lib/reminderNotifications';
 
 export default function ReminderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -137,6 +138,7 @@ export default function ReminderDetailPage() {
     setIsSaving(true);
     try {
       await rescheduleReminder(reminder.id, newDueAt);
+      await reconcileReminderNotifications(language);
       setReminder(prev => prev ? { ...prev, dueAt: newDueAt, snoozedUntil: undefined } : null);
       setShowDatePicker(false);
       toast.success(language === 'ru' ? 'Время изменено' : 'Rescheduled');
@@ -151,6 +153,7 @@ export default function ReminderDetailPage() {
   const handleDone = async () => {
     if (!reminder?.id) return;
     await markReminderDone(reminder.id);
+    await reconcileReminderNotifications(language);
     toast.success(language === 'ru' ? 'Выполнено!' : 'Done!');
     navigate('/');
   };
@@ -158,6 +161,7 @@ export default function ReminderDetailPage() {
   const handleDismiss = async () => {
     if (!reminder?.id) return;
     await dismissReminder(reminder.id);
+    await reconcileReminderNotifications(language);
     toast.success(language === 'ru' ? 'Отклонено' : 'Dismissed');
     navigate('/');
   };
@@ -166,6 +170,7 @@ export default function ReminderDetailPage() {
     if (!reminder?.id) return;
     const snoozedUntil = getSnoozeTimestamp(presetId);
     await snoozeReminder(reminder.id, snoozedUntil);
+    await reconcileReminderNotifications(language);
     toast.success(language === 'ru' ? 'Отложено' : 'Snoozed');
     navigate('/');
   };
@@ -173,6 +178,7 @@ export default function ReminderDetailPage() {
   const handleDelete = async () => {
     if (!reminder?.id) return;
     await deleteReminder(reminder.id);
+    await reconcileReminderNotifications(language);
     toast.success(language === 'ru' ? 'Удалено' : 'Deleted');
     navigate('/');
   };
