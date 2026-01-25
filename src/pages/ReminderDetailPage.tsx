@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bell, Check, Clock, X, Trash2, ChevronDown, CalendarIcon, Save, FileText, ExternalLink, Repeat } from 'lucide-react';
+import { ArrowLeft, Bell, Check, Clock, X, Trash2, ChevronDown, CalendarIcon, Save, FileText, ExternalLink, Repeat, SkipForward } from 'lucide-react';
 import { format, setHours, setMinutes } from 'date-fns';
 import { ru, enUS } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -43,6 +43,7 @@ import {
   snoozeReminder,
   deleteReminder,
   updateReminderRepeat,
+  updateReminderSkipNext,
 } from '@/lib/db';
 import {
   formatDueDate,
@@ -181,6 +182,19 @@ export default function ReminderDetailPage() {
       await updateReminderRepeat(reminder.id, newRepeat);
       setReminder(prev => prev ? { ...prev, repeat: newRepeat } : null);
       toast.success(language === 'ru' ? 'Сохранено' : 'Saved');
+    } catch (error) {
+      toast.error(language === 'ru' ? 'Ошибка' : 'Failed');
+    } finally {
+    setIsSaving(false);
+    }
+  };
+  
+  const handleSkipNextChange = async (skipNext: boolean) => {
+    if (!reminder?.id) return;
+    setIsSaving(true);
+    try {
+      await updateReminderSkipNext(reminder.id, skipNext);
+      setReminder(prev => prev ? { ...prev, skipNext } : null);
     } catch (error) {
       toast.error(language === 'ru' ? 'Ошибка' : 'Failed');
     } finally {
@@ -422,8 +436,36 @@ export default function ReminderDetailPage() {
                 </button>
               ))}
             </div>
+            
+            {/* Skip next toggle (only for repeating) */}
+            {reminder.repeat && reminder.repeat !== 'none' && (
+              <button
+                type="button"
+                onClick={() => handleSkipNextChange(!reminder.skipNext)}
+                disabled={isSaving}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 text-sm rounded-lg border transition-colors w-full",
+                  reminder.skipNext
+                    ? "bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400"
+                    : "bg-background border-border hover:bg-accent"
+                )}
+              >
+                <SkipForward className="h-4 w-4" />
+                {language === 'ru' ? 'Пропустить следующее' : 'Skip next'}
+              </button>
+            )}
+            
             {/* Next occurrence preview */}
             {reminder.repeat && reminder.repeat !== 'none' && (() => {
+              // If skipNext is true, show "skipped" message
+              if (reminder.skipNext) {
+                return (
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    {language === 'ru' ? 'Следующее: пропущено' : 'Next: skipped'}
+                  </p>
+                );
+              }
+              
               const nextDue = computeNextDueAt(reminder.dueAt, reminder.repeat);
               if (!nextDue) return null;
               const nextDate = new Date(nextDue);
