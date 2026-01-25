@@ -20,9 +20,12 @@ import {
   formatDueDate, 
   isOverdue, 
   SNOOZE_PRESETS, 
-  getSnoozeTimestamp 
+  getSnoozeTimestamp,
+  computeNextDueAt,
 } from '@/lib/reminderUtils';
 import { reconcileReminderNotifications } from '@/lib/reminderNotifications';
+import { format } from 'date-fns';
+import { ru, enUS } from 'date-fns/locale';
 
 interface ReminderCardProps {
   reminder: Reminder;
@@ -198,6 +201,13 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
   const isTodayVariant = variant === 'today';
   const isUpcomingVariant = variant === 'upcoming';
   
+  // Compute next occurrence for repeating reminders
+  const isRepeating = reminder.repeat && reminder.repeat !== 'none';
+  const nextDueAt = isRepeating ? computeNextDueAt(reminder.dueAt, reminder.repeat!) : null;
+  const nextLabel = nextDueAt 
+    ? format(new Date(nextDueAt), 'd MMM', { locale: language === 'ru' ? ru : enUS })
+    : null;
+  
   const handleCardClick = () => {
     // Don't navigate if swiping
     if (isSwiping || Math.abs(translateX) > 5) return;
@@ -299,6 +309,14 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
             >
               {dueLabel}
             </p>
+            
+            {/* Next occurrence for repeating reminders */}
+            {isRepeating && nextLabel && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {language === 'ru' ? 'Далее: ' : 'Next: '}
+                {nextLabel}
+              </p>
+            )}
           </div>
           
           <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
