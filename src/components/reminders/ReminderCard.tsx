@@ -34,6 +34,17 @@ interface ReminderCardProps {
 const TRIGGER_THRESHOLD = 80;
 const MAX_TRANSLATE = 120;
 
+// Haptic feedback helper (Web Vibration API)
+function vibrate(pattern: number | number[]) {
+  try {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      (navigator as Navigator).vibrate(pattern);
+    }
+  } catch {
+    // Silently fail if vibrate not supported
+  }
+}
+
 export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps) {
   const navigate = useNavigate();
   const { language } = useI18n();
@@ -47,7 +58,9 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
     startY: number;
     isTracking: boolean;
     isHorizontal: boolean | null;
-  }>({ startX: 0, startY: 0, isTracking: false, isHorizontal: null });
+    didHapticRight: boolean;
+    didHapticLeft: boolean;
+  }>({ startX: 0, startY: 0, isTracking: false, isHorizontal: null, didHapticRight: false, didHapticLeft: false });
   
   const handleDone = async () => {
     setIsActioning(true);
@@ -94,6 +107,8 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
       startY: e.clientY,
       isTracking: true,
       isHorizontal: null,
+      didHapticRight: false,
+      didHapticLeft: false,
     };
     setIsSwiping(false);
   }, [isActioning]);
@@ -125,12 +140,23 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
     const clampedX = Math.max(-MAX_TRANSLATE, Math.min(MAX_TRANSLATE, deltaX));
     setTranslateX(clampedX);
     setIsSwiping(true);
+    
+    // Haptic feedback when crossing threshold
+    if (clampedX >= TRIGGER_THRESHOLD && !ref.didHapticRight) {
+      ref.didHapticRight = true;
+      vibrate(10);
+    } else if (clampedX <= -TRIGGER_THRESHOLD && !ref.didHapticLeft) {
+      ref.didHapticLeft = true;
+      vibrate(10);
+    }
   }, [isActioning]);
   
   const handlePointerUp = useCallback(async () => {
     const ref = swipeRef.current;
     ref.isTracking = false;
     ref.isHorizontal = null;
+    ref.didHapticRight = false;
+    ref.didHapticLeft = false;
     
     if (!isSwiping || isActioning) {
       setTranslateX(0);
@@ -141,11 +167,13 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
     // Check if threshold reached
     if (translateX >= TRIGGER_THRESHOLD) {
       // Swipe right → Done
+      vibrate(20); // Confirm haptic
       setTranslateX(0);
       setIsSwiping(false);
       await handleDone();
     } else if (translateX <= -TRIGGER_THRESHOLD) {
       // Swipe left → Dismiss
+      vibrate(30); // Dismiss haptic
       setTranslateX(0);
       setIsSwiping(false);
       await handleDismiss();
@@ -159,6 +187,8 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
   const handlePointerCancel = useCallback(() => {
     swipeRef.current.isTracking = false;
     swipeRef.current.isHorizontal = null;
+    swipeRef.current.didHapticRight = false;
+    swipeRef.current.didHapticLeft = false;
     setTranslateX(0);
     setIsSwiping(false);
   }, []);
