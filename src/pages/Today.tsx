@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { format } from 'date-fns';
 import { ru, enUS } from 'date-fns/locale';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
 import { getEntriesByDate } from '@/lib/db';
 import { EntryCard } from '@/components/EntryCard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { BiographyDisplay } from '@/components/BiographyDisplay';
 import { BiographyPromptDialog } from '@/components/BiographyPromptDialog';
 import { RemindersSection } from '@/components/reminders/RemindersSection';
+import { QuickReminderSheet } from '@/components/reminders/QuickReminderSheet';
 import { useBiographyPrompts } from '@/hooks/useBiographyPrompts';
 import { getBiography, StoredBiography, getTodayDate } from '@/lib/biographyService';
 import { loadAISettings } from '@/lib/aiConfig';
@@ -26,6 +27,7 @@ function TodayContent() {
   const entries = useLiveQuery(() => getEntriesByDate(today), [today]);
   
   const [biography, setBiography] = useState<StoredBiography | undefined>();
+  const [quickReminderOpen, setQuickReminderOpen] = useState(false);
   const { prompt, isGenerating, generate, dismiss } = useBiographyPrompts();
   const aiSettings = loadAISettings();
   
@@ -77,16 +79,27 @@ function TodayContent() {
           </div>
         </div>
 
-        {/* Date and entry count */}
+        {/* Date, entry count, and quick reminder button */}
         <div className="mt-3 flex items-center justify-between">
-          <p className="text-sm capitalize text-muted-foreground">
-            {todayFormatted}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {entries.length === 0
-              ? t('today.noEntries')
-              : `${entries.length} ${getEntriesLabel(entries.length)}`}
-          </p>
+          <div>
+            <p className="text-sm capitalize text-muted-foreground">
+              {todayFormatted}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {entries.length === 0
+                ? t('today.noEntries')
+                : `${entries.length} ${getEntriesLabel(entries.length)}`}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setQuickReminderOpen(true)}
+            className="text-xs gap-1"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {language === 'ru' ? 'Напоминание' : 'Reminder'}
+          </Button>
         </div>
 
         {/* Rune divider */}
@@ -157,6 +170,12 @@ function TodayContent() {
           </div>
         )}
       </main>
+      
+      {/* Quick Reminder Sheet */}
+      <QuickReminderSheet
+        open={quickReminderOpen}
+        onOpenChange={setQuickReminderOpen}
+      />
     </div>
   );
 }
