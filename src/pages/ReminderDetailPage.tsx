@@ -50,6 +50,7 @@ import {
   SNOOZE_PRESETS,
   getSnoozeTimestamp,
   REPEAT_OPTIONS,
+  computeNextDueAt,
 } from '@/lib/reminderUtils';
 import { reconcileReminderNotifications } from '@/lib/reminderNotifications';
 
@@ -402,7 +403,7 @@ export default function ReminderDetailPage() {
               {language === 'ru' ? 'Повторять' : 'Repeat'}
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
+          <CardContent className="pt-0 space-y-3">
             <div className="flex flex-wrap gap-2">
               {REPEAT_OPTIONS.map((option) => (
                 <button
@@ -421,6 +422,19 @@ export default function ReminderDetailPage() {
                 </button>
               ))}
             </div>
+            {/* Next occurrence preview */}
+            {reminder.repeat && reminder.repeat !== 'none' && (() => {
+              const nextDue = computeNextDueAt(reminder.dueAt, reminder.repeat);
+              if (!nextDue) return null;
+              const nextDate = new Date(nextDue);
+              const nextLabel = format(nextDate, 'd MMM, HH:mm', { locale: language === 'ru' ? ru : enUS });
+              return (
+                <p className="text-sm text-muted-foreground">
+                  {language === 'ru' ? 'Следующее: ' : 'Next: '}
+                  <span className="text-foreground">{nextLabel}</span>
+                </p>
+              );
+            })()}
           </CardContent>
         </Card>
         
