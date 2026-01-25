@@ -8,6 +8,7 @@ import { EntryCard } from '@/components/EntryCard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { BiographyDisplay } from '@/components/BiographyDisplay';
 import { BiographyPromptDialog } from '@/components/BiographyPromptDialog';
+import { RemindersSection } from '@/components/reminders/RemindersSection';
 import { useBiographyPrompts } from '@/hooks/useBiographyPrompts';
 import { getBiography, StoredBiography, getTodayDate } from '@/lib/biographyService';
 import { loadAISettings } from '@/lib/aiConfig';
@@ -95,6 +96,9 @@ function TodayContent() {
       </header>
 
       <main className="px-4 pt-4">
+        {/* Gentle Nudges: Reminders Section */}
+        <RemindersSection />
+        
         {/* Biography Prompt Dialog */}
         <BiographyPromptDialog
           prompt={prompt}
