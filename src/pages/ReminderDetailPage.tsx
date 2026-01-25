@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bell, Check, Clock, X, Trash2, ChevronDown, CalendarIcon, Save, FileText, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Bell, Check, Clock, X, Trash2, ChevronDown, CalendarIcon, Save, FileText, ExternalLink, Repeat } from 'lucide-react';
 import { format, setHours, setMinutes } from 'date-fns';
 import { ru, enUS } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -33,20 +33,23 @@ import { toast } from 'sonner';
 import {
   type Reminder,
   type DiaryEntry,
+  type ReminderRepeat,
   getReminderById,
   getEntryById,
   updateReminderText,
   rescheduleReminder,
-  markReminderDone,
+  completeReminder,
   dismissReminder,
   snoozeReminder,
   deleteReminder,
+  updateReminderRepeat,
 } from '@/lib/db';
 import {
   formatDueDate,
   isOverdue,
   SNOOZE_PRESETS,
   getSnoozeTimestamp,
+  REPEAT_OPTIONS,
 } from '@/lib/reminderUtils';
 import { reconcileReminderNotifications } from '@/lib/reminderNotifications';
 
@@ -164,10 +167,24 @@ export default function ReminderDetailPage() {
   // Actions
   const handleDone = async () => {
     if (!reminder?.id) return;
-    await markReminderDone(reminder.id);
+    await completeReminder(reminder.id);
     await reconcileReminderNotifications(language);
     toast.success(language === 'ru' ? 'Выполнено!' : 'Done!');
     navigate('/');
+  };
+  
+  const handleRepeatChange = async (newRepeat: ReminderRepeat) => {
+    if (!reminder?.id) return;
+    setIsSaving(true);
+    try {
+      await updateReminderRepeat(reminder.id, newRepeat);
+      setReminder(prev => prev ? { ...prev, repeat: newRepeat } : null);
+      toast.success(language === 'ru' ? 'Сохранено' : 'Saved');
+    } catch (error) {
+      toast.error(language === 'ru' ? 'Ошибка' : 'Failed');
+    } finally {
+      setIsSaving(false);
+    }
   };
   
   const handleDismiss = async () => {
@@ -374,6 +391,36 @@ export default function ReminderDetailPage() {
               <Clock className="h-4 w-4 mr-2" />
               {language === 'ru' ? 'Изменить время' : 'Reschedule'}
             </Button>
+          </CardContent>
+        </Card>
+        
+        {/* Repeat setting */}
+        <Card className="panel-glass">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Repeat className="h-4 w-4" />
+              {language === 'ru' ? 'Повторять' : 'Repeat'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex flex-wrap gap-2">
+              {REPEAT_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => handleRepeatChange(option.value)}
+                  disabled={isSaving}
+                  className={cn(
+                    "px-3 py-1.5 text-sm rounded-full border transition-colors",
+                    reminder.repeat === option.value
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background border-border hover:bg-accent hover:text-accent-foreground"
+                  )}
+                >
+                  {language === 'ru' ? option.labelRu : option.labelEn}
+                </button>
+              ))}
+            </div>
           </CardContent>
         </Card>
         

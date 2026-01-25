@@ -173,6 +173,7 @@ export interface ScanLog {
 
 // Gentle Nudges: Reminders from actionable captures
 export type ReminderStatus = 'pending' | 'done' | 'dismissed';
+export type ReminderRepeat = 'none' | 'daily' | 'weekly' | 'monthly';
 
 export interface Reminder {
   id?: number;
@@ -182,6 +183,7 @@ export interface Reminder {
   dueAt: number;                // Timestamp (ms) when reminder is due
   status: ReminderStatus;
   snoozedUntil?: number;        // For snooze feature (timestamp)
+  repeat: ReminderRepeat;       // Repeat schedule (default 'none')
   createdAt: number;
   updatedAt: number;
 }
@@ -296,6 +298,26 @@ class DaybookDatabase extends Dexie {
       receiptItems: '++id, receiptId, category',
       scanLogs: '++id, timestamp',
       reminders: '++id, entryId, status, dueAt, createdAt',
+    });
+
+    // Version 8: Add repeat field to reminders for recurring support
+    this.version(8).stores({
+      entries: '++id, date, mood, *tags, isPrivate, aiAllowed, createdAt, updatedAt',
+      attachments: '++id, entryId, kind, createdAt',
+      drafts: 'id, updatedAt',
+      biographies: 'date, status, generatedAt',
+      attachmentInsights: 'attachmentId, createdAt',
+      receipts: '++id, entryId, date, storeName, createdAt, updatedAt',
+      receiptItems: '++id, receiptId, category',
+      scanLogs: '++id, timestamp',
+      reminders: '++id, entryId, status, dueAt, createdAt',
+    }).upgrade(tx => {
+      // Add repeat='none' to existing reminders
+      return tx.table('reminders').toCollection().modify(reminder => {
+        if (reminder.repeat === undefined) {
+          reminder.repeat = 'none';
+        }
+      });
     });
   }
 }
@@ -755,7 +777,8 @@ export function resetBackfillFlag(): void {
 // REMINDER CRUD OPERATIONS (Gentle Nudges MVP)
 // ============================================
 
-import { getEndOfTodayTimestamp, getStartOfTodayTimestamp } from './reminderUtils';
+import { getEndOfTodayTimestamp, getStartOfTodayTimestamp, computeNextDueAt } from './reminderUtils';
+import { format } from 'date-fns';
 
 /**
  * Create a new reminder linked to an entry.
@@ -766,6 +789,7 @@ export async function createReminder(
   const now = Date.now();
   return await db.reminders.add({
     ...reminder,
+    repeat: reminder.repeat ?? 'none',
     createdAt: now,
     updatedAt: now,
   });
@@ -841,10 +865,61 @@ export async function updateReminderStatus(
 }
 
 /**
- * Mark reminder as done.
+ * Mark reminder as done (simple, no repeat handling).
  */
 export async function markReminderDone(id: number): Promise<void> {
   await updateReminderStatus(id, 'done');
+}
+
+/**
+ * Complete a reminder: mark as done + create next occurrence if repeating.
+ * This is the main "Done" handler for swipe and detail page.
+ * Returns the new reminder ID if a repeat was created, or null.
+ */
+export async function completeReminder(id: number): Promise<number | null> {
+  const reminder = await getReminderById(id);
+  if (!reminder) return null;
+  
+  // Mark current as done
+  await markReminderDone(id);
+  
+  // If not repeating, we're done
+  if (!reminder.repeat || reminder.repeat === 'none') {
+    return null;
+  }
+  
+  // Compute next due date
+  const nextDueAt = computeNextDueAt(reminder.dueAt, reminder.repeat);
+  if (!nextDueAt) return null;
+  
+  // Create a new source diary entry (Variant B)
+  const nextDateStr = format(new Date(nextDueAt), 'yyyy-MM-dd');
+  const newEntryId = await createEntry({
+    date: nextDateStr,
+    text: reminder.actionText,
+    mood: null as any, // minimal entry
+    tags: [],
+    isPrivate: false,
+  });
+  
+  // Create new reminder linked to new entry
+  const newReminderId = await createReminder({
+    entryId: newEntryId,
+    sourceText: reminder.actionText,
+    actionText: reminder.actionText,
+    dueAt: nextDueAt,
+    status: 'pending',
+    repeat: reminder.repeat,
+  });
+  
+  return newReminderId;
+}
+
+/**
+ * Update reminder repeat setting.
+ */
+export async function updateReminderRepeat(id: number, repeat: ReminderRepeat): Promise<void> {
+  await db.reminders.update(id, { repeat, updatedAt: Date.now() });
 }
 
 /**

@@ -20,8 +20,8 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { useI18n } from '@/lib/i18n';
-import { TIME_CHIPS } from '@/lib/reminderUtils';
-import { createEntry, createReminder } from '@/lib/db';
+import { TIME_CHIPS, REPEAT_OPTIONS } from '@/lib/reminderUtils';
+import { createEntry, createReminder, type ReminderRepeat } from '@/lib/db';
 import { reconcileReminderNotifications } from '@/lib/reminderNotifications';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -38,6 +38,7 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
   const [actionText, setActionText] = useState('');
   const [selectedChip, setSelectedChip] = useState<SuggestedTime | null>('tomorrow_morning');
   const [isCreating, setIsCreating] = useState(false);
+  const [repeat, setRepeat] = useState<ReminderRepeat>('none');
   
   // Custom date/time picker state
   const [customDate, setCustomDate] = useState<Date | undefined>();
@@ -98,6 +99,7 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
         actionText: actionText.trim(),
         dueAt,
         status: 'pending',
+        repeat,
       });
       
       // Step 3: Reconcile notifications
@@ -120,6 +122,7 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
     setSelectedChip('tomorrow_morning');
     setCustomDate(undefined);
     setCustomTime('09:00');
+    setRepeat('none');
     onOpenChange(false);
   };
   
@@ -256,6 +259,31 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
                 {customSelectionLabel}
               </p>
             )}
+          </div>
+          
+          {/* Repeat selector */}
+          <div className="space-y-2">
+            <Label>
+              {language === 'ru' ? 'Повторять' : 'Repeat'}
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              {REPEAT_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setRepeat(option.value)}
+                  disabled={isCreating}
+                  className={cn(
+                    "px-3 py-1.5 text-sm rounded-full border transition-colors",
+                    repeat === option.value
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background border-border hover:bg-accent hover:text-accent-foreground"
+                  )}
+                >
+                  {language === 'ru' ? option.labelRu : option.labelEn}
+                </button>
+              ))}
+            </div>
           </div>
           
           {/* Action buttons */}

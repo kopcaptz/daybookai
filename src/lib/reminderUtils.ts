@@ -3,8 +3,9 @@
  * MVP: Smart defaults for time chip presets and snooze options.
  */
 
-import { format, addDays, addHours, setHours, setMinutes, nextSaturday, nextMonday, startOfDay, endOfDay } from 'date-fns';
+import { format, addDays, addHours, addMonths, setHours, setMinutes, nextSaturday, nextMonday, startOfDay, endOfDay, getDate, getDaysInMonth, setDate } from 'date-fns';
 import type { SuggestedTime } from './reminderDetection';
+import type { ReminderRepeat } from './db';
 
 /**
  * Time chip preset configuration.
@@ -232,3 +233,53 @@ export function getStartOfTodayTimestamp(): number {
 export function getNowPlus24hTimestamp(): number {
   return Date.now() + 24 * 60 * 60 * 1000;
 }
+
+// ============================================
+// RECURRING REMINDER HELPERS
+// ============================================
+
+/**
+ * Compute next due date for a repeating reminder.
+ * - daily: +1 day at same local time
+ * - weekly: +7 days at same local time
+ * - monthly: same day-of-month next month (clamped to last day if needed)
+ */
+export function computeNextDueAt(currentDueAt: number, repeat: ReminderRepeat): number | null {
+  if (!repeat || repeat === 'none') return null;
+  
+  const current = new Date(currentDueAt);
+  const hours = current.getHours();
+  const minutes = current.getMinutes();
+  
+  switch (repeat) {
+    case 'daily': {
+      const next = addDays(current, 1);
+      return setMinutes(setHours(next, hours), minutes).getTime();
+    }
+    case 'weekly': {
+      const next = addDays(current, 7);
+      return setMinutes(setHours(next, hours), minutes).getTime();
+    }
+    case 'monthly': {
+      const dayOfMonth = getDate(current);
+      const nextMonth = addMonths(current, 1);
+      const daysInNextMonth = getDaysInMonth(nextMonth);
+      // Clamp day to last day of month if needed
+      const clampedDay = Math.min(dayOfMonth, daysInNextMonth);
+      const next = setDate(nextMonth, clampedDay);
+      return setMinutes(setHours(next, hours), minutes).getTime();
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * Repeat option labels for UI.
+ */
+export const REPEAT_OPTIONS: { value: ReminderRepeat; labelRu: string; labelEn: string }[] = [
+  { value: 'none', labelRu: 'Не повторять', labelEn: 'No repeat' },
+  { value: 'daily', labelRu: 'Ежедневно', labelEn: 'Daily' },
+  { value: 'weekly', labelRu: 'Еженедельно', labelEn: 'Weekly' },
+  { value: 'monthly', labelRu: 'Ежемесячно', labelEn: 'Monthly' },
+];
