@@ -1,0 +1,626 @@
+/* Cyber-Grimoire Design System — Кибер-Гримуар */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Cyber-Grimoire Light (редко используется - dark-first) */
+    --background: 220 15% 95%;
+    --foreground: 220 25% 15%;
+
+    --card: 220 20% 98%;
+    --card-foreground: 220 25% 15%;
+
+    --popover: 220 20% 98%;
+    --popover-foreground: 220 25% 15%;
+
+    /* Cyan/Teal primary */
+    --primary: 185 70% 45%;
+    --primary-foreground: 220 25% 98%;
+
+    /* Violet secondary */
+    --secondary: 270 40% 92%;
+    --secondary-foreground: 270 50% 35%;
+
+    --muted: 220 15% 90%;
+    --muted-foreground: 220 15% 45%;
+
+    /* Violet accent */
+    --accent: 270 60% 60%;
+    --accent-foreground: 220 25% 98%;
+
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 220 25% 98%;
+
+    --border: 220 20% 85%;
+    --input: 220 20% 88%;
+    --ring: 185 70% 45%;
+
+    --radius: 0.5rem;
+
+    /* Mood colors - cyber palette */
+    --mood-1: 0 60% 50%;
+    --mood-2: 30 60% 50%;
+    --mood-3: 185 50% 50%;
+    --mood-4: 160 55% 45%;
+    --mood-5: 270 55% 60%;
+
+    /* Cyber-mystic accents */
+    --glow-primary: 185 80% 55%;
+    --glow-secondary: 270 70% 60%;
+    --sigil: 185 70% 50%;
+    --rune: 270 50% 70%;
+
+    /* Sidebar */
+    --sidebar-background: 220 15% 93%;
+    --sidebar-foreground: 220 20% 20%;
+    --sidebar-primary: 185 70% 45%;
+    --sidebar-primary-foreground: 220 25% 98%;
+    --sidebar-accent: 270 40% 90%;
+    --sidebar-accent-foreground: 220 25% 15%;
+    --sidebar-border: 220 20% 85%;
+    --sidebar-ring: 185 70% 45%;
+  }
+
+  .dark {
+    /* 🌑 Cyber-Grimoire Dark — Primary Theme */
+    --background: 230 25% 6%;
+    --foreground: 200 25% 92%;
+
+    --card: 230 25% 9%;
+    --card-foreground: 200 25% 92%;
+
+    --popover: 230 25% 10%;
+    --popover-foreground: 200 25% 92%;
+
+    /* Cold cyan glow */
+    --primary: 185 75% 55%;
+    --primary-foreground: 230 25% 6%;
+
+    /* Violet/purple secondary */
+    --secondary: 270 35% 20%;
+    --secondary-foreground: 270 45% 85%;
+
+    --muted: 230 20% 14%;
+    --muted-foreground: 200 20% 72%;
+
+    /* Violet accent */
+    --accent: 270 60% 55%;
+    --accent-foreground: 230 25% 98%;
+
+    --destructive: 0 55% 50%;
+    --destructive-foreground: 200 30% 95%;
+
+    --border: 230 25% 22%;
+    --input: 230 25% 20%;
+    --ring: 185 75% 55%;
+
+    /* Cyber mood colors */
+    --mood-1: 0 50% 50%;
+    --mood-2: 30 55% 50%;
+    --mood-3: 185 55% 50%;
+    --mood-4: 160 50% 45%;
+    --mood-5: 270 55% 60%;
+
+    /* Cyber-mystic glow accents */
+    --glow-primary: 185 85% 60%;
+    --glow-secondary: 270 75% 65%;
+    --sigil: 185 80% 60%;
+    --rune: 270 60% 70%;
+
+    /* Sidebar dark */
+    --sidebar-background: 230 25% 7%;
+    --sidebar-foreground: 200 25% 88%;
+    --sidebar-primary: 185 75% 55%;
+    --sidebar-primary-foreground: 230 25% 6%;
+    --sidebar-accent: 270 35% 18%;
+    --sidebar-accent-foreground: 200 30% 92%;
+    --sidebar-border: 230 25% 18%;
+    --sidebar-ring: 185 75% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    /* Force dark mode as primary */
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  /* Grimoire headings — clean semi-serif */
+  h1, h2, h3, .grimoire-heading {
+    font-family: 'Cinzel', 'Times New Roman', serif;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+
+  /* Prevent pull-to-refresh on mobile */
+  html, body {
+    overscroll-behavior: none;
+  }
+
+  /* Safe area for mobile devices */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+}
+
+@layer utilities {
+  /* Cyber noise texture background */
+  .cyber-noise {
+    position: relative;
+  }
+
+  .cyber-noise::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  }
+
+  /* Geometric rune grid */
+  .rune-grid {
+    position: relative;
+  }
+
+  .rune-grid::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.025;
+    background-image: 
+      linear-gradient(hsl(var(--glow-primary) / 0.3) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--glow-primary) / 0.3) 1px, transparent 1px),
+      linear-gradient(45deg, transparent 48%, hsl(var(--glow-secondary) / 0.15) 49%, hsl(var(--glow-secondary) / 0.15) 51%, transparent 52%);
+    background-size: 60px 60px, 60px 60px, 120px 120px;
+  }
+
+  /* Mood gradient */
+  .mood-gradient {
+    background: linear-gradient(
+      to right,
+      hsl(var(--mood-1)),
+      hsl(var(--mood-2)),
+      hsl(var(--mood-3)),
+      hsl(var(--mood-4)),
+      hsl(var(--mood-5))
+    );
+  }
+
+  /* Cyber glow effects */
+  .cyber-glow {
+    box-shadow: 
+      0 0 20px hsl(var(--glow-primary) / 0.15),
+      0 0 40px hsl(var(--glow-primary) / 0.08);
+  }
+
+  .cyber-glow-strong {
+    box-shadow: 
+      0 0 25px hsl(var(--glow-primary) / 0.25),
+      0 0 50px hsl(var(--glow-primary) / 0.15),
+      0 0 80px hsl(var(--glow-primary) / 0.08);
+  }
+
+  .cyber-glow-violet {
+    box-shadow: 
+      0 0 20px hsl(var(--glow-secondary) / 0.2),
+      0 0 40px hsl(var(--glow-secondary) / 0.1);
+  }
+
+  /* Sigil glow (for AI elements) */
+  .sigil-glow {
+    color: hsl(var(--sigil));
+    text-shadow: 
+      0 0 10px hsl(var(--sigil) / 0.6),
+      0 0 20px hsl(var(--sigil) / 0.3);
+  }
+
+  /* Rune accent */
+  .rune-accent {
+    color: hsl(var(--rune));
+    text-shadow: 0 0 8px hsl(var(--rune) / 0.4);
+  }
+
+  /* Luminous border */
+  .luminous-border {
+    border: 1px solid hsl(var(--glow-primary) / 0.2);
+    box-shadow: 
+      inset 0 0 20px hsl(var(--glow-primary) / 0.03),
+      0 0 1px hsl(var(--glow-primary) / 0.3);
+  }
+
+  /* Panel glass effect */
+  .panel-glass {
+    @apply rounded-lg;
+    background: hsl(var(--card) / 0.8);
+    backdrop-filter: blur(12px);
+    border: 1px solid hsl(var(--glow-primary) / 0.15);
+    box-shadow: 
+      0 4px 24px hsl(var(--background) / 0.5),
+      inset 0 1px 0 hsl(var(--glow-primary) / 0.1);
+  }
+
+  /* Grimoire card */
+  .grimoire-card {
+    @apply panel-glass p-4 transition-all duration-300;
+  }
+
+  .grimoire-card:hover {
+    border-color: hsl(var(--glow-primary) / 0.3);
+    box-shadow: 
+      0 4px 30px hsl(var(--glow-primary) / 0.1),
+      inset 0 1px 0 hsl(var(--glow-primary) / 0.15);
+  }
+
+  /* Rune divider */
+  .rune-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .rune-divider::before,
+  .rune-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--glow-primary) / 0.3),
+      transparent
+    );
+  }
+
+  /* Sigil separator glyph */
+  .sigil-separator {
+    color: hsl(var(--sigil) / 0.5);
+    font-size: 0.75rem;
+  }
+
+  /* Cyber animations */
+  @keyframes pulse-glow {
+    0%, 100% { 
+      box-shadow: 0 0 15px hsl(var(--glow-primary) / 0.2);
+      border-color: hsl(var(--glow-primary) / 0.2);
+    }
+    50% { 
+      box-shadow: 0 0 25px hsl(var(--glow-primary) / 0.35);
+      border-color: hsl(var(--glow-primary) / 0.35);
+    }
+  }
+
+  @keyframes sigil-pulse {
+    0%, 100% { 
+      opacity: 0.7;
+      text-shadow: 0 0 10px hsl(var(--sigil) / 0.4);
+    }
+    50% { 
+      opacity: 1;
+      text-shadow: 0 0 20px hsl(var(--sigil) / 0.7);
+    }
+  }
+
+  @keyframes rune-flicker {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+
+  .animate-sigil-pulse {
+    animation: sigil-pulse 2s ease-in-out infinite;
+  }
+
+  .animate-rune-flicker {
+    animation: rune-flicker 4s ease-in-out infinite;
+  }
+
+  /* Grimoire shadow */
+  .grimoire-shadow {
+    box-shadow: 
+      0 2px 8px hsl(var(--background) / 0.4),
+      0 8px 24px hsl(var(--background) / 0.3),
+      0 0 1px hsl(var(--glow-primary) / 0.2);
+  }
+
+  /* Quill cursor (desktop only) */
+  @media (pointer: fine) {
+    .quill-cursor {
+      cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2300d4ff' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4'/%3E%3C/svg%3E") 2 22, auto;
+    }
+  }
+}
+
+@layer components {
+  /* Cyber button */
+  .btn-cyber {
+    @apply relative overflow-hidden rounded-md px-6 py-3 font-medium;
+    @apply bg-primary text-primary-foreground;
+    @apply transition-all duration-300;
+    @apply hover:shadow-lg;
+    border: 1px solid hsl(var(--glow-primary) / 0.3);
+  }
+
+  .btn-cyber::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--glow-primary) / 0.3),
+      transparent
+    );
+    transition: left 0.5s ease;
+  }
+
+  .btn-cyber:hover::before {
+    left: 100%;
+  }
+
+  .btn-cyber:hover {
+    box-shadow: 
+      0 0 20px hsl(var(--glow-primary) / 0.3),
+      0 0 40px hsl(var(--glow-primary) / 0.15);
+  }
+
+  /* Secondary cyber button (violet) */
+  .btn-cyber-secondary {
+    @apply btn-cyber;
+    @apply bg-secondary text-secondary-foreground;
+    border-color: hsl(var(--glow-secondary) / 0.3);
+  }
+
+  .btn-cyber-secondary::before {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--glow-secondary) / 0.3),
+      transparent
+    );
+  }
+
+  .btn-cyber-secondary:hover {
+    box-shadow: 
+      0 0 20px hsl(var(--glow-secondary) / 0.25),
+      0 0 40px hsl(var(--glow-secondary) / 0.1);
+  }
+
+  /* Grimoire heading with rune flourish */
+  .heading-rune {
+    @apply relative inline-block;
+  }
+
+  .heading-rune::before,
+  .heading-rune::after {
+    content: '◇';
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    color: hsl(var(--sigil) / 0.5);
+    font-size: 0.5em;
+  }
+
+  .heading-rune::before {
+    right: 100%;
+    margin-right: 0.75rem;
+  }
+
+  .heading-rune::after {
+    left: 100%;
+    margin-left: 0.75rem;
+  }
+
+  /* AI Sigil icon styles */
+  .ai-sigil {
+    @apply relative;
+    color: hsl(var(--sigil));
+  }
+
+  .ai-sigil::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      hsl(var(--sigil) / 0.2) 0%,
+      transparent 70%
+    );
+    pointer-events: none;
+  }
+
+  /* Biography seal */
+  .bio-seal {
+    @apply inline-flex items-center justify-center w-6 h-6 rounded-full;
+    background: linear-gradient(
+      135deg,
+      hsl(var(--glow-primary) / 0.2),
+      hsl(var(--glow-secondary) / 0.2)
+    );
+    border: 1px solid hsl(var(--sigil) / 0.3);
+    color: hsl(var(--sigil));
+    font-size: 0.65rem;
+  }
+
+  /* Notification/toast panel */
+  .toast-cyber {
+    @apply panel-glass;
+    border-color: hsl(var(--glow-primary) / 0.25);
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  /* Entry card cyber style */
+  .entry-card-cyber {
+    @apply grimoire-card relative overflow-hidden;
+  }
+
+  .entry-card-cyber::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--glow-primary) / 0.4),
+      transparent
+    );
+  }
+
+  /* Media toolbar cyber */
+  .toolbar-cyber {
+    @apply flex items-center gap-2 p-2 rounded-lg;
+    background: hsl(var(--muted) / 0.5);
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  .toolbar-cyber button {
+    @apply p-2 rounded-md transition-all duration-200;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .toolbar-cyber button:hover {
+    color: hsl(var(--sigil));
+    background: hsl(var(--sigil) / 0.1);
+    box-shadow: 0 0 10px hsl(var(--sigil) / 0.2);
+  }
+
+  /* Storage indicator cyber */
+  .storage-cyber {
+    @apply relative h-2 rounded-full overflow-hidden;
+    background: hsl(var(--muted));
+  }
+
+  .storage-cyber .bar {
+    @apply h-full rounded-full transition-all duration-500;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--glow-primary)),
+      hsl(var(--glow-secondary))
+    );
+    box-shadow: 0 0 10px hsl(var(--glow-primary) / 0.5);
+  }
+
+  /* Calendar day cyber */
+  .calendar-day-cyber {
+    @apply relative flex items-center justify-center w-10 h-10 rounded-md transition-all duration-200;
+    border: 1px solid transparent;
+  }
+
+  .calendar-day-cyber:hover {
+    border-color: hsl(var(--glow-primary) / 0.3);
+    background: hsl(var(--glow-primary) / 0.05);
+  }
+
+  .calendar-day-cyber.has-entries::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: hsl(var(--sigil));
+    box-shadow: 0 0 6px hsl(var(--sigil) / 0.6);
+  }
+
+  .calendar-day-cyber.today {
+    background: hsl(var(--glow-primary) / 0.1);
+    border-color: hsl(var(--glow-primary) / 0.4);
+  }
+
+  /* Chat message cyber */
+  .chat-message-cyber {
+    @apply p-3 rounded-lg;
+  }
+
+  .chat-message-cyber.user {
+    background: hsl(var(--secondary));
+    border: 1px solid hsl(var(--glow-secondary) / 0.2);
+  }
+
+  .chat-message-cyber.assistant {
+    @apply panel-glass;
+  }
+
+  /* Profile button cyber */
+  .profile-btn-cyber {
+    @apply px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200;
+    background: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+  }
+
+  .profile-btn-cyber:hover {
+    border-color: hsl(var(--glow-primary) / 0.4);
+    box-shadow: 0 0 8px hsl(var(--glow-primary) / 0.15);
+  }
+
+  .profile-btn-cyber.active {
+    background: hsl(var(--glow-primary) / 0.15);
+    border-color: hsl(var(--glow-primary) / 0.5);
+    color: hsl(var(--glow-primary));
+    box-shadow: 0 0 12px hsl(var(--glow-primary) / 0.2);
+  }
+
+  /* Switch cyber */
+  .switch-cyber {
+    @apply relative;
+  }
+
+  .switch-cyber[data-state="checked"] {
+    background: hsl(var(--glow-primary));
+    box-shadow: 0 0 10px hsl(var(--glow-primary) / 0.4);
+  }
+}
+
+/* Shake animation for PIN error */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+/* Legacy compatibility - map old classes to new */
+@layer utilities {
+  .magic-glow { @apply cyber-glow; }
+  .magic-glow-strong { @apply cyber-glow-strong; }
+  .book-page { @apply panel-glass; }
+  .book-shadow { @apply grimoire-shadow; }
+  .parchment { @apply panel-glass; }
+  .card-fairytale { @apply grimoire-card; }
+  .btn-fairytale { @apply btn-cyber; }
+  .gold-accent { @apply sigil-glow; }
+  .silver-accent { @apply rune-accent; }
+  .starlight { @apply sigil-glow; }
+  .flourish { @apply heading-rune; }
+}

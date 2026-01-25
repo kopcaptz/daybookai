@@ -1,0 +1,90 @@
+import { Link, useLocation } from 'react-router-dom';
+import { Scroll, Calendar, Search, Hexagon, Settings, Feather } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useI18n } from '@/lib/i18n';
+
+export function BottomNav() {
+  const location = useLocation();
+  const { t } = useI18n();
+
+  const navItems = [
+    { path: '/', icon: Scroll, label: t('nav.today') },
+    { path: '/calendar', icon: Calendar, label: t('nav.calendar') },
+    { path: '/new', icon: Feather, label: '', isCenter: true },
+    { path: '/chat', icon: Hexagon, label: t('nav.chat') },
+    { path: '/settings', icon: Settings, label: t('nav.settings') },
+  ];
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-card/90 backdrop-blur-xl safe-bottom">
+      {/* Luminous top border */}
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyber-glow/30 to-transparent" />
+
+      {/* Rune separator */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 text-cyber-sigil/40">
+        <span className="text-xs">◇</span>
+        <div className="w-12 h-px bg-gradient-to-r from-transparent via-cyber-glow/40 to-transparent" />
+        <span className="text-xs">◇</span>
+      </div>
+
+      <div className="mx-auto flex h-16 max-w-lg items-center justify-around px-2">
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.path;
+          const Icon = item.icon;
+
+          if (item.isCenter) {
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className="flex -translate-y-3 items-center justify-center"
+              >
+                <div className={cn(
+                  "flex h-14 w-14 items-center justify-center rounded-lg transition-all duration-300 active:scale-95",
+                  "bg-gradient-to-br from-primary via-primary to-accent",
+                  "border border-cyber-glow/30",
+                  "hover:animate-pulse-glow",
+                  "relative overflow-hidden grimoire-shadow"
+                )}>
+                  {/* Glow accent */}
+                  <div className="absolute top-1 left-1 w-4 h-4 rounded-full bg-cyber-glow/20 blur-sm" />
+                  <Icon className="h-6 w-6 text-primary-foreground relative z-10" />
+                </div>
+              </Link>
+            );
+          }
+
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={cn(
+                'flex flex-1 flex-col items-center gap-1 py-2 transition-all duration-200',
+                isActive 
+                  ? 'text-cyber-sigil' 
+                  : 'text-muted-foreground hover:text-foreground/90'
+              )}
+            >
+              <div className="relative">
+                <Icon 
+                  className={cn(
+                    "h-5 w-5 transition-all duration-200",
+                    isActive && "drop-shadow-[0_0_8px_hsl(var(--sigil)/0.6)]"
+                  )} 
+                  strokeWidth={1.5}
+                />
+                {isActive && (
+                  <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-5 h-0.5 rounded-full bg-gradient-to-r from-cyber-sigil/60 via-cyber-sigil to-cyber-sigil/60" />
+                )}
+              </div>
+              <span className={cn(
+                "text-[10px] font-medium tracking-wide transition-colors",
+                isActive ? "text-cyber-sigil" : "text-muted-foreground/80"
+              )}>{item.label}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
