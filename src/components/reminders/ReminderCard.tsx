@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { 
   type Reminder, 
-  markReminderDone, 
+  completeReminder, 
   dismissReminder, 
   snoozeReminder 
 } from '@/lib/db';
@@ -65,7 +65,7 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
   const handleDone = async () => {
     setIsActioning(true);
     try {
-      await markReminderDone(reminder.id!);
+      await completeReminder(reminder.id!);
       await reconcileReminderNotifications(language);
       onAction?.();
     } finally {
