@@ -299,7 +299,14 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
                 {reminder.actionText}
               </p>
               {isRepeating && (
-                <Repeat className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+                  <Repeat className="h-3.5 w-3.5 text-muted-foreground" />
+                  {reminder.skipNext && (
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                      {language === 'ru' ? 'пропуск' : 'skip'}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
             
