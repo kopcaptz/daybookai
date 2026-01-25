@@ -171,6 +171,21 @@ export interface ScanLog {
   errorCode: string | null;
 }
 
+// Gentle Nudges: Reminders from actionable captures
+export type ReminderStatus = 'pending' | 'done' | 'dismissed';
+
+export interface Reminder {
+  id?: number;
+  entryId: number;              // Required: links back to source entry
+  sourceText: string;           // Original captured text snippet
+  actionText: string;           // User-editable action description
+  dueAt: number;                // Timestamp (ms) when reminder is due
+  status: ReminderStatus;
+  snoozedUntil?: number;        // For snooze feature (timestamp)
+  createdAt: number;
+  updatedAt: number;
+}
+
 // Biography settings
 export interface BiographySettings {
   bioTime: string; // HH:MM format, default "21:00"
@@ -210,6 +225,7 @@ class DaybookDatabase extends Dexie {
   receipts!: EntityTable<Receipt, 'id'>;
   receiptItems!: EntityTable<ReceiptItem, 'id'>;
   scanLogs!: EntityTable<ScanLog, 'id'>;
+  reminders!: EntityTable<Reminder, 'id'>;
 
   constructor() {
     super('DaybookDB');
@@ -267,6 +283,19 @@ class DaybookDatabase extends Dexie {
       receipts: '++id, entryId, date, storeName, createdAt, updatedAt',
       receiptItems: '++id, receiptId, category',
       scanLogs: '++id, timestamp',
+    });
+
+    // Version 7: Add Gentle Nudges reminders table
+    this.version(7).stores({
+      entries: '++id, date, mood, *tags, isPrivate, aiAllowed, createdAt, updatedAt',
+      attachments: '++id, entryId, kind, createdAt',
+      drafts: 'id, updatedAt',
+      biographies: 'date, status, generatedAt',
+      attachmentInsights: 'attachmentId, createdAt',
+      receipts: '++id, entryId, date, storeName, createdAt, updatedAt',
+      receiptItems: '++id, receiptId, category',
+      scanLogs: '++id, timestamp',
+      reminders: '++id, entryId, status, dueAt, createdAt',
     });
   }
 }
@@ -720,4 +749,148 @@ export function resetBackfillFlag(): void {
   } catch {
     // ignore
   }
+}
+
+// ============================================
+// REMINDER CRUD OPERATIONS (Gentle Nudges MVP)
+// ============================================
+
+import { getEndOfTodayTimestamp, getStartOfTodayTimestamp } from './reminderUtils';
+
+/**
+ * Create a new reminder linked to an entry.
+ */
+export async function createReminder(
+  reminder: Omit<Reminder, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<number> {
+  const now = Date.now();
+  return await db.reminders.add({
+    ...reminder,
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
+/**
+ * Get a reminder by ID.
+ */
+export async function getReminderById(id: number): Promise<Reminder | undefined> {
+  return await db.reminders.get(id);
+}
+
+/**
+ * Get all reminders for an entry.
+ */
+export async function getRemindersByEntryId(entryId: number): Promise<Reminder[]> {
+  return await db.reminders.where('entryId').equals(entryId).toArray();
+}
+
+/**
+ * Get pending reminders that are due today or overdue.
+ * This is the main query for Today page and notifications.
+ */
+export async function getPendingTodayAndOverdueReminders(): Promise<Reminder[]> {
+  const endOfToday = getEndOfTodayTimestamp();
+  
+  return await db.reminders
+    .where('status')
+    .equals('pending')
+    .filter(r => r.dueAt <= endOfToday && (!r.snoozedUntil || r.snoozedUntil <= Date.now()))
+    .toArray();
+}
+
+/**
+ * Get overdue reminders only (due before start of today).
+ */
+export async function getOverdueReminders(): Promise<Reminder[]> {
+  const startOfToday = getStartOfTodayTimestamp();
+  
+  return await db.reminders
+    .where('status')
+    .equals('pending')
+    .filter(r => r.dueAt < startOfToday && (!r.snoozedUntil || r.snoozedUntil <= Date.now()))
+    .toArray();
+}
+
+/**
+ * Get reminders due today (not overdue).
+ */
+export async function getTodayReminders(): Promise<Reminder[]> {
+  const startOfToday = getStartOfTodayTimestamp();
+  const endOfToday = getEndOfTodayTimestamp();
+  
+  return await db.reminders
+    .where('status')
+    .equals('pending')
+    .filter(r => 
+      r.dueAt >= startOfToday && 
+      r.dueAt <= endOfToday && 
+      (!r.snoozedUntil || r.snoozedUntil <= Date.now())
+    )
+    .toArray();
+}
+
+/**
+ * Update reminder status.
+ */
+export async function updateReminderStatus(
+  id: number,
+  status: ReminderStatus
+): Promise<void> {
+  await db.reminders.update(id, { status, updatedAt: Date.now() });
+}
+
+/**
+ * Mark reminder as done.
+ */
+export async function markReminderDone(id: number): Promise<void> {
+  await updateReminderStatus(id, 'done');
+}
+
+/**
+ * Dismiss a reminder.
+ */
+export async function dismissReminder(id: number): Promise<void> {
+  await updateReminderStatus(id, 'dismissed');
+}
+
+/**
+ * Snooze a reminder until a specific time.
+ */
+export async function snoozeReminder(id: number, snoozedUntil: number): Promise<void> {
+  await db.reminders.update(id, { snoozedUntil, updatedAt: Date.now() });
+}
+
+/**
+ * Reschedule a reminder to a new due time.
+ */
+export async function rescheduleReminder(id: number, newDueAt: number): Promise<void> {
+  await db.reminders.update(id, { 
+    dueAt: newDueAt, 
+    snoozedUntil: undefined, 
+    updatedAt: Date.now() 
+  });
+}
+
+/**
+ * Update reminder action text.
+ */
+export async function updateReminderText(id: number, actionText: string): Promise<void> {
+  await db.reminders.update(id, { actionText, updatedAt: Date.now() });
+}
+
+/**
+ * Delete a reminder.
+ */
+export async function deleteReminder(id: number): Promise<void> {
+  await db.reminders.delete(id);
+}
+
+/**
+ * Get count of pending reminders due today or overdue.
+ * Useful for badge/indicator.
+ */
+export async function getPendingReminderCount(): Promise<number> {
+  const reminders = await getPendingTodayAndOverdueReminders();
+  return reminders.length;
 }
