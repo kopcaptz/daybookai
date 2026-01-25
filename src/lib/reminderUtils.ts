@@ -227,8 +227,8 @@ export function getStartOfTodayTimestamp(): number {
 }
 
 /**
- * Get end of upcoming 24h window (endOfToday + 24 hours).
+ * Get timestamp 24 hours from now.
  */
-export function getUpcoming24hEndTimestamp(): number {
-  return endOfDay(new Date()).getTime() + 24 * 60 * 60 * 1000;
+export function getNowPlus24hTimestamp(): number {
+  return Date.now() + 24 * 60 * 60 * 1000;
 }

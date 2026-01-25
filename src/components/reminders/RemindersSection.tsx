@@ -7,7 +7,7 @@ import { db, type Reminder } from '@/lib/db';
 import { 
   getStartOfTodayTimestamp, 
   getEndOfTodayTimestamp,
-  getUpcoming24hEndTimestamp 
+  getNowPlus24hTimestamp 
 } from '@/lib/reminderUtils';
 import { ReminderCard } from './ReminderCard';
 import {
@@ -63,21 +63,21 @@ function useTodayReminders() {
 }
 
 /**
- * Query upcoming reminders (due within 24h after today ends, pending, not snoozed).
+ * Query upcoming reminders (due within next 24h from now, after today ends, pending, not snoozed).
  */
 function useUpcomingReminders() {
   return useLiveQuery(async () => {
     const endOfToday = getEndOfTodayTimestamp();
-    const upcoming24hEnd = getUpcoming24hEndTimestamp();
     const now = Date.now();
+    const upper = getNowPlus24hTimestamp();
     
     const reminders = await db.reminders
       .where('status')
       .equals('pending')
       .filter(r => 
-        r.dueAt > endOfToday && 
-        r.dueAt <= upcoming24hEnd &&
-        (!r.snoozedUntil || r.snoozedUntil <= now)
+        (!r.snoozedUntil || r.snoozedUntil <= now) &&
+        r.dueAt > endOfToday &&
+        r.dueAt <= upper
       )
       .toArray();
     
