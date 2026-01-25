@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Sun, Moon, Monitor, Download, Trash2, AlertTriangle, HardDrive, Smartphone, Globe, Clock, Shield, Receipt } from 'lucide-react';
+import { Sun, Moon, Monitor, Download, Trash2, AlertTriangle, HardDrive, Smartphone, Globe, Clock, Shield, Receipt, Bell } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { exportAllData, clearAllData, STORAGE_WARNINGS, loadBioSettings, saveBioSettings } from '@/lib/db';
 import { useStorageUsage } from '@/hooks/useStorageUsage';
@@ -8,6 +8,7 @@ import { formatFileSize } from '@/lib/mediaUtils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { InstallButton } from '@/components/InstallPrompt';
 import { AISettingsCard } from '@/components/AISettingsCard';
 import {
@@ -26,6 +27,13 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useI18n, Language } from '@/lib/i18n';
 import { GrimoireIcon } from '@/components/icons/SigilIcon';
+import { isCapacitorNative, requestNotificationPermission } from '@/lib/notifications';
+import {
+  loadReminderNotificationSettings,
+  saveReminderNotificationSettings,
+  reconcileReminderNotifications,
+  cancelAllReminderNotifications,
+} from '@/lib/reminderNotifications';
 
 function SettingsContent() {
   const storage = useStorageUsage();
@@ -34,6 +42,32 @@ function SettingsContent() {
   const [isExporting, setIsExporting] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [bioTime, setBioTime] = useState(() => loadBioSettings().bioTime);
+  
+  // Android-only reminder notifications toggle
+  const [reminderNotificationsEnabled, setReminderNotificationsEnabled] = useState(
+    () => loadReminderNotificationSettings().enabled
+  );
+  
+  const handleReminderNotificationsToggle = async (enabled: boolean) => {
+    if (enabled) {
+      const granted = await requestNotificationPermission();
+      if (!granted) {
+        toast.error(language === 'ru' ? 'Разрешение отклонено' : 'Permission denied');
+        return;
+      }
+    }
+    
+    saveReminderNotificationSettings({ enabled });
+    setReminderNotificationsEnabled(enabled);
+    
+    if (enabled) {
+      await reconcileReminderNotifications(language);
+      toast.success(language === 'ru' ? 'Уведомления включены' : 'Notifications enabled');
+    } else {
+      await cancelAllReminderNotifications();
+      toast.success(language === 'ru' ? 'Уведомления отключены' : 'Notifications disabled');
+    }
+  };
 
   const handleBioTimeChange = (value: string) => {
     setBioTime(value);
@@ -181,6 +215,34 @@ function SettingsContent() {
             <InstallButton />
           </CardContent>
         </Card>
+
+        {/* Reminder Notifications (Android only) */}
+        {isCapacitorNative() && (
+          <Card className="panel-glass border-cyber-glow/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Bell className="h-5 w-5 text-cyber-sigil" />
+                {language === 'ru' ? 'Уведомления' : 'Notifications'}
+              </CardTitle>
+              <CardDescription>
+                {language === 'ru' 
+                  ? 'Push-уведомления о напоминаниях' 
+                  : 'Push notifications for reminders'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">
+                  {language === 'ru' ? 'Включить уведомления' : 'Enable notifications'}
+                </span>
+                <Switch
+                  checked={reminderNotificationsEnabled}
+                  onCheckedChange={handleReminderNotificationsToggle}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Receipt Scanner */}
         <Card className="panel-glass border-cyber-glow/20">
