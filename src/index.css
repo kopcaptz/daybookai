@@ -66,26 +66,26 @@
   }
 
   .dark {
-    /* ☕ Espresso Dark — Warm Coffee Theme */
-    --background: 28 22% 7%;
-    --foreground: 32 18% 90%;
+    /* ☕ Espresso Dark — Warm Coffee Theme (readability pass) */
+    --background: 28 22% 9%;
+    --foreground: 32 18% 92%;
 
-    --card: 28 20% 10%;
-    --card-foreground: 32 18% 90%;
+    --card: 28 20% 12%;
+    --card-foreground: 32 18% 92%;
 
-    --popover: 28 20% 11%;
-    --popover-foreground: 32 18% 90%;
+    --popover: 28 20% 13%;
+    --popover-foreground: 32 18% 92%;
 
     /* Warm amber primary */
     --primary: 36 85% 55%;
     --primary-foreground: 28 22% 7%;
 
     /* Warm brown secondary */
-    --secondary: 28 18% 16%;
-    --secondary-foreground: 32 15% 80%;
+    --secondary: 28 18% 18%;
+    --secondary-foreground: 32 15% 82%;
 
-    --muted: 28 16% 14%;
-    --muted-foreground: 30 12% 65%;
+    --muted: 28 16% 16%;
+    --muted-foreground: 30 12% 70%;
 
     /* Warm amber accent */
     --accent: 32 70% 50%;
@@ -94,9 +94,9 @@
     --destructive: 0 55% 48%;
     --destructive-foreground: 32 20% 95%;
 
-    --border: 28 14% 18%;
-    --input: 28 14% 16%;
-    --ring: 36 80% 50%;
+    --border: 28 14% 22%;
+    --input: 28 14% 20%;
+    --ring: 36 80% 52%;
 
     /* Espresso mood colors (warm-shifted) */
     --mood-1: 0 50% 48%;
