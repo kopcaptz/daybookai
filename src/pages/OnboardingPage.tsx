@@ -250,9 +250,17 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-background via-background to-muted/20 relative overflow-hidden">
+      {/* Subtle radial glow in center */}
+      <div 
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse 80% 50% at 50% 40%, hsl(var(--primary) / 0.08) 0%, transparent 70%)',
+        }}
+        aria-hidden="true"
+      />
       {/* Skip button */}
-      <div className="flex justify-end p-4">
+      <div className="flex justify-end p-4 relative z-10">
         <Button
           variant="ghost"
           size="sm"
@@ -265,17 +273,21 @@ export default function OnboardingPage() {
 
       {/* Slide content - swipeable area */}
       <div
-        className="flex-1 flex flex-col items-center justify-center px-8 pb-8 touch-pan-y"
+        className="flex-1 flex flex-col items-center justify-center px-4 sm:px-8 pb-8 touch-pan-y relative z-10"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         onPointerLeave={handlePointerCancel}
       >
+        {/* Card surface */}
         <div
           key={currentSlide}
           className={cn(
-            'text-center max-w-sm select-none',
+            'text-center max-w-md w-full select-none',
+            'bg-background/80 backdrop-blur-sm',
+            'border border-border/50 rounded-2xl',
+            'p-6 sm:p-8 shadow-lg shadow-primary/5',
             // Only apply CSS animation when not dragging
             dragOffset === 0 && 'animate-in fade-in duration-300',
             dragOffset === 0 && (slideDirection === 'right' ? 'slide-in-from-right-4' : 'slide-in-from-left-4'),
@@ -291,14 +303,21 @@ export default function OnboardingPage() {
           {(() => {
             const Icon = slideIcons[currentSlide];
             return (
-              <Icon
-                className="h-11 w-11 mx-auto mb-5 text-primary/70"
-                aria-hidden="true"
-                strokeWidth={1.5}
-              />
+              <div className="relative inline-block mb-5">
+                {/* Icon glow */}
+                <div 
+                  className="absolute inset-0 rounded-full blur-xl bg-primary/20"
+                  aria-hidden="true"
+                />
+                <Icon
+                  className="relative h-12 w-12 mx-auto text-primary"
+                  aria-hidden="true"
+                  strokeWidth={1.5}
+                />
+              </div>
             );
           })()}
-          <h1 className="text-2xl font-semibold text-foreground mb-4">
+          <h1 className="text-2xl font-semibold text-foreground mb-3">
             {currentSlides[currentSlide].title}
           </h1>
           <p className="text-muted-foreground leading-relaxed">
@@ -320,7 +339,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Navigation controls */}
-      <div className="p-6 pb-8 space-y-4">
+      <div className="p-6 pb-8 space-y-4 relative z-10">
         {/* Progress dots */}
         <div className="flex justify-center gap-2">
           {currentSlides.map((_, index) => (
