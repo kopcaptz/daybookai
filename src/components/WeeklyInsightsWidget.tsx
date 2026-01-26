@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookOpen, Smile, Bell, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -23,8 +24,16 @@ function getTrendSymbol(trend: WeeklyStats['moodTrend']): string {
   }
 }
 
+function scrollToReminders() {
+  const el = document.getElementById('reminders-section');
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
 export function WeeklyInsightsWidget() {
   const { language } = useI18n();
+  const navigate = useNavigate();
   
   const stats = useLiveQuery(() => getWeeklyStats(), []);
   
@@ -60,8 +69,16 @@ export function WeeklyInsightsWidget() {
       
       {/* Metrics grid */}
       <div className="grid grid-cols-3 gap-3">
-        {/* Entries count */}
-        <div className="flex flex-col items-center text-center">
+        {/* Entries count - tap to Calendar */}
+        <button
+          type="button"
+          onClick={() => navigate('/calendar')}
+          className={cn(
+            "flex flex-col items-center text-center p-2 -m-2 rounded-md",
+            "cursor-pointer transition-colors",
+            "hover:bg-accent/50 active:bg-accent/70"
+          )}
+        >
           <div className="flex items-center gap-1.5 mb-1">
             <BookOpen className="h-4 w-4 text-cyber-sigil" />
           </div>
@@ -71,10 +88,18 @@ export function WeeklyInsightsWidget() {
           <span className="text-[10px] text-muted-foreground">
             {labels.entries}
           </span>
-        </div>
+        </button>
         
-        {/* Average mood */}
-        <div className="flex flex-col items-center text-center">
+        {/* Average mood - tap to Calendar */}
+        <button
+          type="button"
+          onClick={() => navigate('/calendar')}
+          className={cn(
+            "flex flex-col items-center text-center p-2 -m-2 rounded-md",
+            "cursor-pointer transition-colors",
+            "hover:bg-accent/50 active:bg-accent/70"
+          )}
+        >
           <div className="flex items-center gap-1.5 mb-1">
             <Smile className="h-4 w-4 text-amber-500" />
           </div>
@@ -96,10 +121,18 @@ export function WeeklyInsightsWidget() {
           <span className="text-[10px] text-muted-foreground">
             {labels.mood}
           </span>
-        </div>
+        </button>
         
-        {/* Pending reminders */}
-        <div className="flex flex-col items-center text-center">
+        {/* Pending reminders - tap to scroll */}
+        <button
+          type="button"
+          onClick={scrollToReminders}
+          className={cn(
+            "flex flex-col items-center text-center p-2 -m-2 rounded-md",
+            "cursor-pointer transition-colors",
+            "hover:bg-accent/50 active:bg-accent/70"
+          )}
+        >
           <div className="flex items-center gap-1.5 mb-1">
             <Bell className="h-4 w-4 text-cyan-500" />
           </div>
@@ -109,7 +142,7 @@ export function WeeklyInsightsWidget() {
           <span className="text-[10px] text-muted-foreground">
             {labels.reminders}
           </span>
-        </div>
+        </button>
       </div>
     </div>
   );

@@ -114,7 +114,9 @@ function TodayContent() {
         <WeeklyInsightsWidget />
         
         {/* Gentle Nudges: Reminders Section */}
-        <RemindersSection />
+        <div id="reminders-section">
+          <RemindersSection />
+        </div>
         
         {/* Biography Prompt Dialog */}
         <BiographyPromptDialog
