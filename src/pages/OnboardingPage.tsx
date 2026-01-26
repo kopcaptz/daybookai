@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, BookOpen, LayoutDashboard, PenLine, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -116,6 +116,45 @@ export default function OnboardingPage() {
       goToSlide(currentSlide - 1);
     }
   };
+
+  // Keyboard navigation
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Ignore if user is typing in an input
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'PageDown':
+        e.preventDefault();
+        if (currentSlide < currentSlides.length - 1) {
+          goToSlide(currentSlide + 1);
+        }
+        break;
+      case 'ArrowLeft':
+      case 'PageUp':
+        e.preventDefault();
+        if (currentSlide > 0) {
+          goToSlide(currentSlide - 1);
+        }
+        break;
+      case 'Enter':
+        e.preventDefault();
+        handleNext();
+        break;
+      case 'Escape':
+        e.preventDefault();
+        handleSkip();
+        break;
+    }
+  }, [currentSlide, currentSlides.length]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   const handleOpenSettings = () => {
     setOnboarded();
