@@ -66,10 +66,17 @@ export default function OnboardingPage() {
   const { language } = useI18n();
   const navigate = useNavigate();
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
 
   const currentSlides = slides[language];
   const currentLabels = labels[language];
   const isLastSlide = currentSlide === currentSlides.length - 1;
+
+  const goToSlide = (index: number) => {
+    if (index === currentSlide) return;
+    setSlideDirection(index > currentSlide ? 'right' : 'left');
+    setCurrentSlide(index);
+  };
 
   const handleSkip = () => {
     setOnboarded();
@@ -81,13 +88,13 @@ export default function OnboardingPage() {
       setOnboarded();
       navigate('/');
     } else {
-      setCurrentSlide((prev) => prev + 1);
+      goToSlide(currentSlide + 1);
     }
   };
 
   const handleBack = () => {
     if (currentSlide > 0) {
-      setCurrentSlide((prev) => prev - 1);
+      goToSlide(currentSlide - 1);
     }
   };
 
@@ -114,7 +121,11 @@ export default function OnboardingPage() {
       <div className="flex-1 flex flex-col items-center justify-center px-8 pb-8">
         <div
           key={currentSlide}
-          className="text-center max-w-sm animate-in fade-in duration-300"
+          className={cn(
+            'text-center max-w-sm animate-in fade-in duration-300',
+            slideDirection === 'right' ? 'slide-in-from-right-4' : 'slide-in-from-left-4',
+            'motion-reduce:slide-in-from-right-0 motion-reduce:slide-in-from-left-0'
+          )}
         >
           <h1 className="text-2xl font-semibold text-foreground mb-4">
             {currentSlides[currentSlide].title}
@@ -145,7 +156,7 @@ export default function OnboardingPage() {
             <button
               key={index}
               type="button"
-              onClick={() => setCurrentSlide(index)}
+              onClick={() => goToSlide(index)}
               aria-label={language === 'ru' ? `Перейти к слайду ${index + 1}` : `Go to slide ${index + 1}`}
               className={cn(
                 'w-2.5 h-2.5 rounded-full transition-colors duration-200 cursor-pointer',
