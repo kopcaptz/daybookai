@@ -1003,3 +1003,63 @@ export async function getPendingReminderCount(): Promise<number> {
   const reminders = await getPendingTodayAndOverdueReminders();
   return reminders.length;
 }
+
+/**
+ * Weekly stats for insights widget.
+ */
+export interface WeeklyStats {
+  entries7d: number;
+  avgMood7d: number | null;
+  moodTrend: 'up' | 'down' | 'flat';
+  pendingReminders: number;
+}
+
+/**
+ * Get weekly statistics for the insights widget.
+ * Compares last 7 days vs previous 7 days for trend.
+ */
+export async function getWeeklyStats(): Promise<WeeklyStats> {
+  const now = Date.now();
+  const msPerDay = 24 * 60 * 60 * 1000;
+  
+  // Time windows
+  const start7d = now - 7 * msPerDay;
+  const start14d = now - 14 * msPerDay;
+  
+  // Get all entries for last 14 days
+  const allEntries = await db.entries.toArray();
+  
+  // Filter by createdAt timestamp
+  const entries7d = allEntries.filter(e => e.createdAt >= start7d && e.createdAt <= now);
+  const entriesPrev7d = allEntries.filter(e => e.createdAt >= start14d && e.createdAt < start7d);
+  
+  // Calculate avg mood for last 7 days (only entries with valid mood 1-5)
+  const moodsLast7d = entries7d.map(e => e.mood).filter(m => m >= 1 && m <= 5);
+  const avgMood7d = moodsLast7d.length > 0 
+    ? Math.round((moodsLast7d.reduce((a, b) => a + b, 0) / moodsLast7d.length) * 10) / 10
+    : null;
+  
+  // Calculate avg mood for previous 7 days
+  const moodsPrev7d = entriesPrev7d.map(e => e.mood).filter(m => m >= 1 && m <= 5);
+  const avgMoodPrev7d = moodsPrev7d.length > 0
+    ? moodsPrev7d.reduce((a, b) => a + b, 0) / moodsPrev7d.length
+    : null;
+  
+  // Determine trend (threshold 0.15)
+  let moodTrend: 'up' | 'down' | 'flat' = 'flat';
+  if (avgMood7d !== null && avgMoodPrev7d !== null) {
+    const diff = avgMood7d - avgMoodPrev7d;
+    if (diff > 0.15) moodTrend = 'up';
+    else if (diff < -0.15) moodTrend = 'down';
+  }
+  
+  // Get pending reminders count
+  const pendingReminders = await getPendingReminderCount();
+  
+  return {
+    entries7d: entries7d.length,
+    avgMood7d,
+    moodTrend,
+    pendingReminders,
+  };
+}

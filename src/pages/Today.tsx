@@ -10,6 +10,7 @@ import { BiographyDisplay } from '@/components/BiographyDisplay';
 import { BiographyPromptDialog } from '@/components/BiographyPromptDialog';
 import { RemindersSection } from '@/components/reminders/RemindersSection';
 import { QuickReminderSheet } from '@/components/reminders/QuickReminderSheet';
+import { WeeklyInsightsWidget } from '@/components/WeeklyInsightsWidget';
 import { useBiographyPrompts } from '@/hooks/useBiographyPrompts';
 import { getBiography, StoredBiography, getTodayDate } from '@/lib/biographyService';
 import { loadAISettings } from '@/lib/aiConfig';
@@ -109,6 +110,9 @@ function TodayContent() {
       </header>
 
       <main className="px-4 pt-4">
+        {/* Weekly Insights Widget */}
+        <WeeklyInsightsWidget />
+        
         {/* Gentle Nudges: Reminders Section */}
         <RemindersSection />
         
