@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Sun, Moon, Monitor, Download, Trash2, AlertTriangle, HardDrive, Smartphone, Globe, Clock, Shield, Receipt, Bell } from 'lucide-react';
+import { Sun, Moon, Monitor, Download, Trash2, AlertTriangle, HardDrive, Smartphone, Globe, Clock, Shield, Receipt, Bell, Coffee, Zap } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { exportAllData, clearAllData, STORAGE_WARNINGS, loadBioSettings, saveBioSettings } from '@/lib/db';
 import { useStorageUsage } from '@/hooks/useStorageUsage';
@@ -131,9 +131,10 @@ function SettingsContent() {
   };
 
   const themeOptions = [
-    { value: 'light' as const, label: t('settings.themeLight'), icon: Sun },
-    { value: 'dark' as const, label: t('settings.themeDark'), icon: Moon },
-    { value: 'system' as const, label: t('settings.themeSystem'), icon: Monitor },
+    { value: 'light' as const, label: language === 'ru' ? 'Светлая' : 'Light', icon: Sun },
+    { value: 'espresso' as const, label: language === 'ru' ? 'Кофейная' : 'Espresso', icon: Coffee },
+    { value: 'cyber' as const, label: language === 'ru' ? 'Кибер' : 'Cyber', icon: Zap },
+    { value: 'system' as const, label: language === 'ru' ? 'Система' : 'System', icon: Monitor },
   ];
 
   const languageOptions: { value: Language; label: string }[] = [
