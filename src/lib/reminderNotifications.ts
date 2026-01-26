@@ -6,7 +6,7 @@
 
 import { getPendingTodayAndOverdueReminders, type Reminder } from './db';
 import { formatDueDate } from './reminderUtils';
-import { isCapacitorNative, canShowNativeNotifications } from './notifications';
+import { isCapacitorNative, canShowNativeNotifications, ensureNotificationChannel } from './notifications';
 
 // ============================================
 // SETTINGS STORAGE
@@ -87,6 +87,9 @@ export async function reconcileReminderNotifications(language: 'ru' | 'en'): Pro
     return;
   }
   
+  // Ensure notification channel exists (Android 8+)
+  await ensureNotificationChannel();
+  
   try {
     const { LocalNotifications } = await import('@capacitor/local-notifications');
     
@@ -143,7 +146,11 @@ function buildReminderNotification(reminder: Reminder, language: 'ru' | 'en') {
     id: getReminderNotificationId(reminder.id!),
     title: reminder.actionText.slice(0, 50),
     body: formatDueDate(reminder.dueAt, language),
-    schedule: { at: scheduleAt },
+    schedule: { 
+      at: scheduleAt,
+      allowWhileIdle: true, // Doze mode: fire even if device is idle
+    },
+    channelId: 'reminders', // Android 8+ channel
     extra: {
       type: 'reminder',
       reminderId: reminder.id,
