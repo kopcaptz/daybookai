@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate, Navigate } from "react-router-dom";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { BottomNav } from "@/components/BottomNav";
 import { InstallPrompt } from "@/components/InstallPrompt";
@@ -13,6 +13,7 @@ import { GlobalAIPinDialog } from "@/components/GlobalAIPinDialog";
 import { I18nProvider } from "@/lib/i18n";
 import { initNotificationListeners, setNavigationCallback } from "@/lib/notifications";
 import { reconcileReminderNotifications } from "@/lib/reminderNotifications";
+import { isOnboarded } from "@/lib/onboarding";
 
 // Lazy load pages to reduce initial bundle size
 const Today = lazy(() => import("./pages/Today"));
@@ -29,8 +30,21 @@ const ReceiptReviewPage = lazy(() => import("./pages/ReceiptReviewPage"));
 const ReceiptDetailPage = lazy(() => import("./pages/ReceiptDetailPage"));
 const ReceiptAnalyticsPage = lazy(() => import("./pages/ReceiptAnalyticsPage"));
 const ReminderDetailPage = lazy(() => import("./pages/ReminderDetailPage"));
+const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 
 const queryClient = new QueryClient();
+
+// Guard component for onboarding redirect
+function OnboardingGuard({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  
+  // If not onboarded and not already on /onboarding, redirect
+  if (!isOnboarded() && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
+  }
+  
+  return <>{children}</>;
+}
 
 // Minimal loading fallback
 function PageLoader() {
@@ -58,8 +72,8 @@ function AppContent() {
     reconcileReminderNotifications(storedLang as 'ru' | 'en');
   }, [navigate]);
   
-  // Hide bottom nav on entry editor and receipt pages
-  const hideNav = location.pathname === '/new' || location.pathname.startsWith('/entry/') || location.pathname === '/receipts' || location.pathname.startsWith('/receipts/');
+  // Hide bottom nav on entry editor, receipt pages, and onboarding
+  const hideNav = location.pathname === '/new' || location.pathname.startsWith('/entry/') || location.pathname === '/receipts' || location.pathname.startsWith('/receipts/') || location.pathname === '/onboarding';
 
   return (
     <div className="min-h-screen bg-background starry-bg moon-vignette relative">
@@ -68,20 +82,24 @@ function AppContent() {
         <PageTransition>
           <Suspense fallback={<PageLoader />}>
             <Routes>
-              <Route path="/" element={<Today />} />
-              <Route path="/calendar" element={<CalendarPage />} />
-              <Route path="/search" element={<SearchPage />} />
-              <Route path="/chat" element={<ChatPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/new" element={<NewEntry />} />
-              <Route path="/entry/:id" element={<NewEntry />} />
-              <Route path="/day/:date" element={<DayView />} />
-              <Route path="/receipts" element={<ReceiptsPage />} />
-              <Route path="/receipts/scan" element={<ReceiptScanPage />} />
-              <Route path="/receipts/review" element={<ReceiptReviewPage />} />
-              <Route path="/receipts/analytics" element={<ReceiptAnalyticsPage />} />
-              <Route path="/receipts/:id" element={<ReceiptDetailPage />} />
-              <Route path="/reminder/:id" element={<ReminderDetailPage />} />
+              {/* Onboarding route - no guard needed */}
+              <Route path="/onboarding" element={<OnboardingPage />} />
+              
+              {/* All other routes wrapped in onboarding guard */}
+              <Route path="/" element={<OnboardingGuard><Today /></OnboardingGuard>} />
+              <Route path="/calendar" element={<OnboardingGuard><CalendarPage /></OnboardingGuard>} />
+              <Route path="/search" element={<OnboardingGuard><SearchPage /></OnboardingGuard>} />
+              <Route path="/chat" element={<OnboardingGuard><ChatPage /></OnboardingGuard>} />
+              <Route path="/settings" element={<OnboardingGuard><SettingsPage /></OnboardingGuard>} />
+              <Route path="/new" element={<OnboardingGuard><NewEntry /></OnboardingGuard>} />
+              <Route path="/entry/:id" element={<OnboardingGuard><NewEntry /></OnboardingGuard>} />
+              <Route path="/day/:date" element={<OnboardingGuard><DayView /></OnboardingGuard>} />
+              <Route path="/receipts" element={<OnboardingGuard><ReceiptsPage /></OnboardingGuard>} />
+              <Route path="/receipts/scan" element={<OnboardingGuard><ReceiptScanPage /></OnboardingGuard>} />
+              <Route path="/receipts/review" element={<OnboardingGuard><ReceiptReviewPage /></OnboardingGuard>} />
+              <Route path="/receipts/analytics" element={<OnboardingGuard><ReceiptAnalyticsPage /></OnboardingGuard>} />
+              <Route path="/receipts/:id" element={<OnboardingGuard><ReceiptDetailPage /></OnboardingGuard>} />
+              <Route path="/reminder/:id" element={<OnboardingGuard><ReminderDetailPage /></OnboardingGuard>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
