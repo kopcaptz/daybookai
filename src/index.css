@@ -195,6 +195,29 @@
     font-family: 'Inter', system-ui, sans-serif;
   }
 
+  /* Smooth theme transition */
+  html, body, #root {
+    transition: background-color 250ms ease-out, color 250ms ease-out;
+  }
+
+  .panel-glass,
+  .grimoire-card,
+  [class*="card"],
+  [class*="Card"] {
+    transition: background-color 250ms ease-out, color 250ms ease-out, border-color 250ms ease-out, box-shadow 250ms ease-out;
+  }
+
+  /* Disable theme transitions for reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    html, body, #root,
+    .panel-glass,
+    .grimoire-card,
+    [class*="card"],
+    [class*="Card"] {
+      transition: none;
+    }
+  }
+
   /* Grimoire headings — clean semi-serif */
   h1, h2, h3, .grimoire-heading {
     font-family: 'Cinzel', 'Times New Roman', serif;
