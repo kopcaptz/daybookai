@@ -33,7 +33,7 @@ function applyThemeClasses(mode: ThemeMode) {
 
 export function useTheme() {
   const [theme, setThemeState] = useState<ThemeMode>(() => {
-    if (typeof window === 'undefined') return 'espresso';
+    if (typeof window === 'undefined') return 'system';
     const saved = localStorage.getItem(THEME_KEY) as ThemeMode | null;
     // Validate saved value
     if (saved === 'light' || saved === 'espresso' || saved === 'cyber' || saved === 'system') {
@@ -44,7 +44,7 @@ export function useTheme() {
       localStorage.setItem(THEME_KEY, 'espresso');
       return 'espresso';
     }
-    return 'espresso'; // Default to espresso dark
+    return 'system'; // Default to system theme for new users
   });
 
   const setTheme = useCallback((newTheme: ThemeMode) => {
