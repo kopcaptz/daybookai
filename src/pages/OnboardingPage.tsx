@@ -1,10 +1,13 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BookOpen, LayoutDashboard, PenLine, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
 import { setOnboarded } from '@/lib/onboarding';
 import { cn } from '@/lib/utils';
+
+// Icons for each slide (decorative)
+const slideIcons = [BookOpen, LayoutDashboard, PenLine, Shield];
 
 // Swipe gesture constants
 const SWIPE_THRESHOLD = 60; // px to trigger slide change
@@ -245,6 +248,17 @@ export default function OnboardingPage() {
             transition: dragOffset !== 0 ? 'none' : undefined,
           }}
         >
+          {/* Slide icon */}
+          {(() => {
+            const Icon = slideIcons[currentSlide];
+            return (
+              <Icon
+                className="h-11 w-11 mx-auto mb-5 text-primary/70"
+                aria-hidden="true"
+                strokeWidth={1.5}
+              />
+            );
+          })()}
           <h1 className="text-2xl font-semibold text-foreground mb-4">
             {currentSlides[currentSlide].title}
           </h1>
