@@ -142,13 +142,17 @@ export default function OnboardingPage() {
         {/* Progress dots */}
         <div className="flex justify-center gap-2">
           {currentSlides.map((_, index) => (
-            <div
+            <button
               key={index}
+              type="button"
+              onClick={() => setCurrentSlide(index)}
+              aria-label={language === 'ru' ? `Перейти к слайду ${index + 1}` : `Go to slide ${index + 1}`}
               className={cn(
-                'w-2 h-2 rounded-full transition-colors duration-200',
+                'w-2.5 h-2.5 rounded-full transition-colors duration-200 cursor-pointer',
+                'hover:scale-110 active:scale-95 transition-transform',
                 index === currentSlide
                   ? 'bg-primary'
-                  : 'bg-muted-foreground/30'
+                  : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'
               )}
             />
           ))}
