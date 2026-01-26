@@ -107,6 +107,92 @@ export async function canShowNativeNotifications(): Promise<boolean> {
   }
 }
 
+// ============================================
+// NOTIFICATION CHANNEL (Android 8+)
+// ============================================
+
+let channelCreated = false;
+
+/**
+ * Ensure reminders notification channel exists.
+ * Must be called before scheduling notifications on Android 8+.
+ */
+export async function ensureNotificationChannel(): Promise<void> {
+  if (!isCapacitorNative() || channelCreated) {
+    return;
+  }
+  
+  try {
+    const { LocalNotifications } = await import('@capacitor/local-notifications');
+    
+    await LocalNotifications.createChannel({
+      id: 'reminders',
+      name: 'Напоминания / Reminders',
+      description: 'Уведомления о напоминаниях',
+      importance: 4, // HIGH - makes sound, shows heads-up
+      visibility: 1, // PUBLIC
+      sound: 'default',
+      vibration: true,
+    });
+    
+    channelCreated = true;
+  } catch (error) {
+    console.log('Failed to create notification channel:', error);
+  }
+}
+
+// ============================================
+// TEST NOTIFICATION (Debug)
+// ============================================
+
+/**
+ * Schedule a test notification in 5 seconds.
+ * Used for debugging notification pipeline.
+ */
+export async function scheduleTestNotification(): Promise<boolean> {
+  if (!isCapacitorNative()) {
+    return false;
+  }
+  
+  const canNative = await canShowNativeNotifications();
+  if (!canNative) {
+    return false;
+  }
+  
+  await ensureNotificationChannel();
+  
+  try {
+    const { LocalNotifications } = await import('@capacitor/local-notifications');
+    
+    const testId = 99999; // Fixed test ID
+    
+    // Cancel any existing test notification
+    await LocalNotifications.cancel({ notifications: [{ id: testId }] });
+    
+    // Schedule in 5 seconds
+    await LocalNotifications.schedule({
+      notifications: [{
+        id: testId,
+        title: 'Тест / Test',
+        body: 'Уведомление работает! / Notification works!',
+        schedule: { 
+          at: new Date(Date.now() + 5000),
+          allowWhileIdle: true,
+        },
+        channelId: 'reminders',
+        extra: { type: 'test', deepLink: '/settings' },
+        smallIcon: 'ic_stat_icon_config_sample',
+        iconColor: '#10B981', // Green for test
+      }],
+    });
+    
+    return true;
+  } catch (error) {
+    console.log('Test notification failed:', error);
+    return false;
+  }
+}
+
 // Show biography ready notification
 export async function showBiographyNotification(
   date: string,

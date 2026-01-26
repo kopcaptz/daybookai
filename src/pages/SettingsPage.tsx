@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useI18n, Language } from '@/lib/i18n';
 import { GrimoireIcon } from '@/components/icons/SigilIcon';
-import { isCapacitorNative, requestNotificationPermission } from '@/lib/notifications';
+import { isCapacitorNative, requestNotificationPermission, scheduleTestNotification } from '@/lib/notifications';
 import {
   loadReminderNotificationSettings,
   saveReminderNotificationSettings,
@@ -47,6 +47,7 @@ function SettingsContent() {
   const [reminderNotificationsEnabled, setReminderNotificationsEnabled] = useState(
     () => loadReminderNotificationSettings().enabled
   );
+  const [isTestingNotification, setIsTestingNotification] = useState(false);
   
   const handleReminderNotificationsToggle = async (enabled: boolean) => {
     if (enabled) {
@@ -66,6 +67,26 @@ function SettingsContent() {
     } else {
       await cancelAllReminderNotifications();
       toast.success(language === 'ru' ? 'Уведомления отключены' : 'Notifications disabled');
+    }
+  };
+  
+  const handleTestNotification = async () => {
+    setIsTestingNotification(true);
+    try {
+      const granted = await requestNotificationPermission();
+      if (!granted) {
+        toast.error(language === 'ru' ? 'Разрешение отклонено' : 'Permission denied');
+        return;
+      }
+      
+      const scheduled = await scheduleTestNotification();
+      if (scheduled) {
+        toast.success(language === 'ru' ? 'Уведомление через 5 сек...' : 'Notification in 5 sec...');
+      } else {
+        toast.error(language === 'ru' ? 'Не удалось запланировать' : 'Failed to schedule');
+      }
+    } finally {
+      setIsTestingNotification(false);
     }
   };
 
@@ -230,7 +251,7 @@ function SettingsContent() {
                   : 'Push notifications for reminders'}
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm">
                   {language === 'ru' ? 'Включить уведомления' : 'Enable notifications'}
@@ -240,6 +261,20 @@ function SettingsContent() {
                   onCheckedChange={handleReminderNotificationsToggle}
                 />
               </div>
+              
+              {/* Test notification button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTestNotification}
+                disabled={isTestingNotification}
+                className="w-full"
+              >
+                <Bell className="h-4 w-4 mr-2" />
+                {isTestingNotification 
+                  ? (language === 'ru' ? 'Планирование...' : 'Scheduling...')
+                  : (language === 'ru' ? 'Тест (5 сек)' : 'Test (5 sec)')}
+              </Button>
             </CardContent>
           </Card>
         )}
