@@ -323,10 +323,12 @@ export function ReminderCard({ reminder, variant, onAction }: ReminderCardProps)
             </p>
             
             {/* Next occurrence for repeating reminders */}
-            {isRepeating && nextLabel && (
+            {isRepeating && (
               <p className="text-xs text-muted-foreground mt-0.5">
                 {language === 'ru' ? 'Далее: ' : 'Next: '}
-                {nextLabel}
+                {reminder.skipNext 
+                  ? (language === 'ru' ? 'пропущено' : 'skipped')
+                  : nextLabel}
               </p>
             )}
           </div>
