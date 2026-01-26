@@ -25,6 +25,7 @@ import {
   getBiography,
 } from '@/lib/biographyService';
 import { loadAISettings } from '@/lib/aiConfig';
+import { detectActionableText, type SuggestedTime } from '@/lib/reminderDetection';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
@@ -36,6 +37,7 @@ import { MediaToolbar } from '@/components/media/MediaToolbar';
 import { AttachmentList, AttachmentPreview } from '@/components/media/AttachmentList';
 import { StorageIndicator } from '@/components/StorageIndicator';
 import { LinkedReceiptsList } from '@/components/receipts/LinkedReceiptsList';
+import { ReminderPrompt } from '@/components/reminders/ReminderPrompt';
 import { useDraft, loadDraft, removeDraft, hasDraftContent } from '@/hooks/useDraft';
 import {
   AlertDialog,
@@ -85,6 +87,12 @@ function EntryEditorContent() {
   const [showUpdateBioDialog, setShowUpdateBioDialog] = useState(false);
   const [staleBioDate, setStaleBioDate] = useState<string | null>(null);
   const [isUpdatingBio, setIsUpdatingBio] = useState(false);
+  
+  // Reminder prompt state (after saving actionable entry)
+  const [reminderPromptOpen, setReminderPromptOpen] = useState(false);
+  const [reminderPromptEntryId, setReminderPromptEntryId] = useState<number | null>(null);
+  const [reminderPromptSourceText, setReminderPromptSourceText] = useState('');
+  const [reminderPromptSuggestedTime, setReminderPromptSuggestedTime] = useState<SuggestedTime>('tomorrow_morning');
 
   const allTags = useLiveQuery(() => getAllTags(), []);
 
@@ -307,6 +315,19 @@ function EntryEditorContent() {
           setShowUpdateBioDialog(true);
           setIsSaving(false);
           return;
+        }
+      }
+
+      // Check for actionable content (only for non-private, new entries)
+      if (!isEditing && !isPrivate && text.trim()) {
+        const detection = detectActionableText(text);
+        if (detection.isActionable && detection.suggestedTime) {
+          setReminderPromptEntryId(entryId!);
+          setReminderPromptSourceText(text);
+          setReminderPromptSuggestedTime(detection.suggestedTime);
+          setReminderPromptOpen(true);
+          setIsSaving(false);
+          return; // Don't navigate yet - wait for prompt
         }
       }
 
@@ -612,6 +633,23 @@ function EntryEditorContent() {
         </div>
       </main>
       </div>
+      
+      {/* Reminder Prompt (shown after saving actionable entry) */}
+      {reminderPromptEntryId !== null && (
+        <ReminderPrompt
+          open={reminderPromptOpen}
+          onOpenChange={(open) => {
+            setReminderPromptOpen(open);
+            if (!open) {
+              // User dismissed without creating - navigate away
+              navigate(-1);
+            }
+          }}
+          entryId={reminderPromptEntryId}
+          sourceText={reminderPromptSourceText}
+          suggestedTime={reminderPromptSuggestedTime}
+        />
+      )}
     </>
   );
 }
