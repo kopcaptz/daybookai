@@ -70,10 +70,10 @@
     --background: 28 22% 9%;
     --foreground: 32 18% 92%;
 
-    --card: 28 20% 12%;
+    --card: 28 20% 13%;
     --card-foreground: 32 18% 92%;
 
-    --popover: 28 20% 13%;
+    --popover: 28 20% 14%;
     --popover-foreground: 32 18% 92%;
 
     /* Warm amber primary */
@@ -85,7 +85,7 @@
     --secondary-foreground: 32 15% 82%;
 
     --muted: 28 16% 16%;
-    --muted-foreground: 30 12% 70%;
+    --muted-foreground: 30 12% 72%;
 
     /* Warm amber accent */
     --accent: 32 70% 50%;
@@ -94,8 +94,8 @@
     --destructive: 0 55% 48%;
     --destructive-foreground: 32 20% 95%;
 
-    --border: 28 14% 22%;
-    --input: 28 14% 20%;
+    --border: 28 14% 24%;
+    --input: 28 14% 22%;
     --ring: 36 80% 52%;
 
     /* Espresso mood colors (warm-shifted) */
@@ -127,10 +127,10 @@
     --background: 230 25% 6%;
     --foreground: 200 25% 92%;
 
-    --card: 230 25% 9%;
+    --card: 230 25% 10%;
     --card-foreground: 200 25% 92%;
 
-    --popover: 230 25% 10%;
+    --popover: 230 25% 11%;
     --popover-foreground: 200 25% 92%;
 
     /* Cold cyan glow */
@@ -142,7 +142,7 @@
     --secondary-foreground: 270 45% 85%;
 
     --muted: 230 20% 14%;
-    --muted-foreground: 200 20% 72%;
+    --muted-foreground: 200 20% 74%;
 
     /* Violet accent */
     --accent: 270 60% 55%;
@@ -151,8 +151,8 @@
     --destructive: 0 55% 50%;
     --destructive-foreground: 200 30% 95%;
 
-    --border: 230 25% 22%;
-    --input: 230 25% 20%;
+    --border: 230 25% 24%;
+    --input: 230 25% 22%;
     --ring: 185 75% 55%;
 
     /* Cyber mood colors */
