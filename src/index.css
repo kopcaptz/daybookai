@@ -66,60 +66,60 @@
   }
 
   .dark {
-    /* 🌑 Cyber-Grimoire Dark — Primary Theme */
-    --background: 230 25% 6%;
-    --foreground: 200 25% 92%;
+    /* ☕ Espresso Dark — Warm Coffee Theme */
+    --background: 28 22% 7%;
+    --foreground: 32 18% 90%;
 
-    --card: 230 25% 9%;
-    --card-foreground: 200 25% 92%;
+    --card: 28 20% 10%;
+    --card-foreground: 32 18% 90%;
 
-    --popover: 230 25% 10%;
-    --popover-foreground: 200 25% 92%;
+    --popover: 28 20% 11%;
+    --popover-foreground: 32 18% 90%;
 
-    /* Cold cyan glow */
-    --primary: 185 75% 55%;
-    --primary-foreground: 230 25% 6%;
+    /* Warm amber primary */
+    --primary: 36 85% 55%;
+    --primary-foreground: 28 22% 7%;
 
-    /* Violet/purple secondary */
-    --secondary: 270 35% 20%;
-    --secondary-foreground: 270 45% 85%;
+    /* Warm brown secondary */
+    --secondary: 28 18% 16%;
+    --secondary-foreground: 32 15% 80%;
 
-    --muted: 230 20% 14%;
-    --muted-foreground: 200 20% 72%;
+    --muted: 28 16% 14%;
+    --muted-foreground: 30 12% 65%;
 
-    /* Violet accent */
-    --accent: 270 60% 55%;
-    --accent-foreground: 230 25% 98%;
+    /* Warm amber accent */
+    --accent: 32 70% 50%;
+    --accent-foreground: 28 22% 98%;
 
-    --destructive: 0 55% 50%;
-    --destructive-foreground: 200 30% 95%;
+    --destructive: 0 55% 48%;
+    --destructive-foreground: 32 20% 95%;
 
-    --border: 230 25% 22%;
-    --input: 230 25% 20%;
-    --ring: 185 75% 55%;
+    --border: 28 14% 18%;
+    --input: 28 14% 16%;
+    --ring: 36 80% 50%;
 
-    /* Cyber mood colors */
-    --mood-1: 0 50% 50%;
-    --mood-2: 30 55% 50%;
-    --mood-3: 185 55% 50%;
-    --mood-4: 160 50% 45%;
-    --mood-5: 270 55% 60%;
+    /* Espresso mood colors (warm-shifted) */
+    --mood-1: 0 50% 48%;
+    --mood-2: 32 60% 50%;
+    --mood-3: 45 55% 50%;
+    --mood-4: 150 40% 42%;
+    --mood-5: 28 55% 55%;
 
-    /* Cyber-mystic glow accents */
-    --glow-primary: 185 85% 60%;
-    --glow-secondary: 270 75% 65%;
-    --sigil: 185 80% 60%;
-    --rune: 270 60% 70%;
+    /* Warm glow accents */
+    --glow-primary: 36 90% 58%;
+    --glow-secondary: 28 60% 50%;
+    --sigil: 36 85% 55%;
+    --rune: 32 50% 60%;
 
-    /* Sidebar dark */
-    --sidebar-background: 230 25% 7%;
-    --sidebar-foreground: 200 25% 88%;
-    --sidebar-primary: 185 75% 55%;
-    --sidebar-primary-foreground: 230 25% 6%;
-    --sidebar-accent: 270 35% 18%;
-    --sidebar-accent-foreground: 200 30% 92%;
-    --sidebar-border: 230 25% 18%;
-    --sidebar-ring: 185 75% 55%;
+    /* Sidebar espresso */
+    --sidebar-background: 28 22% 8%;
+    --sidebar-foreground: 32 18% 85%;
+    --sidebar-primary: 36 85% 55%;
+    --sidebar-primary-foreground: 28 22% 7%;
+    --sidebar-accent: 28 18% 14%;
+    --sidebar-accent-foreground: 32 15% 88%;
+    --sidebar-border: 28 14% 16%;
+    --sidebar-ring: 36 80% 50%;
   }
 }
 
