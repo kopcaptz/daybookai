@@ -250,12 +250,12 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-background via-background to-muted/20 relative overflow-hidden">
-      {/* Subtle radial glow in center */}
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-background via-background to-muted/30 relative overflow-hidden">
+      {/* Subtle neutral radial glow in center */}
       <div 
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: 'radial-gradient(ellipse 80% 50% at 50% 40%, hsl(var(--primary) / 0.08) 0%, transparent 70%)',
+          background: 'radial-gradient(ellipse 80% 50% at 50% 40%, hsl(var(--muted-foreground) / 0.04) 0%, transparent 70%)',
         }}
         aria-hidden="true"
       />
