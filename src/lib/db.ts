@@ -1012,6 +1012,61 @@ export interface WeeklyStats {
   avgMood7d: number | null;
   moodTrend: 'up' | 'down' | 'flat';
   pendingReminders: number;
+  streakDays: number;
+}
+
+/**
+ * Format a Date to yyyy-MM-dd in local time.
+ */
+function formatDateLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Calculate streak (consecutive days with at least 1 entry).
+ * Uses entry.date (yyyy-MM-dd), not createdAt.
+ * If today has entry => starts from today.
+ * Else if yesterday has entry => starts from yesterday (user hasn't written yet).
+ * Counts backward until break.
+ */
+function calculateStreak(datesWithEntries: Set<string>): number {
+  const today = new Date();
+  const todayStr = formatDateLocal(today);
+  
+  // Determine start date
+  let startDate: Date;
+  if (datesWithEntries.has(todayStr)) {
+    startDate = today;
+  } else {
+    // Check yesterday
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = formatDateLocal(yesterday);
+    if (datesWithEntries.has(yesterdayStr)) {
+      startDate = yesterday;
+    } else {
+      return 0; // No streak
+    }
+  }
+  
+  // Count consecutive days backward from startDate
+  let streak = 0;
+  let current = new Date(startDate);
+  
+  while (true) {
+    const currentStr = formatDateLocal(current);
+    if (datesWithEntries.has(currentStr)) {
+      streak++;
+      current.setDate(current.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  
+  return streak;
 }
 
 /**
@@ -1056,10 +1111,17 @@ export async function getWeeklyStats(): Promise<WeeklyStats> {
   // Get pending reminders count
   const pendingReminders = await getPendingReminderCount();
   
+  // Calculate streak from all entries (using entry.date, not createdAt)
+  const datesWithEntries = new Set<string>(
+    allEntries.map(e => e.date).filter((d): d is string => !!d)
+  );
+  const streakDays = calculateStreak(datesWithEntries);
+  
   return {
     entries7d: entries7d.length,
     avgMood7d,
     moodTrend,
     pendingReminders,
+    streakDays,
   };
 }
