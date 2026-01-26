@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
 import { setOnboarded } from '@/lib/onboarding';
 import { cn } from '@/lib/utils';
+import { useTheme, type ThemeMode } from '@/hooks/useTheme';
 
 // Icons for each slide (decorative)
 const slideIcons = [BookOpen, LayoutDashboard, PenLine, Shield];
@@ -59,6 +60,7 @@ const labels = {
     back: 'Назад',
     start: 'Начать',
     openSettings: 'Открыть настройки',
+    themeTitle: 'Тема',
   },
   en: {
     skip: 'Skip',
@@ -66,12 +68,21 @@ const labels = {
     back: 'Back',
     start: 'Start',
     openSettings: 'Open settings',
+    themeTitle: 'Theme',
   },
 };
+
+const themeOptions: { mode: ThemeMode; labelRu: string; labelEn: string }[] = [
+  { mode: 'system', labelRu: 'Система', labelEn: 'System' },
+  { mode: 'light', labelRu: 'Светлая', labelEn: 'Light' },
+  { mode: 'espresso', labelRu: 'Эспрессо', labelEn: 'Espresso' },
+  { mode: 'cyber', labelRu: 'Кибер', labelEn: 'Cyber' },
+];
 
 export default function OnboardingPage() {
   const { language } = useI18n();
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
   const [dragOffset, setDragOffset] = useState(0);
@@ -323,6 +334,33 @@ export default function OnboardingPage() {
           <p className="text-muted-foreground leading-relaxed">
             {currentSlides[currentSlide].body}
           </p>
+
+          {/* Theme selector on Slide 4 only */}
+          {isLastSlide && (
+            <div className="mt-6 pt-4 border-t border-border/30">
+              <p className="text-sm font-medium text-foreground mb-3">
+                {currentLabels.themeTitle}
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {themeOptions.map((opt) => (
+                  <button
+                    key={opt.mode}
+                    type="button"
+                    onClick={() => setTheme(opt.mode)}
+                    className={cn(
+                      'px-3 py-1.5 text-sm rounded-full transition-colors',
+                      'border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      theme === opt.mode
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+                    )}
+                  >
+                    {language === 'ru' ? opt.labelRu : opt.labelEn}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Secondary CTA on last slide */}
