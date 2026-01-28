@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Scroll, Calendar, Search, Hexagon, Settings, Feather } from 'lucide-react';
+import { Scroll, Calendar, MessageSquare, Settings, Feather } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
@@ -17,7 +17,7 @@ export function BottomNav() {
     { path: '/', icon: Scroll, label: t('nav.today'), showBadge: true },
     { path: '/calendar', icon: Calendar, label: t('nav.calendar') },
     { path: '/new', icon: Feather, label: '', isCenter: true },
-    { path: '/chat', icon: Hexagon, label: t('nav.chat') },
+    { path: '/discussions', icon: MessageSquare, label: t('nav.discussions') },
     { path: '/settings', icon: Settings, label: t('nav.settings') },
   ];
 

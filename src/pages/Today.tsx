@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ru, enUS } from 'date-fns/locale';
-import { Loader2, Plus } from 'lucide-react';
-import { getEntriesByDate } from '@/lib/db';
+import { Loader2, Plus, CheckSquare, X, MessageSquare } from 'lucide-react';
+import { getEntriesByDate, createDiscussionSession } from '@/lib/db';
 import { EntryCard } from '@/components/EntryCard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { BiographyDisplay } from '@/components/BiographyDisplay';
@@ -17,10 +18,13 @@ import { loadAISettings } from '@/lib/aiConfig';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
 import { GrimoireIcon, SealGlyph } from '@/components/icons/SigilIcon';
+import { cn } from '@/lib/utils';
 
 function TodayContent() {
   const { t, language } = useI18n();
   const locale = language === 'ru' ? ru : enUS;
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   
   const today = format(new Date(), 'yyyy-MM-dd');
   const todayFormatted = format(new Date(), "d MMMM, EEEE", { locale });
@@ -32,6 +36,18 @@ function TodayContent() {
   const { prompt, isGenerating, generate, dismiss } = useBiographyPrompts();
   const aiSettings = loadAISettings();
   
+  // Selection mode state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [creatingDiscussion, setCreatingDiscussion] = useState(false);
+  
+  // Check if we should enter select mode from URL
+  useEffect(() => {
+    if (searchParams.get('selectMode') === 'true') {
+      setSelectionMode(true);
+    }
+  }, [searchParams]);
+  
   // Load biography for today
   useEffect(() => {
     getBiography(today).then(setBiography);
@@ -39,6 +55,42 @@ function TodayContent() {
   
   const handleBiographyUpdate = (bio: StoredBiography) => {
     setBiography(bio);
+  };
+
+  const handleToggleSelection = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleStartDiscussion = async () => {
+    if (selectedIds.size === 0) return;
+    setCreatingDiscussion(true);
+    
+    try {
+      const sessionId = await createDiscussionSession({
+        title: language === 'ru' ? 'Новое обсуждение' : 'New discussion',
+        scope: { entryIds: Array.from(selectedIds), docIds: [] },
+        modeDefault: 'discuss',
+      });
+      
+      setSelectionMode(false);
+      setSelectedIds(new Set());
+      navigate(`/discussions/${sessionId}`);
+    } finally {
+      setCreatingDiscussion(false);
+    }
+  };
+
+  const handleCancelSelection = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
   };
 
   const getEntriesLabel = (count: number) => {
@@ -65,19 +117,34 @@ function TodayContent() {
     <div className="min-h-screen pb-24 cyber-noise rune-grid">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
         {/* Brand header */}
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <GrimoireIcon className="h-7 w-7 text-cyber-sigil" />
-            <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyber-glow animate-sigil-pulse" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <GrimoireIcon className="h-7 w-7 text-cyber-sigil" />
+              <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyber-glow animate-sigil-pulse" />
+            </div>
+            <div>
+              <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
+                {t('app.name')}
+              </h1>
+              <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
+                {t('app.subtitle')}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
-              {t('app.name')}
-            </h1>
-            <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
-              {t('app.subtitle')}
-            </p>
-          </div>
+          
+          {/* Select button - only show when there are entries */}
+          {entries.length > 0 && !selectionMode && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectionMode(true)}
+              className="text-xs gap-1.5"
+            >
+              <CheckSquare className="h-4 w-4" />
+              {t('today.select')}
+            </Button>
+          )}
         </div>
 
         {/* Date, entry count, and quick reminder button */}
@@ -152,7 +219,7 @@ function TodayContent() {
         ) : (
           <div className="space-y-4">
             {/* Biography section */}
-            {aiSettings.enabled && (
+            {aiSettings.enabled && !selectionMode && (
               <BiographyDisplay
                 date={today}
                 biography={biography}
@@ -169,13 +236,51 @@ function TodayContent() {
                   className="animate-fade-in"
                   style={{ animationDelay: `${index * 0.05}s` }}
                 >
-                  <EntryCard entry={entry} />
+                  <EntryCard 
+                    entry={entry}
+                    selectable={selectionMode}
+                    selected={entry.id ? selectedIds.has(entry.id) : false}
+                    onSelect={handleToggleSelection}
+                  />
                 </div>
               ))}
             </div>
           </div>
         )}
       </main>
+      
+      {/* Selection mode floating action bar */}
+      {selectionMode && (
+        <div className="fixed bottom-20 left-4 right-4 z-50 flex items-center justify-center">
+          <div className="flex items-center gap-2 px-4 py-3 bg-card/95 backdrop-blur-xl border border-border/50 rounded-lg shadow-xl grimoire-shadow">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCancelSelection}
+              className="gap-1.5"
+            >
+              <X className="h-4 w-4" />
+              {t('today.cancel')}
+            </Button>
+            
+            <div className="w-px h-6 bg-border" />
+            
+            <Button
+              onClick={handleStartDiscussion}
+              disabled={selectedIds.size === 0 || creatingDiscussion}
+              size="sm"
+              className="gap-1.5"
+            >
+              {creatingDiscussion ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MessageSquare className="h-4 w-4" />
+              )}
+              {t('today.discuss')} ({selectedIds.size})
+            </Button>
+          </div>
+        </div>
+      )}
       
       {/* Quick Reminder Sheet */}
       <QuickReminderSheet

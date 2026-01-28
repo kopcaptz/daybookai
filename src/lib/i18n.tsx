@@ -291,6 +291,45 @@ export const translations = {
   'aiPin.retrying': { ru: 'Повторный запрос...', en: 'Retrying...' },
   'aiPin.requestId': { ru: 'ID запроса', en: 'Request ID' },
   
+  // Navigation - Discussions
+  'nav.discussions': { ru: 'Обсуждения', en: 'Discussions' },
+  
+  // Discussions List
+  'discussions.title': { ru: 'Обсуждения', en: 'Discussions' },
+  'discussions.new': { ru: 'Новое', en: 'New' },
+  'discussions.empty': { ru: 'Нет обсуждений', en: 'No discussions' },
+  'discussions.emptyHint': { ru: 'Выберите записи и начните обсуждение', en: 'Select entries and start discussing' },
+  'discussions.delete': { ru: 'Удалить', en: 'Delete' },
+  'discussions.deleteConfirm': { ru: 'Удалить обсуждение?', en: 'Delete discussion?' },
+  'discussions.pin': { ru: 'Закрепить', en: 'Pin' },
+  'discussions.unpin': { ru: 'Открепить', en: 'Unpin' },
+  
+  // Discussion Chat
+  'discussion.context': { ru: 'Контекст', en: 'Context' },
+  'discussion.addFromToday': { ru: 'Добавить из записей', en: 'Add from entries' },
+  'discussion.sources': { ru: 'Источники', en: 'Sources' },
+  'discussion.openSource': { ru: 'Открыть', en: 'Open' },
+  'discussion.findInNotes': { ru: 'Найти в записях', en: 'Find in notes' },
+  'discussion.offline': { ru: 'Офлайн: ИИ недоступен', en: 'Offline: AI unavailable' },
+  'discussion.loadingContext': { ru: 'Загрузка контекста...', en: 'Loading context...' },
+  'discussion.copyDraft': { ru: 'Скопировать', en: 'Copy' },
+  'discussion.placeholder': { ru: 'Спросите о выбранных записях...', en: 'Ask about selected entries...' },
+  'discussion.newSession': { ru: 'Новое обсуждение', en: 'New discussion' },
+  'discussion.sending': { ru: 'Отправка...', en: 'Sending...' },
+  'discussion.error': { ru: 'Ошибка', en: 'Error' },
+  
+  // Discussion Modes
+  'mode.discuss': { ru: 'Обсудить', en: 'Discuss' },
+  'mode.analyze': { ru: 'Анализ', en: 'Analyze' },
+  'mode.draft': { ru: 'Черновик', en: 'Draft' },
+  'mode.compute': { ru: 'Расчёт', en: 'Compute' },
+  'mode.plan': { ru: 'План', en: 'Plan' },
+  
+  // Today - Selection
+  'today.select': { ru: 'Выбрать', en: 'Select' },
+  'today.cancel': { ru: 'Отмена', en: 'Cancel' },
+  'today.discuss': { ru: 'Обсудить', en: 'Discuss' },
+  
 } as const;
 
 export type TranslationKey = keyof typeof translations;

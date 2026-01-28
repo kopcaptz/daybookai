@@ -31,6 +31,8 @@ const ReceiptDetailPage = lazy(() => import("./pages/ReceiptDetailPage"));
 const ReceiptAnalyticsPage = lazy(() => import("./pages/ReceiptAnalyticsPage"));
 const ReminderDetailPage = lazy(() => import("./pages/ReminderDetailPage"));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
+const DiscussionsListPage = lazy(() => import("./pages/DiscussionsListPage"));
+const DiscussionChatPage = lazy(() => import("./pages/DiscussionChatPage"));
 
 const queryClient = new QueryClient();
 
@@ -72,8 +74,13 @@ function AppContent() {
     reconcileReminderNotifications(storedLang as 'ru' | 'en');
   }, [navigate]);
   
-  // Hide bottom nav on entry editor, receipt pages, and onboarding
-  const hideNav = location.pathname === '/new' || location.pathname.startsWith('/entry/') || location.pathname === '/receipts' || location.pathname.startsWith('/receipts/') || location.pathname === '/onboarding';
+  // Hide bottom nav on entry editor, receipt pages, discussion chat, and onboarding
+  const hideNav = location.pathname === '/new' || 
+    location.pathname.startsWith('/entry/') || 
+    location.pathname === '/receipts' || 
+    location.pathname.startsWith('/receipts/') || 
+    location.pathname.startsWith('/discussions/') ||
+    location.pathname === '/onboarding';
 
   return (
     <div className="min-h-screen bg-background starry-bg moon-vignette relative">
@@ -90,6 +97,8 @@ function AppContent() {
               <Route path="/calendar" element={<OnboardingGuard><CalendarPage /></OnboardingGuard>} />
               <Route path="/search" element={<OnboardingGuard><SearchPage /></OnboardingGuard>} />
               <Route path="/chat" element={<OnboardingGuard><ChatPage /></OnboardingGuard>} />
+              <Route path="/discussions" element={<OnboardingGuard><DiscussionsListPage /></OnboardingGuard>} />
+              <Route path="/discussions/:id" element={<OnboardingGuard><DiscussionChatPage /></OnboardingGuard>} />
               <Route path="/settings" element={<OnboardingGuard><SettingsPage /></OnboardingGuard>} />
               <Route path="/new" element={<OnboardingGuard><NewEntry /></OnboardingGuard>} />
               <Route path="/entry/:id" element={<OnboardingGuard><NewEntry /></OnboardingGuard>} />
