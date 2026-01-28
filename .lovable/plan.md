@@ -1,5 +1,4 @@
 
-
 # Discussions Tab QA Audit Report
 
 ## Summary: **PASS** (with minor issues)
@@ -149,16 +148,83 @@ export async function sendDiscussionMessage(
   retryWithPin = true,
   signal?: AbortSignal  // Add optional signal
 ): Promise<DiscussionAIResponse> {
-  // ... existing code ...
+  const { userText, mode, contextPack, history, language } = request;
   
-  const response = await fetch(AI_CHAT_URL, {
-    method: 'POST',
-    headers: { ... },
-    body: JSON.stringify({ ... }),
-    signal,  // Pass signal to fetch
-  });
+  // Check if AI token is valid
+  if (!isAITokenValid()) {
+    if (retryWithPin) {
+      try {
+        await requestPinDialog();
+        return sendDiscussionMessage(request, false);
+      } catch {
+        throw new AIAuthRetryError('AI authorization cancelled');
+      }
+    }
+    throw new AIAuthRetryError('AI token required');
+  }
   
-  // ... rest of function
+  const systemPrompt = buildSystemPrompt(contextPack.contextText, mode, language);
+  const historyMessages = buildHistoryMessages(history);
+  
+  const messages = [
+    { role: 'system' as const, content: systemPrompt },
+    ...historyMessages,
+    { role: 'user' as const, content: userText },
+  ];
+  
+  try {
+    const response = await fetch(AI_CHAT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAITokenHeader(),
+      },
+      body: JSON.stringify({
+        messages,
+        model: 'google/gemini-3-flash-preview',
+        maxTokens: 2048,
+        temperature: 0.7,
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      
+      // Check for auth errors
+      if (isAuthError(errorData.error) || response.status === 401) {
+        if (retryWithPin) {
+          try {
+            await requestPinDialog();
+            return sendDiscussionMessage(request, false);
+          } catch {
+            throw new AIAuthRetryError('AI authorization cancelled');
+          }
+        }
+        throw new AIAuthRetryError(errorData.error || 'AI authorization failed');
+      }
+      
+      if (response.status === 429) {
+        throw new Error('Rate limit exceeded. Please try again later.');
+      }
+      if (response.status === 402) {
+        throw new Error('Payment required. Please add credits.');
+      }
+      
+      throw new Error(errorData.error || `AI request failed: ${response.status}`);
+    }
+    
+    // Parse SSE stream
+    const fullText = await parseSSEStream(response);
+    
+    if (!fullText) {
+      throw new Error('Empty AI response');
+    }
+    
+    return parseAIResponse(fullText, contextPack.evidence);
+  } catch (error) {
+    console.error('[discussions] AI request failed:', error);
+    throw error;
+  }
 }
 ```
 
@@ -199,4 +265,3 @@ The implementation meets all critical requirements:
 3. Documents module not yet integrated (correctly deferred)
 
 These are minor UX enhancements that can be addressed in future iterations without blocking ship.
-
