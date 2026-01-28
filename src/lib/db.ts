@@ -189,6 +189,53 @@ export interface Reminder {
   updatedAt: number;
 }
 
+// Discussion types for Discussions feature
+export type DiscussionMode = 'discuss' | 'analyze' | 'draft' | 'compute' | 'plan';
+
+export interface DiscussionSession {
+  id?: number;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  lastMessageAt: number;
+  scope: {
+    entryIds: number[];
+    docIds: number[];
+  };
+  modeDefault: DiscussionMode;
+  pinned?: boolean;
+}
+
+export interface DiscussionMessage {
+  id?: number;
+  sessionId: number;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  createdAt: number;
+  evidenceRefs?: Array<{
+    type: 'entry' | 'document_page' | 'document';
+    id: string;
+    title: string;
+    subtitle?: string;
+    snippet?: string;
+    deepLink: string;
+    entityId: number;
+    pageIndex?: number;
+  }>;
+  status?: 'ok' | 'error';
+  meta?: {
+    model?: string;
+    tokens?: number;
+    mode?: DiscussionMode;
+    draftArtifact?: {
+      type: string;
+      title: string;
+      body: string;
+      format: 'markdown' | 'text';
+    };
+  };
+}
+
 // Biography settings
 export interface BiographySettings {
   bioTime: string; // HH:MM format, default "21:00"
@@ -229,6 +276,8 @@ class DaybookDatabase extends Dexie {
   receiptItems!: EntityTable<ReceiptItem, 'id'>;
   scanLogs!: EntityTable<ScanLog, 'id'>;
   reminders!: EntityTable<Reminder, 'id'>;
+  discussionSessions!: EntityTable<DiscussionSession, 'id'>;
+  discussionMessages!: EntityTable<DiscussionMessage, 'id'>;
 
   constructor() {
     super('DaybookDB');
@@ -339,6 +388,21 @@ class DaybookDatabase extends Dexie {
           reminder.skipNext = false;
         }
       });
+    });
+
+    // Version 10: Add Discussion tables for Discussions feature
+    this.version(10).stores({
+      entries: '++id, date, mood, *tags, isPrivate, aiAllowed, createdAt, updatedAt',
+      attachments: '++id, entryId, kind, createdAt',
+      drafts: 'id, updatedAt',
+      biographies: 'date, status, generatedAt',
+      attachmentInsights: 'attachmentId, createdAt',
+      receipts: '++id, entryId, date, storeName, createdAt, updatedAt',
+      receiptItems: '++id, receiptId, category',
+      scanLogs: '++id, timestamp',
+      reminders: '++id, entryId, status, dueAt, createdAt',
+      discussionSessions: '++id, updatedAt, lastMessageAt, pinned',
+      discussionMessages: '++id, sessionId, [sessionId+createdAt]',
     });
   }
 }
@@ -1124,4 +1188,122 @@ export async function getWeeklyStats(): Promise<WeeklyStats> {
     pendingReminders,
     streakDays,
   };
+}
+
+// ============= DISCUSSION CRUD OPERATIONS =============
+
+/**
+ * Create a new discussion session.
+ */
+export async function createDiscussionSession(
+  session: Omit<DiscussionSession, 'id' | 'createdAt' | 'updatedAt' | 'lastMessageAt'>
+): Promise<number> {
+  const now = Date.now();
+  return await db.discussionSessions.add({
+    ...session,
+    createdAt: now,
+    updatedAt: now,
+    lastMessageAt: now,
+  });
+}
+
+/**
+ * Get a discussion session by ID.
+ */
+export async function getDiscussionSessionById(id: number): Promise<DiscussionSession | undefined> {
+  return await db.discussionSessions.get(id);
+}
+
+/**
+ * Get all discussion sessions sorted by lastMessageAt (desc).
+ */
+export async function getAllDiscussionSessions(): Promise<DiscussionSession[]> {
+  const sessions = await db.discussionSessions.toArray();
+  // Sort: pinned first, then by lastMessageAt desc
+  return sessions.sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return b.lastMessageAt - a.lastMessageAt;
+  });
+}
+
+/**
+ * Update a discussion session.
+ */
+export async function updateDiscussionSession(
+  id: number,
+  updates: Partial<Omit<DiscussionSession, 'id' | 'createdAt'>>
+): Promise<void> {
+  await db.discussionSessions.update(id, {
+    ...updates,
+    updatedAt: Date.now(),
+  });
+}
+
+/**
+ * Toggle pinned status for a discussion session.
+ */
+export async function toggleDiscussionSessionPin(id: number): Promise<void> {
+  const session = await db.discussionSessions.get(id);
+  if (session) {
+    await db.discussionSessions.update(id, {
+      pinned: !session.pinned,
+      updatedAt: Date.now(),
+    });
+  }
+}
+
+/**
+ * Delete a discussion session and all its messages.
+ */
+export async function deleteDiscussionSession(id: number): Promise<void> {
+  await db.transaction('rw', [db.discussionSessions, db.discussionMessages], async () => {
+    await db.discussionMessages.where('sessionId').equals(id).delete();
+    await db.discussionSessions.delete(id);
+  });
+}
+
+/**
+ * Add a message to a discussion session.
+ */
+export async function addDiscussionMessage(
+  message: Omit<DiscussionMessage, 'id' | 'createdAt'>
+): Promise<number> {
+  const now = Date.now();
+  
+  // Add message
+  const messageId = await db.discussionMessages.add({
+    ...message,
+    createdAt: now,
+  });
+  
+  // Update session lastMessageAt
+  await db.discussionSessions.update(message.sessionId, {
+    lastMessageAt: now,
+    updatedAt: now,
+  });
+  
+  return messageId;
+}
+
+/**
+ * Get all messages for a discussion session.
+ */
+export async function getMessagesBySessionId(sessionId: number): Promise<DiscussionMessage[]> {
+  return await db.discussionMessages
+    .where('sessionId')
+    .equals(sessionId)
+    .sortBy('createdAt');
+}
+
+/**
+ * Get entries by IDs for discussion scope display.
+ */
+export async function getEntriesByIds(ids: number[]): Promise<DiaryEntry[]> {
+  const entries: DiaryEntry[] = [];
+  for (const id of ids) {
+    const entry = await db.entries.get(id);
+    if (entry) entries.push(entry);
+  }
+  return entries;
 }
