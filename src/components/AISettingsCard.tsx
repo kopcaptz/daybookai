@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Zap, Gauge, Wifi, WifiOff, Shield, ShieldCheck, KeyRound, Clock, Brain, Tags } from 'lucide-react';
+import { Zap, Gauge, Wifi, WifiOff, Shield, ShieldCheck, KeyRound, Clock, Brain, Tags, Camera } from 'lucide-react';
 import { 
   AIProfile, 
   AISettings, 
@@ -269,6 +269,52 @@ export function AISettingsCard({ onSettingsChange }: AISettingsCardProps) {
               onCheckedChange={(checked) => updateSettings({ autoTags: checked })}
             />
           </div>
+        </Collapsible>
+
+        {/* Auto-Screenshot Toggle */}
+        <Collapsible open={settings.autoScreenshot}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Camera className={cn(
+                "h-5 w-5",
+                settings.autoScreenshot ? "text-cyber-sigil" : "text-muted-foreground"
+              )} />
+              <div>
+                <Label htmlFor="auto-screenshot" className="text-sm font-medium">
+                  {t('autoScreenshot.title')}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {t('autoScreenshot.description')}
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="auto-screenshot"
+              checked={settings.autoScreenshot}
+              onCheckedChange={(checked) => updateSettings({ autoScreenshot: checked })}
+            />
+          </div>
+          
+          {/* Sub-settings for auto-screenshot */}
+          {settings.autoScreenshot && (
+            <CollapsibleContent className="pl-8 mt-3 space-y-3 border-l-2 border-cyber-glow/20 ml-2.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="blur-private" className="text-sm">
+                    {t('autoScreenshot.blurPrivate')}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t('autoScreenshot.blurPrivateHint')}
+                  </p>
+                </div>
+                <Switch
+                  id="blur-private"
+                  checked={settings.autoScreenshotBlurPrivate}
+                  onCheckedChange={(checked) => updateSettings({ autoScreenshotBlurPrivate: checked })}
+                />
+              </div>
+            </CollapsibleContent>
+          )}
         </Collapsible>
 
         {/* Chat Profile Selection */}

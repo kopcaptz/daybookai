@@ -65,6 +65,8 @@ export interface AISettings {
   autoMoodLiveSuggestions: boolean; // Show live suggestions while typing
   autoMoodInheritFromChat: boolean; // Inherit mood from discussions
   autoTags: boolean; // Auto-suggest tags based on text content
+  autoScreenshot: boolean; // Auto-capture screen on FAB open (default: false)
+  autoScreenshotBlurPrivate: boolean; // Blur .blur-private elements (default: true)
 }
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
@@ -76,6 +78,8 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   autoMoodLiveSuggestions: true, // ON by default (if autoMood enabled)
   autoMoodInheritFromChat: true, // ON by default (if autoMood enabled)
   autoTags: false, // OFF by default (opt-in)
+  autoScreenshot: false, // OFF by default (opt-in)
+  autoScreenshotBlurPrivate: true, // ON by default
 };
 
 // Storage key

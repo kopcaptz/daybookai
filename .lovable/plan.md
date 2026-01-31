@@ -1,9 +1,26 @@
 
 # Автоскриншот при открытии FAB: Техническое задание
 
+## ✅ РЕАЛИЗОВАНО
+
+Все основные компоненты реализованы:
+
+| Файл | Статус | Описание |
+|------|--------|----------|
+| `src/lib/screenshotService.ts` | ✅ | Сервис захвата и обработки скриншотов |
+| `src/hooks/useAutoScreenshot.ts` | ✅ | Hook для управления автоскриншотом |
+| `src/components/FloatingChatButton.tsx` | ✅ | Интеграция захвата при открытии |
+| `src/pages/ChatPage.tsx` | ✅ | Прием скриншота через postMessage |
+| `src/lib/aiConfig.ts` | ✅ | Настройки autoScreenshot + autoScreenshotBlurPrivate |
+| `src/components/AISettingsCard.tsx` | ✅ | UI toggle для автоскриншота |
+| `src/lib/i18n.tsx` | ✅ | Локализация новых строк |
+| `src/components/chat/AutoScreenshotPreview.tsx` | ✅ | Компонент превью с отменой |
+
+---
+
 ## Обзор задачи
 
-Реализовать автоматический захват скриншота видимой области экрана при открытии плавающей кнопки чата (FAB), с последующей автоматической отправкой в чат вместе с промптом "Посмотри этот скрин и что на нём важно?".
+Реализован автоматический захват скриншота видимой области экрана при открытии плавающей кнопки чата (FAB), с последующей автоматической отправкой в чат вместе с промптом "Посмотри этот скрин и что на нём важно?".
 
 ---
 
@@ -39,279 +56,26 @@
 
 ---
 
-## Зависимости
+## Как использовать
 
-**Новый пакет:**
-- `html2canvas` (MIT License, ~40KB gzipped) - для захвата DOM как canvas
-
----
-
-## Файлы для создания/изменения
-
-| Файл | Действие | Описание |
-|------|----------|----------|
-| `src/lib/screenshotService.ts` | CREATE | Сервис захвата и обработки скриншотов |
-| `src/hooks/useAutoScreenshot.ts` | CREATE | Hook для управления автоскриншотом |
-| `src/components/FloatingChatButton.tsx` | MODIFY | Интеграция захвата при открытии |
-| `src/pages/ChatPage.tsx` | MODIFY | Прием скриншота через postMessage |
-| `src/lib/aiConfig.ts` | MODIFY | Добавить настройку autoScreenshot |
-| `src/components/AISettingsCard.tsx` | MODIFY | UI toggle для автоскриншота |
-| `src/lib/i18n.tsx` | MODIFY | Локализация новых строк |
-| `src/components/chat/AutoScreenshotPreview.tsx` | CREATE | Компонент превью с отменой |
+1. Откройте **Настройки → AI → Автоскриншот** и включите функцию
+2. Опционально включите **Размывать приватные поля** (включено по умолчанию)
+3. Нажмите на плавающую кнопку чата (FAB)
+4. Скриншот автоматически захватится и появится в превью
+5. Отредактируйте промпт при необходимости и нажмите "Отправить"
 
 ---
 
-## Детали реализации
+## Приватность
 
-### 1. Screenshot Service (`src/lib/screenshotService.ts`)
-
-```typescript
-interface ScreenshotOptions {
-  excludeSelectors?: string[];  // Elements to exclude (e.g., FAB)
-  blurSelectors?: string[];     // Elements to blur for privacy
-  maxSize?: number;             // Max file size in bytes (default 2MB)
-  quality?: number;             // PNG quality 0-1
-}
-
-interface ScreenshotResult {
-  success: true;
-  blob: Blob;
-  base64DataUrl: string;
-  dimensions: { width: number; height: number };
-  capturedAt: number;
-} | {
-  success: false;
-  error: 'capture_failed' | 'too_large' | 'permission_denied';
-  message: string;
-}
-
-async function captureVisibleArea(options?: ScreenshotOptions): Promise<ScreenshotResult>
-```
-
-**Ключевые аспекты:**
-- Использует `html2canvas` с опцией `ignoreElements` для исключения FAB
-- Применяет CSS `filter: blur(10px)` к элементам с классом `.blur-private` перед захватом
-- Компрессия через canvas с уменьшением dimensions если > 2MB
-- Не логирует содержимое изображения (privacy)
-
-### 2. PostMessage Protocol
-
-**Отправка (FAB → iframe):**
-```typescript
-interface AutoScreenshotMessage {
-  type: 'AUTO_SCREENSHOT';
-  payload: {
-    base64DataUrl: string;
-    timestamp: number;
-    prompt: string;  // Предзаполненный промпт
-    route: string;   // Откуда был сделан скриншот
-  };
-}
-
-// В FloatingChatButton после захвата:
-iframeRef.current?.contentWindow?.postMessage({
-  type: 'AUTO_SCREENSHOT',
-  payload: { ... }
-}, window.location.origin);
-```
-
-**Прием (ChatPage):**
-```typescript
-useEffect(() => {
-  const handleMessage = (event: MessageEvent) => {
-    if (event.origin !== window.location.origin) return;
-    if (event.data.type === 'AUTO_SCREENSHOT') {
-      setPendingAutoScreenshot(event.data.payload);
-    }
-  };
-  window.addEventListener('message', handleMessage);
-  return () => window.removeEventListener('message', handleMessage);
-}, []);
-```
-
-### 3. Settings Extension (`aiConfig.ts`)
-
-```typescript
-interface AISettings {
-  // ... existing fields
-  autoScreenshot: boolean;           // Auto-capture on FAB open (default: false)
-  autoScreenshotBlurPrivate: boolean; // Blur .blur-private elements (default: true)
-  autoScreenshotAutoSend: boolean;    // Send without confirmation (default: false)
-}
-```
-
-### 4. UI Flow в ChatPage
-
-**Состояния:**
-1. **Pending**: Скриншот получен, показан preview с кнопками "Отправить" / "Отмена" / "Редактировать промпт"
-2. **Editing**: Пользователь редактирует текст промпта
-3. **Sending**: Отправка в процессе
-4. **Dismissed**: Пользователь отменил
-
-**Preview Component:**
-```tsx
-<AutoScreenshotPreview
-  imageUrl={pendingScreenshot.base64DataUrl}
-  defaultPrompt={pendingScreenshot.prompt}
-  onSend={(prompt) => handleSendWithScreenshot(prompt)}
-  onDismiss={() => setPendingAutoScreenshot(null)}
-  isLoading={isLoading}
-/>
-```
-
-### 5. Privacy Considerations
-
-**Элементы для blur:**
-- Поля с паролями (`input[type="password"]`)
-- Элементы с классом `.blur-private` (можно добавить на чувствительные данные)
-- PIN-диалоги
-
-**Логирование:**
-- Логировать только: timestamp, route, dimensions, success/error
-- НЕ логировать: содержимое изображения, base64 data
-
-**Временные файлы:**
-- Скриншот хранится только в памяти (base64 в state)
-- Автоматически очищается при:
-  - Закрытии Sheet
-  - Dismiss пользователем
-  - Успешной отправке
-  - Через 5 минут timeout (если не отправлен)
+- Поля с паролями (`input[type="password"]`) автоматически размываются
+- Элементы с классом `.blur-private` также размываются
+- Скриншот хранится только в памяти (не сохраняется на диск)
+- Автоматически удаляется через 5 минут если не отправлен
 
 ---
 
-## API / Endpoints
-
-**Используется существующий endpoint:**
-`ai-chat` Edge Function уже поддерживает multimodal messages с изображениями.
-
-**Payload (тот же что сейчас):**
-```json
-{
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        { "type": "text", "text": "Посмотри этот скрин и что на нём важно?" },
-        { "type": "image_url", "image_url": { "url": "data:image/png;base64,..." } }
-      ]
-    }
-  ],
-  "profile": "balanced"
-}
-```
-
----
-
-## Оценка сроков
-
-| Задача | Оценка | Приоритет |
-|--------|--------|-----------|
-| Screenshot Service + html2canvas | 2-3 часа | P0 |
-| PostMessage communication | 1-2 часа | P0 |
-| AutoScreenshotPreview component | 1-2 часа | P0 |
-| Settings toggle + i18n | 0.5 часа | P1 |
-| Privacy blur implementation | 1 час | P1 |
-| E2E тесты (mobile/desktop) | 2-3 часа | P2 |
-| Timeout cleanup logic | 0.5 часа | P2 |
-| **Итого** | **8-12 часов** | |
-
----
-
-## Оценка рисков
-
-### Высокий риск
-
-| Риск | Вероятность | Влияние | Митигация |
-|------|-------------|---------|-----------|
-| **Конфиденциальность**: случайный захват паролей/PIN | Средняя | Высокое | Default blur для input[type=password], явный класс .blur-private |
-| **Производительность**: html2canvas на сложных страницах | Средняя | Среднее | Показывать loading indicator, timeout 5s, fallback "не удалось" |
-
-### Средний риск
-
-| Риск | Вероятность | Влияние | Митигация |
-|------|-------------|---------|-----------|
-| **Cross-origin iframe**: postMessage блокировка | Низкая | Высокое | Проверка origin, fallback URL params |
-| **Mobile performance**: медленный захват на слабых устройствах | Средняя | Среднее | Уменьшить scale для mobile (0.5x) |
-| **Размер bundle**: html2canvas ~40KB | Низкая | Низкое | Lazy load только при включенной опции |
-
-### Низкий риск
-
-| Риск | Вероятность | Влияние | Митигация |
-|------|-------------|---------|-----------|
-| **Пользователь не понимает**: неожиданный скриншот | Низкая | Среднее | Явное opt-in в настройках, первый раз показать tooltip |
-
----
-
-## UX Flow
-
-```text
-┌────────────────────────────────────────────────────────────────────┐
-│  ПЕРВОЕ ВКЛЮЧЕНИЕ                                                  │
-├────────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  Настройки → AI → Автоскриншот [OFF by default]                    │
-│                                                                    │
-│  При включении показать tooltip:                                   │
-│  "При открытии чата будет автоматически захвачен скриншот          │
-│   текущего экрана для контекста. Приватные поля размыты."          │
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
-
-┌────────────────────────────────────────────────────────────────────┐
-│  RUNTIME FLOW                                                       │
-├────────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  1. Клик на FAB                                                    │
-│     ↓                                                              │
-│  2. [0.3-1s] Показать overlay "Захват экрана..."                   │
-│     ↓                                                              │
-│  3. Открыть Sheet с ChatPage                                       │
-│     ↓                                                              │
-│  4. В ChatPage появляется preview:                                 │
-│                                                                    │
-│     ┌─────────────────────────────────────────┐                    │
-│     │  [Screenshot preview]                   │                    │
-│     │  ┌─────────────────────────────────────┐│                    │
-│     │  │ Посмотри этот скрин и что на нём    ││                    │
-│     │  │ важно?                              ││                    │
-│     │  └─────────────────────────────────────┘│                    │
-│     │  [Отмена]  [Редактировать]  [Отправить] │                    │
-│     └─────────────────────────────────────────┘                    │
-│                                                                    │
-│  5. Клик "Отправить" → стандартный chat flow                       │
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Пример локализации (i18n)
-
-```typescript
-autoScreenshot: {
-  title: language === 'ru' ? 'Автоскриншот' : 'Auto-screenshot',
-  description: language === 'ru' 
-    ? 'Автоматически захватывать экран при открытии чата' 
-    : 'Automatically capture screen when opening chat',
-  capturing: language === 'ru' ? 'Захват экрана...' : 'Capturing screen...',
-  preview: language === 'ru' ? 'Превью скриншота' : 'Screenshot preview',
-  defaultPrompt: language === 'ru' 
-    ? 'Посмотри этот скрин и что на нём важно?' 
-    : 'Look at this screen and what\'s important on it?',
-  send: language === 'ru' ? 'Отправить' : 'Send',
-  dismiss: language === 'ru' ? 'Отмена' : 'Cancel',
-  edit: language === 'ru' ? 'Редактировать' : 'Edit',
-  failed: language === 'ru' ? 'Не удалось захватить экран' : 'Failed to capture screen',
-  blurPrivate: language === 'ru' ? 'Размывать приватные поля' : 'Blur private fields',
-}
-```
-
----
-
-## Тестовые сценарии
-
-### E2E тесты
+## Тестовые сценарии (TODO)
 
 1. **Desktop Chrome**: Открыть /calendar → FAB → проверить скриншот содержит календарь
 2. **Mobile Safari**: Открыть / → FAB → проверить размер ≤2MB
@@ -320,23 +84,3 @@ autoScreenshot: {
 5. **Edit prompt**: FAB → Preview → Редактировать → изменить текст → Отправить
 6. **Timeout cleanup**: FAB → Preview → ждать 5 мин → проверить auto-dismiss
 7. **Disabled setting**: Выключить в Settings → FAB → проверить нет скриншота
-
-### Performance тесты
-
-| Метрика | Target | Метод измерения |
-|---------|--------|-----------------|
-| Время захвата (desktop) | <1s | Performance.now() |
-| Время захвата (mobile) | <2s | Performance.now() |
-| Размер файла | ≤2MB | blob.size |
-| Memory leak | 0 | Chrome DevTools |
-
----
-
-## Примечания для дизайнера
-
-1. **Preview overlay**: Полупрозрачный фон с миниатюрой скриншота (max-height: 200px)
-2. **Actions**: Три кнопки inline - "Отмена" (ghost), "Редактировать" (outline), "Отправить" (primary)
-3. **Loading state**: Skeleton + spinner overlay на FAB во время захвата
-4. **Error state**: Toast с ошибкой, fallback к обычному чату без скриншота
-5. **Privacy indicator**: Маленький badge "🔒" на размытых областях в preview
-

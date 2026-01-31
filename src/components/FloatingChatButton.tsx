@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
-import { MessageCircle, X } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { MessageCircle, X, Camera } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAutoScreenshot } from '@/hooks/useAutoScreenshot';
+import { loadAISettings } from '@/lib/aiConfig';
 
 interface FloatingChatButtonProps {
   className?: string;
@@ -16,6 +18,15 @@ export function FloatingChatButton({ className }: FloatingChatButtonProps) {
   const [isAnimating, setIsAnimating] = useState(false);
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [iframeError, setIframeError] = useState(false);
+  
+  // Iframe ref for postMessage communication
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  
+  // Auto-screenshot hook
+  const { isCapturing, captureAndSend, isEnabled: isAutoScreenshotEnabled } = useAutoScreenshot({
+    language,
+    iframeRef,
+  });
 
   // Handle keyboard escape
   useEffect(() => {
@@ -32,7 +43,7 @@ export function FloatingChatButton({ className }: FloatingChatButtonProps) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
-  const handleOpen = useCallback(() => {
+  const handleOpen = useCallback(async () => {
     setIsAnimating(true);
     setIsOpen(true);
     
@@ -43,16 +54,28 @@ export function FloatingChatButton({ className }: FloatingChatButtonProps) {
 
     // Reset animation state after transition
     setTimeout(() => setIsAnimating(false), 400);
+    
+    // Auto-screenshot after sheet opens and iframe loads
+    // This is handled after iframe loads in handleIframeLoad
   }, []);
+  
+  const handleIframeLoad = useCallback(() => {
+    setIframeLoaded(true);
+    setIframeError(false);
+    
+    // Trigger auto-screenshot after iframe is ready
+    const settings = loadAISettings();
+    if (settings.autoScreenshot) {
+      // Small delay to ensure iframe is fully interactive
+      setTimeout(() => {
+        captureAndSend();
+      }, 300);
+    }
+  }, [captureAndSend]);
 
   const handleClose = useCallback(() => {
     setIsOpen(false);
     setIframeLoaded(false);
-    setIframeError(false);
-  }, []);
-
-  const handleIframeLoad = useCallback(() => {
-    setIframeLoaded(true);
     setIframeError(false);
   }, []);
 
@@ -199,6 +222,7 @@ export function FloatingChatButton({ className }: FloatingChatButtonProps) {
 
             {/* Chat iframe */}
             <iframe
+              ref={iframeRef}
               src="/chat"
               className={cn(
                 "w-full h-full border-0",

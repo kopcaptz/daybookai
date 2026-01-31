@@ -16,6 +16,8 @@ import { SigilIcon, GrimoireIcon, SealGlyph } from '@/components/icons/SigilIcon
 import { ChatImageCapture } from '@/components/chat/ChatImageCapture';
 import { ChatImageConsent } from '@/components/chat/ChatImageConsent';
 import { DiaryImagePicker } from '@/components/chat/DiaryImagePicker';
+import { AutoScreenshotPreview } from '@/components/chat/AutoScreenshotPreview';
+import { isAutoScreenshotMessage, AutoScreenshotPayload } from '@/lib/screenshotService';
 import { useAIAccess } from '@/hooks/useAIAccess';
 import { AIPinDialog } from '@/components/AIPinDialog';
 
@@ -53,6 +55,9 @@ function ChatContent() {
   const [confirmedImages, setConfirmedImages] = useState<ConfirmedImage[]>([]);
   const [showDiaryPicker, setShowDiaryPicker] = useState(false);
   
+  // Auto-screenshot state
+  const [pendingAutoScreenshot, setPendingAutoScreenshot] = useState<AutoScreenshotPayload | null>(null);
+  
   // AI Access (PIN gate)
   const aiAccess = useAIAccess(language);
   
@@ -64,6 +69,22 @@ function ChatContent() {
     const handleFocus = () => setSettings(loadAISettings());
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
+  // Listen for auto-screenshot messages from parent window
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Verify origin for security
+      if (event.origin !== window.location.origin) return;
+      
+      if (isAutoScreenshotMessage(event.data)) {
+        console.log('[ChatPage] Received auto-screenshot');
+        setPendingAutoScreenshot(event.data.payload);
+      }
+    };
+    
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
   }, []);
 
   // Handle deep link for biography
@@ -152,6 +173,94 @@ function ChatContent() {
 
   const clearAllConfirmedImages = () => {
     setConfirmedImages([]);
+  };
+
+  // Handle auto-screenshot send
+  const handleAutoScreenshotSend = async (prompt: string, imageUrl: string) => {
+    if (isLoading) return;
+    
+    // Build display message for user
+    const userDisplayMessage: DisplayMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: prompt,
+      imageUrls: [imageUrl],
+    };
+
+    const assistantMessage: DisplayMessage = {
+      id: `assistant-${Date.now()}`,
+      role: 'assistant',
+      content: '',
+      isStreaming: true,
+    };
+
+    setMessages(prev => [...prev, userDisplayMessage, assistantMessage]);
+    setPendingAutoScreenshot(null);
+    setIsLoading(true);
+
+    // Build API messages
+    const apiMessages: ChatMessage[] = messages.map(m => {
+      if ((m.imageUrl || m.imageUrls) && m.role === 'user') {
+        const parts: MessageContentPart[] = [];
+        if (m.content && m.content !== '[Фото]' && m.content !== '[Photo]') {
+          parts.push({ type: 'text', text: m.content });
+        }
+        const urls = m.imageUrls ?? (m.imageUrl ? [m.imageUrl] : []);
+        urls.forEach(url => {
+          parts.push({ type: 'image_url', image_url: { url } });
+        });
+        return { role: 'user' as const, content: parts };
+      }
+      return { role: m.role as 'user' | 'assistant', content: m.content };
+    });
+
+    // Add current message with screenshot
+    const parts: MessageContentPart[] = [
+      { type: 'text', text: prompt },
+      { type: 'image_url', image_url: { url: imageUrl } },
+    ];
+    apiMessages.push({ role: 'user' as const, content: parts });
+
+    await streamChatCompletion(
+      apiMessages,
+      settings.chatProfile,
+      {
+        onToken: (token) => {
+          setMessages(prev => {
+            const newMessages = [...prev];
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage && lastMessage.role === 'assistant') {
+              lastMessage.content += token;
+            }
+            return newMessages;
+          });
+        },
+        onComplete: () => {
+          setMessages(prev => {
+            const newMessages = [...prev];
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage) {
+              lastMessage.isStreaming = false;
+            }
+            return newMessages;
+          });
+          setIsLoading(false);
+        },
+        onError: (error) => {
+          toast.error(error.message);
+          setMessages(prev => {
+            const newMessages = [...prev];
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage && lastMessage.role === 'assistant') {
+              lastMessage.content = t('common.error');
+              lastMessage.isStreaming = false;
+            }
+            return newMessages;
+          });
+          setIsLoading(false);
+        },
+      }
+    );
   };
 
   const handleSend = async () => {
@@ -384,6 +493,17 @@ function ChatContent() {
           </Link>
         </div>
       </header>
+
+      {/* Auto-screenshot preview */}
+      {pendingAutoScreenshot && (
+        <AutoScreenshotPreview
+          payload={pendingAutoScreenshot}
+          onSend={handleAutoScreenshotSend}
+          onDismiss={() => setPendingAutoScreenshot(null)}
+          isLoading={isLoading}
+          language={language}
+        />
+      )}
 
       {/* Messages */}
       <main className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
