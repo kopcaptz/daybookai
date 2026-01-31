@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -20,6 +20,7 @@ import { useI18n } from '@/lib/i18n';
 import { GrimoireIcon } from '@/components/icons/SigilIcon';
 import { BreathingSigil } from '@/components/icons/BreathingSigil';
 import { useOracleWhisper } from '@/hooks/useOracleWhisper';
+import { useHeroTransition } from '@/hooks/useHeroTransition';
 import { cn } from '@/lib/utils';
 
 function TodayContent() {
@@ -48,6 +49,10 @@ function TodayContent() {
   
   // Oracle whisper for empty state
   const { whisper } = useOracleWhisper();
+  
+  // Hero transition for sigil click
+  const { startTransition } = useHeroTransition();
+  const sigilRef = useRef<HTMLButtonElement>(null);
   
   // Check if we should enter select mode from URL
   useEffect(() => {
@@ -218,9 +223,18 @@ function TodayContent() {
             "flex flex-col items-center justify-center py-16 text-center transition-all duration-300",
             ritualActive && "scale-95 opacity-60"
           )}>
-            {/* Breathing Sigil with orbital particles */}
+            {/* Breathing Sigil with orbital particles - Interactive */}
             <div className="mb-6">
-              <BreathingSigil ritualActive={ritualActive} />
+              <BreathingSigil 
+                ref={sigilRef}
+                ritualActive={ritualActive}
+                interactive={true}
+                onClick={() => {
+                  navigator.vibrate?.(15);
+                  window.dispatchEvent(new CustomEvent('grimoire-ritual-start'));
+                  startTransition(sigilRef.current, '/new');
+                }}
+              />
             </div>
             
             <h3 className="mb-2 text-xl font-serif font-medium">{t('today.startDay')}</h3>

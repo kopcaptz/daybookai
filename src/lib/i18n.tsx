@@ -35,7 +35,7 @@ export const translations = {
   'today.entries2_4': { ru: 'записи', en: 'entries' },
   'today.entries5_': { ru: 'записей', en: 'entries' },
   'today.startDay': { ru: 'Открой день', en: 'Start your day' },
-  'today.startDayHint': { ru: 'Нажми +, чтобы добавить первую запись', en: 'Tap + to create your first entry' },
+  'today.startDayHint': { ru: 'Нажми на книгу или + чтобы добавить первую запись', en: 'Tap the book or + to add your first entry' },
   
   // Entry
   'entry.new': { ru: 'Новая запись', en: 'New Entry' },
