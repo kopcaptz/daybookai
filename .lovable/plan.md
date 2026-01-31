@@ -1,267 +1,257 @@
 
-# Discussions Tab QA Audit Report
 
-## Summary: **PASS** (with minor issues)
+# Cyber-Grimoire: 3 Улучшения Empty State «Start Your Day»
 
-The Discussions Tab implementation is well-designed with proper privacy enforcement, correct evidence handling, and stable session lifecycle. The issues found are minor and non-blocking.
+## Текущее состояние
 
----
+Empty State сейчас:
+- Статичная иконка `GrimoireIcon` в `panel-glass` контейнере
+- Два `SealGlyph` в углах (opacity 40%/30%)
+- Заголовок "Открой день" + подсказка
+- Декоративная линия с глифами
 
-## CHECKLIST RESULTS
-
-### 1) Privacy Enforcement: **PASS**
-
-| Check | Status | Evidence |
-|-------|--------|----------|
-| isPrivate entries excluded | **PASS** | `contextPack.ts:98` filters `!entry.isPrivate && entry.aiAllowed !== false` in `buildFromScope()` |
-| isPrivate in global search | **PASS** | `contextPack.ts:127` filters same conditions in `buildFromSearch()` |
-| Only text snippets sent | **PASS** | `contextPack.ts:179` creates snippets via `createSnippet(entry.text)` - no blobs |
-| Attachment awareness | **PASS** | `contextPack.ts:174-176` adds `[MEDIA: N attachment(s) - not included]` note |
-| Max 8 evidence items | **PASS** | `contextPack.ts:32` defines `maxEvidence: 8`, enforced at line 161 |
-| Max 600 chars per snippet | **PASS** | `contextPack.ts:33` defines `maxSnippetChars: 600`, enforced in `createSnippet()` |
-| Max 10k total context | **PASS** | `contextPack.ts:35` defines `maxTotalContextChars: 10000`, enforced at line 198 |
-| No private content in logs | **PASS** | `ai-chat/index.ts:388-397` logs only metadata (model, token_limit, message_count), never content |
-
-**Verification Notes:**
-- The privacy pipeline is correctly enforced at the Librarian layer (`buildContextPack`)
-- The AI edge function validates inputs but never logs message content
-- Attachments are acknowledged but their data is never extracted or sent
+**Проблема:** Экран статичен. Нет ощущения "живого" артефакта. Нет AI-присутствия. Кнопка `+` — обычный переход.
 
 ---
 
-### 2) Evidence Correctness: **PASS**
+## УЛУЧШЕНИЕ 1: Живой Сигил (Дышащий артефакт)
 
-| Check | Status | Evidence |
-|-------|--------|----------|
-| Evidence cards render | **PASS** | `DiscussionChatPage.tsx:347-353` renders `<EvidenceList>` for messages with `evidenceRefs` |
-| DeepLinks format | **PASS** | `contextPack.ts:190` generates `/entry/${entryId}` format |
-| Entry route exists | **PASS** | `App.tsx:104` has route `/entry/:id` mapped to `NewEntry` |
-| Used evidence filtered | **PASS** | `DiscussionChatPage.tsx:105-107` filters by `usedEvidenceIds` from AI response |
-| Snippet matches context | **PASS** | Same `createSnippet()` function used for both evidence and context text |
+**Цель:** Превратить статичную иконку в "пульсирующее сердце" гримуара.
 
-**Minor Issue:** Evidence card deep links use `/entry/:id` but the original requirement mentioned `/today?entryId=..` format. Current implementation is correct and working.
+### Визуальные изменения:
 
----
+```
+┌─────────────────────────────┐
+│    ╔═══════════════╗        │
+│    ║   ◇    ◇     ║        │
+│    ║      ◊       ║  ← Центральный сигил
+│    ║   [SIGIL]    ║    с orbital particles
+│    ║      ◊       ║        │
+│    ╚═══════════════╝        │
+│                             │
+│    Orbital particles        │
+│    медленно вращаются       │
+└─────────────────────────────┘
+```
 
-### 3) Modes Behavior: **PASS**
+### Технические детали:
 
-| Mode | Instruction | Status |
-|------|-------------|--------|
-| Discuss | "explore ideas, ask clarifying questions" | **PASS** - `discussions.ts:39-42` |
-| Analyze | "structure, causes, risks, conclusions" | **PASS** - `discussions.ts:43-46` |
-| Draft | Returns `draftArtifact` object | **PASS** - `discussions.ts:47-50`, UI at `DraftArtifact.tsx` |
-| Compute | "show steps and assumptions" | **PASS** - `discussions.ts:51-54` |
-| Plan | "step-by-step plan with checklist" | **PASS** - `discussions.ts:55-58` |
+1. **Breathing Animation** — иконка плавно масштабируется (scale 1.0 → 1.03 → 1.0) за 4 секунды
+2. **Orbital Particles** — 3 маленьких светящихся точки на орбите вокруг иконки (CSS animation, 12s period)
+3. **Ambient Glow** — градиентное свечение под иконкой, реагирующее на время суток:
+   - Утро (6-12): теплый amber
+   - День (12-18): нейтральный
+   - Вечер (18-22): violet tint
+   - Ночь (22-6): холодный cyan
 
-**System Prompt Verified:**
-- Russian and English prompts are correctly localized (`discussions.ts:68-123`)
-- JSON response format is clearly specified in prompt
-- Draft mode explicitly instructs AI to include `draftArtifact` in response
+### Новые CSS keyframes:
 
----
+```css
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.03); opacity: 1; }
+}
 
-### 4) Streaming Stability: **PARTIALLY PASS**
+@keyframes orbit {
+  from { transform: rotate(0deg) translateX(40px) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(40px) rotate(-360deg); }
+}
+```
 
-| Check | Status | Notes |
-|-------|--------|-------|
-| SSE parsing | **PASS** | `discussions.ts:166-227` properly handles SSE stream with buffer management |
-| Duplication prevention | **PASS** | Stream parsing accumulates `fullText` incrementally without duplicates |
-| Abort handling | **MINOR ISSUE** | No explicit AbortController - mid-stream cancellation could leave partial state |
-| Dexie persistence | **PASS** | `DiscussionChatPage.tsx:77-83` saves user message before AI call |
-| Reload survival | **PASS** | `useLiveQuery` at lines 35-36 reloads from Dexie on mount |
+### Новый компонент: `BreathingSigil`
 
-**Minor Issue:** There's no AbortController for canceling in-flight requests. If user navigates away mid-stream, the request continues but doesn't corrupt data since message is only saved after successful completion.
+```tsx
+// Три orbital particles на разных скоростях
+<div className="absolute inset-0">
+  <div className="absolute w-1.5 h-1.5 rounded-full bg-cyber-glow animate-orbit-slow" />
+  <div className="absolute w-1 h-1 rounded-full bg-cyber-rune animate-orbit-medium" />
+  <div className="absolute w-1.5 h-1.5 rounded-full bg-cyber-sigil/60 animate-orbit-fast" />
+</div>
+```
 
----
-
-### 5) Session Lifecycle: **PASS**
-
-| Operation | Status | Evidence |
-|-----------|--------|----------|
-| Create session | **PASS** | `db.ts:1200-1208` - creates with timestamps |
-| List sessions | **PASS** | `db.ts:1220-1228` - sorts pinned first, then by lastMessageAt |
-| Open session | **PASS** | `db.ts:1213-1215` - simple get by ID |
-| Delete session | **PASS** | `db.ts:1259-1264` - transaction deletes messages first, then session |
-| Toggle pin | **PASS** | `db.ts:1246-1254` |
-| Message persistence | **PASS** | `db.ts:1269-1287` - updates session `lastMessageAt` on each message |
-
-**Transaction Safety:** Delete uses proper transaction with both `discussionMessages` and `discussionSessions` tables.
-
----
-
-### 6) Navigation Regression Risk: **PASS**
-
-| Check | Status | Notes |
-|-------|--------|-------|
-| Today tab works | **PASS** | Route `/` renders Today page |
-| Calendar tab works | **PASS** | Route `/calendar` in BottomNav |
-| Discussions tab added | **PASS** | `BottomNav.tsx:20` adds `/discussions` with MessageSquare icon |
-| Chat (Oracle) preserved | **PASS** | Route `/chat` still exists at `App.tsx:99` |
-| Discussion chat hides nav | **PASS** | `App.tsx:82` hides nav for `/discussions/:id` paths |
-
-**Note:** Documents module was mentioned in context but does not appear to be implemented yet. The Settings page has no Documents link - this is correct as Documents feature is deferred.
+**Результат:** Пустой экран "живёт", гримуар словно ждёт пользователя.
 
 ---
 
-## FINDINGS (Prioritized)
+## УЛУЧШЕНИЕ 2: AI-Шёпот Дня (Oracle Whisper)
 
-### High Priority: None
+**Цель:** Добавить AI-слой прямо на Empty State — персонализированное приглашение от "Оракула".
 
-### Medium Priority:
+### Концепция:
 
-**1. No AbortController for streaming requests**
-- **File:** `src/lib/ai/discussions.ts:258-270`
-- **Impact:** User-facing - navigating away mid-stream doesn't cancel request
-- **Risk:** Low - no data corruption, just wasted network
-- **Fix:** Add AbortController support to `sendDiscussionMessage`
+Под заголовком "Открой день" появляется короткая AI-генерированная фраза (1 предложение), меняющаяся ежедневно. Фраза генерируется локально при первом открытии дня (до создания записей).
 
-### Low Priority:
+### Примеры фраз (AI генерирует на основе даты/времени года/дня недели):
 
-**2. React forwardRef warning in console**
-- **File:** `src/components/reminders/QuickReminderSheet.tsx`
-- **Impact:** Console noise only, no user impact
-- **Risk:** None
-- **Fix:** Wrap Dialog component properly or add forwardRef
+- 🌅 Утро понедельника: *"Новая неделя — чистая страница гримуара."*
+- 🌙 Пятница вечер: *"Финальные штрихи к неделе. Что запомнится?"*
+- ❄️ Зимний день: *"Короткий день снаружи — бесконечный внутри."*
+- 🌸 Первый день весны: *"Природа пишет новую главу. И ты?"*
 
-**3. Missing i18n key `discussion.error`**
-- **File:** `src/pages/DiscussionChatPage.tsx:130`
-- **Status:** **Actually present** - verified at `i18n.tsx:319`
-- **No fix needed**
+### Технические детали:
 
-**4. ContextDrawer doesn't support removing entries**
-- **File:** `src/components/discussions/ContextDrawer.tsx:18`
-- **Impact:** `onRemoveEntry` prop is defined but never passed from parent
-- **Risk:** Minor UX limitation - users can't remove entries from existing session scope
-- **Fix:** Wire up `onRemoveEntry` in DiscussionChatPage or defer to future iteration
+1. **Триггер:** При `entries.length === 0` и первом открытии дня
+2. **Кэширование:** LocalStorage ключ `whisper-{date}` (не дублировать запросы)
+3. **Fallback:** Набор из 30+ локальных фраз, если AI недоступен
+4. **Edge Function:** Лёгкий запрос (`/ai-whisper`) с контекстом: `{ date, dayOfWeek, season, timeOfDay }`
+5. **Prompt:** "Ты — мистический Оракул приложения Cyber-Grimoire. Сгенерируй одну короткую, поэтичную фразу-приглашение начать день (макс 10 слов). Стиль: техно-эзотерика, загадочность, тепло."
+
+### UI компонент:
+
+```
+┌─────────────────────────────────┐
+│         [BREATHING SIGIL]       │
+│                                 │
+│       ✧ Открой день ✧           │
+│                                 │
+│   "Новая неделя — чистая        │
+│    страница гримуара."          │  ← Oracle Whisper
+│                                 │
+│   Нажми +, чтобы добавить...    │
+└─────────────────────────────────┘
+```
+
+### Стилизация:
+
+```tsx
+<p className="text-sm text-cyber-sigil/80 italic font-serif animate-fade-in">
+  "{whisper}"
+</p>
+```
+
+**Результат:** AI присутствует с первой секунды, создавая ощущение "живого" советника.
 
 ---
 
-## MINIMAL FIXES (Optional)
+## УЛУЧШЕНИЕ 3: Ритуал Активации (Entry Creation Ritual)
 
-### Fix 1: Add AbortController to streaming (Optional Enhancement)
+**Цель:** Превратить нажатие `+` в осязаемый "магический ритуал".
 
-```typescript
-// src/lib/ai/discussions.ts - add signal support
+### Текущее поведение:
+`+` → мгновенный переход на `/new`
 
-export async function sendDiscussionMessage(
-  request: DiscussionAIRequest,
-  retryWithPin = true,
-  signal?: AbortSignal  // Add optional signal
-): Promise<DiscussionAIResponse> {
-  const { userText, mode, contextPack, history, language } = request;
-  
-  // Check if AI token is valid
-  if (!isAITokenValid()) {
-    if (retryWithPin) {
-      try {
-        await requestPinDialog();
-        return sendDiscussionMessage(request, false);
-      } catch {
-        throw new AIAuthRetryError('AI authorization cancelled');
-      }
-    }
-    throw new AIAuthRetryError('AI token required');
+### Новое поведение:
+
+**Фаза 1: Haptic + Visual Pulse (0-150ms)**
+```
+[+] нажатие → haptic feedback (если поддерживается)
+            → кнопка расширяется (scale 1.1)
+            → glow pulse усиливается
+```
+
+**Фаза 2: Sigil Resonance (150-400ms)**
+```
+Центральный сигил "откликается":
+- Brightness увеличивается
+- Orbital particles ускоряются на 0.2s
+- Ripple wave распространяется от сигила
+```
+
+**Фаза 3: Portal Transition (400-600ms)**
+```
+Экран "втягивается" в точку (scale down + fade)
+→ Navigate to /new
+→ NewEntry появляется с "expand from center"
+```
+
+### Технические детали:
+
+1. **Haptic API:**
+```tsx
+navigator.vibrate?.(15); // Короткий тактильный отклик
+```
+
+2. **Ripple Wave CSS:**
+```css
+@keyframes ritual-ripple {
+  0% { 
+    transform: scale(0.8); 
+    opacity: 0.6;
+    box-shadow: 0 0 0 0 hsl(var(--sigil) / 0.4);
   }
-  
-  const systemPrompt = buildSystemPrompt(contextPack.contextText, mode, language);
-  const historyMessages = buildHistoryMessages(history);
-  
-  const messages = [
-    { role: 'system' as const, content: systemPrompt },
-    ...historyMessages,
-    { role: 'user' as const, content: userText },
-  ];
-  
-  try {
-    const response = await fetch(AI_CHAT_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAITokenHeader(),
-      },
-      body: JSON.stringify({
-        messages,
-        model: 'google/gemini-3-flash-preview',
-        maxTokens: 2048,
-        temperature: 0.7,
-      }),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      
-      // Check for auth errors
-      if (isAuthError(errorData.error) || response.status === 401) {
-        if (retryWithPin) {
-          try {
-            await requestPinDialog();
-            return sendDiscussionMessage(request, false);
-          } catch {
-            throw new AIAuthRetryError('AI authorization cancelled');
-          }
-        }
-        throw new AIAuthRetryError(errorData.error || 'AI authorization failed');
-      }
-      
-      if (response.status === 429) {
-        throw new Error('Rate limit exceeded. Please try again later.');
-      }
-      if (response.status === 402) {
-        throw new Error('Payment required. Please add credits.');
-      }
-      
-      throw new Error(errorData.error || `AI request failed: ${response.status}`);
-    }
-    
-    // Parse SSE stream
-    const fullText = await parseSSEStream(response);
-    
-    if (!fullText) {
-      throw new Error('Empty AI response');
-    }
-    
-    return parseAIResponse(fullText, contextPack.evidence);
-  } catch (error) {
-    console.error('[discussions] AI request failed:', error);
-    throw error;
+  100% { 
+    transform: scale(1.5); 
+    opacity: 0;
+    box-shadow: 0 0 0 30px transparent;
   }
 }
 ```
 
-### Fix 2: Wire up onRemoveEntry in DiscussionChatPage (Optional UX Enhancement)
+3. **Portal Transition:**
+```tsx
+// В PageTransition.tsx — добавить вариант "portal"
+const portalVariants = {
+  initial: { scale: 1, opacity: 1 },
+  exit: { 
+    scale: 0.8, 
+    opacity: 0,
+    filter: 'blur(4px)',
+    transition: { duration: 0.25 }
+  },
+  enter: {
+    scale: [0.9, 1],
+    opacity: [0, 1],
+    transition: { duration: 0.3 }
+  }
+};
+```
 
-This would require updating session scope in Dexie, which is a larger change - defer to next iteration.
+4. **Обработчик в BottomNav:**
+```tsx
+const handleCenterButtonClick = async (e: React.MouseEvent) => {
+  e.preventDefault();
+  navigator.vibrate?.(15);
+  
+  // Trigger ritual animation via event
+  window.dispatchEvent(new CustomEvent('grimoire-ritual-start'));
+  
+  await new Promise(r => setTimeout(r, 400));
+  navigate('/new');
+};
+```
+
+5. **Listener в Today.tsx (Empty State):**
+```tsx
+useEffect(() => {
+  const handleRitual = () => setRitualActive(true);
+  window.addEventListener('grimoire-ritual-start', handleRitual);
+  return () => window.removeEventListener('grimoire-ritual-start', handleRitual);
+}, []);
+```
+
+**Результат:** Каждое создание записи — маленький ритуал, усиливающий эмоциональную связь.
 
 ---
 
-## RISK ASSESSMENT
+## Файлы для изменения
 
-| Category | Impact | Likelihood | Severity |
-|----------|--------|------------|----------|
-| Privacy leak | None | N/A | N/A |
-| Data corruption | None | N/A | N/A |
-| UX regression | Minor console warnings | Low | Low |
-| Feature gaps | Entry removal from scope | Low | Low |
-
-**Overall Risk:** Low
+| Файл | Изменения |
+|------|-----------|
+| `src/pages/Today.tsx` | Empty State с BreathingSigil, Oracle Whisper, ritual listener |
+| `src/components/icons/SigilIcon.tsx` | Добавить `BreathingSigil` компонент с orbital particles |
+| `src/components/BottomNav.tsx` | Haptic feedback + ritual trigger на center button |
+| `src/index.css` | Новые keyframes: breathe, orbit-slow/medium/fast, ritual-ripple, portal |
+| `src/lib/i18n.tsx` | Fallback whisper фразы (30+) для EN/RU |
+| `supabase/functions/ai-whisper/index.ts` (новый) | Лёгкий endpoint для генерации daily whisper |
+| `src/lib/whisperService.ts` (новый) | Логика получения/кэширования whisper |
 
 ---
 
-## RECOMMENDATION
+## Итог
 
-### **SHIP** - Ready for production
+| # | Улучшение | Эффект |
+|---|-----------|--------|
+| 1 | **Живой Сигил** | Экран "дышит", создаёт ощущение магического присутствия |
+| 2 | **AI-Шёпот** | Персонализированное AI-приглашение усиливает связь с "Оракулом" |
+| 3 | **Ритуал Активации** | Haptic + visual transition делает создание записи значимым |
 
-The implementation meets all critical requirements:
-- Privacy is properly enforced at multiple layers
-- Evidence cards work correctly with deep links
-- All 5 modes function as designed
-- Session lifecycle is complete and stable
-- No data loss scenarios identified
-- Navigation is not broken
+Все три улучшения работают вместе: пользователь видит живой, дышащий артефакт → читает AI-шёпот → нажимает `+` → переживает ритуал перехода → начинает запись в правильном настрое.
 
-**Known Limitations (Acceptable):**
-1. No mid-stream request cancellation
-2. Cannot remove entries from existing session scope
-3. Documents module not yet integrated (correctly deferred)
+---
 
-These are minor UX enhancements that can be addressed in future iterations without blocking ship.
+## Приоритет реализации
+
+1. **Живой Сигил** — чисто CSS, быстро, большой визуальный эффект
+2. **Ритуал Активации** — средняя сложность, сильный UX-эффект
+3. **AI-Шёпот** — требует edge function, но добавляет уникальность
+
