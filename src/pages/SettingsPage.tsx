@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useI18n, Language } from '@/lib/i18n';
 import { GrimoireIcon } from '@/components/icons/SigilIcon';
+import { RabbitHoleIcon } from '@/components/icons/RabbitHoleIcon';
 import { isCapacitorNative, requestNotificationPermission, scheduleTestNotification } from '@/lib/notifications';
 import {
   loadReminderNotificationSettings,
@@ -50,20 +51,23 @@ function SettingsContent() {
   );
   const [isTestingNotification, setIsTestingNotification] = useState(false);
   
-  // Secret admin access via long press on version
+  // Secret admin access via long press on rabbit hole icon
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [rabbitHolePressed, setRabbitHolePressed] = useState(false);
   
-  const handleVersionLongPressStart = useCallback(() => {
+  const handleRabbitHoleLongPressStart = useCallback(() => {
+    setRabbitHolePressed(true);
     longPressTimerRef.current = setTimeout(() => {
-      // Haptic feedback
+      // Haptic feedback - triple vibration for "falling down"
       if (navigator.vibrate) {
-        navigator.vibrate([50, 50, 50]);
+        navigator.vibrate([30, 50, 30, 50, 60]);
       }
       navigate('/admin');
-    }, 1500); // 1.5 seconds long press
+    }, 2500); // 2.5 seconds long press
   }, [navigate]);
   
-  const handleVersionLongPressEnd = useCallback(() => {
+  const handleRabbitHoleLongPressEnd = useCallback(() => {
+    setRabbitHolePressed(false);
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
@@ -480,27 +484,39 @@ function SettingsContent() {
           </CardContent>
         </Card>
 
-        {/* App Info - Long press version for admin access */}
+        {/* App Info */}
         <Card className="panel-glass border-cyber-glow/20">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <GrimoireIcon className="h-5 w-5 text-cyber-sigil" />
-              {t('app.name')}
+            <CardTitle className="flex items-center justify-between text-lg">
+              <div className="flex items-center gap-2">
+                <GrimoireIcon className="h-5 w-5 text-cyber-sigil" />
+                {t('app.name')}
+              </div>
+              {/* Rabbit hole - secret admin entry (long press 2.5s) */}
+              <button
+                className={cn(
+                  "p-2 rounded-full transition-all duration-300 select-none touch-none",
+                  "hover:bg-muted/50 active:scale-95",
+                  rabbitHolePressed && "animate-pulse bg-cyber-sigil/20 scale-110"
+                )}
+                onMouseDown={handleRabbitHoleLongPressStart}
+                onMouseUp={handleRabbitHoleLongPressEnd}
+                onMouseLeave={handleRabbitHoleLongPressEnd}
+                onTouchStart={handleRabbitHoleLongPressStart}
+                onTouchEnd={handleRabbitHoleLongPressEnd}
+                onTouchCancel={handleRabbitHoleLongPressEnd}
+                aria-label="Rabbit hole"
+              >
+                <RabbitHoleIcon className={cn(
+                  "h-5 w-5 text-muted-foreground/40 transition-all duration-300",
+                  rabbitHolePressed && "text-cyber-sigil rotate-180 scale-75"
+                )} />
+              </button>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p className="text-xs uppercase tracking-widest text-cyber-sigil/60">{t('app.tagline')}</p>
-            <p
-              className="cursor-default select-none"
-              onMouseDown={handleVersionLongPressStart}
-              onMouseUp={handleVersionLongPressEnd}
-              onMouseLeave={handleVersionLongPressEnd}
-              onTouchStart={handleVersionLongPressStart}
-              onTouchEnd={handleVersionLongPressEnd}
-              onTouchCancel={handleVersionLongPressEnd}
-            >
-              {t('settings.version')}: 1.0.0
-            </p>
+            <p>{t('settings.version')}: 1.0.0</p>
             <p className="text-xs text-muted-foreground/60 font-mono">
               Build: {import.meta.env.MODE === 'production' ? new Date().toISOString().slice(0, 16).replace('T', ' ') : 'dev'}
             </p>
