@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Zap, Gauge, Wifi, WifiOff, Shield, ShieldCheck, KeyRound, Clock, Brain } from 'lucide-react';
+import { Zap, Gauge, Wifi, WifiOff, Shield, ShieldCheck, KeyRound, Clock, Brain, Tags } from 'lucide-react';
 import { 
   AIProfile, 
   AISettings, 
@@ -247,6 +247,28 @@ export function AISettingsCard({ onSettingsChange }: AISettingsCardProps) {
               </div>
             </CollapsibleContent>
           )}
+        </Collapsible>
+
+        {/* Auto-Tags Toggle */}
+        <Collapsible open={settings.autoTags}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Tags className="h-5 w-5 text-cyber-glow" />
+              <div>
+                <Label htmlFor="auto-tags" className="text-sm font-medium">
+                  {t('tags.autoTitle')}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {t('tags.autoHint')}
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="auto-tags"
+              checked={settings.autoTags}
+              onCheckedChange={(checked) => updateSettings({ autoTags: checked })}
+            />
+          </div>
         </Collapsible>
 
         {/* Chat Profile Selection */}
