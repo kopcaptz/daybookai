@@ -64,6 +64,7 @@ export interface AISettings {
   autoMood: boolean; // Predictive mood tracking
   autoMoodLiveSuggestions: boolean; // Show live suggestions while typing
   autoMoodInheritFromChat: boolean; // Inherit mood from discussions
+  autoTags: boolean; // Auto-suggest tags based on text content
 }
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
@@ -74,6 +75,7 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   autoMood: false, // OFF by default (opt-in)
   autoMoodLiveSuggestions: true, // ON by default (if autoMood enabled)
   autoMoodInheritFromChat: true, // ON by default (if autoMood enabled)
+  autoTags: false, // OFF by default (opt-in)
 };
 
 // Storage key

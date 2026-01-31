@@ -1,17 +1,37 @@
 import { useState } from 'react';
-import { X, Plus, Tag } from 'lucide-react';
+import { X, Plus, Tag, Sparkles, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
+import { TagSuggestion } from '@/lib/autoTagService';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface TagSelectorProps {
   value: string[];
   onChange: (tags: string[]) => void;
   allTags?: string[];
+  // Auto-tag suggestions
+  suggestedTags?: TagSuggestion[];
+  onAcceptTag?: (tag: string) => void;
+  onDismissTag?: (tag: string) => void;
+  onAcceptAll?: () => void;
 }
 
-export function TagSelector({ value, onChange, allTags = [] }: TagSelectorProps) {
+export function TagSelector({ 
+  value, 
+  onChange, 
+  allTags = [],
+  suggestedTags = [],
+  onAcceptTag,
+  onDismissTag,
+  onAcceptAll,
+}: TagSelectorProps) {
   const { t, language } = useI18n();
   const [newTag, setNewTag] = useState('');
   const [showInput, setShowInput] = useState(false);
@@ -51,12 +71,71 @@ export function TagSelector({ value, onChange, allTags = [] }: TagSelectorProps)
     }
   };
 
+  const hasSuggestions = suggestedTags.length > 0;
+
   return (
     <div className="space-y-3 panel-glass p-4">
       <div className="flex items-center gap-2">
         <Tag className="h-4 w-4 text-cyber-sigil" />
         <span className="text-sm font-medium">{t('tags.title')}</span>
       </div>
+      
+      {/* Auto-tag suggestions */}
+      {hasSuggestions && (
+        <div className="rounded-lg border border-cyber-glow/30 bg-cyber-glow/5 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs text-cyber-glow">
+              <Sparkles className="h-3 w-3" />
+              <span>{t('tags.suggestions')}</span>
+            </div>
+            {suggestedTags.length > 1 && onAcceptAll && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={onAcceptAll}
+                className="h-6 px-2 text-xs text-cyber-glow hover:bg-cyber-glow/10"
+              >
+                <Check className="h-3 w-3 mr-1" />
+                {t('tags.acceptAll')}
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {suggestedTags.map((suggestion) => (
+              <TooltipProvider key={suggestion.tag}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-1 rounded-full border border-cyber-glow/40 bg-cyber-glow/10 px-2 py-1 animate-sigil-pulse">
+                      <button
+                        type="button"
+                        onClick={() => onAcceptTag?.(suggestion.tag)}
+                        className="flex items-center gap-1 text-sm text-cyber-glow hover:text-cyber-glow/80 transition-colors"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        {suggestion.tag}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDismissTag?.(suggestion.tag)}
+                        className="ml-1 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">
+                      {suggestion.source === 'emoji' ? '😀 ' : '🔤 '}
+                      {Math.round(suggestion.confidence * 100)}% {t('tags.confidence')}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ))}
+          </div>
+        </div>
+      )}
       
       <div className="flex flex-wrap gap-2">
         {availableTags.map((tag) => (

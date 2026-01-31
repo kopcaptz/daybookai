@@ -82,6 +82,11 @@ export const translations = {
   'tags.study': { ru: 'Учёба', en: 'Study' },
   'tags.rest': { ru: 'Отдых', en: 'Rest' },
   'tags.sport': { ru: 'Спорт', en: 'Sport' },
+  'tags.suggestions': { ru: 'Предложения', en: 'Suggestions' },
+  'tags.acceptAll': { ru: 'Принять все', en: 'Accept all' },
+  'tags.confidence': { ru: 'уверенность', en: 'confidence' },
+  'tags.autoTitle': { ru: 'Авто-теги', en: 'Auto Tags' },
+  'tags.autoHint': { ru: 'Предлагать теги на основе текста', en: 'Suggest tags based on text content' },
   
   // Search
   'search.title': { ru: 'Поиск', en: 'Search' },

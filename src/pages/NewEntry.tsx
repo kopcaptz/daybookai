@@ -27,6 +27,7 @@ import {
 } from '@/lib/biographyService';
 import { loadAISettings } from '@/lib/aiConfig';
 import { usePredictiveMood } from '@/hooks/usePredictiveMood';
+import { useAutoTags } from '@/hooks/useAutoTags';
 import { detectActionableText, type SuggestedTime } from '@/lib/reminderDetection';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -102,6 +103,14 @@ function EntryEditorContent() {
   const predictiveMood = usePredictiveMood({
     text,
     currentMood: mood,
+    enabled: true,
+  });
+
+  // Auto-tags detection
+  const autoTags = useAutoTags({
+    text,
+    currentTags: tags,
+    onTagsChange: setTags,
     enabled: true,
   });
 
@@ -623,8 +632,16 @@ function EntryEditorContent() {
           }}
         />
 
-        {/* Tag selector */}
-        <TagSelector value={tags} onChange={setTags} allTags={allTags} />
+        {/* Tag selector with auto-suggestions */}
+        <TagSelector 
+          value={tags} 
+          onChange={setTags} 
+          allTags={allTags}
+          suggestedTags={autoTags.suggestedTags}
+          onAcceptTag={autoTags.acceptTag}
+          onDismissTag={autoTags.dismissTag}
+          onAcceptAll={autoTags.acceptAll}
+        />
 
         {/* Private toggle with cyber styling */}
         <div className="flex items-center justify-between panel-glass p-4">
