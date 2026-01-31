@@ -38,7 +38,9 @@ const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const DiscussionsListPage = lazy(() => import("./pages/DiscussionsListPage"));
 const DiscussionChatPage = lazy(() => import("./pages/DiscussionChatPage"));
 const AdminLoginPage = lazy(() => import("./pages/AdminLoginPage"));
+const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
 const AdminFeedbackPage = lazy(() => import("./pages/AdminFeedbackPage"));
+const AdminSystemPage = lazy(() => import("./pages/AdminSystemPage"));
 
 const queryClient = new QueryClient();
 
@@ -131,7 +133,9 @@ function AppContent() {
               
               {/* Admin routes - no onboarding guard */}
               <Route path="/admin" element={<AdminLoginPage />} />
+              <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
               <Route path="/admin/feedback" element={<AdminFeedbackPage />} />
+              <Route path="/admin/system" element={<AdminSystemPage />} />
               
               <Route path="*" element={<NotFound />} />
               </Routes>

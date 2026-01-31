@@ -1,11 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { 
   LogOut, 
   RefreshCw, 
   Filter,
   Inbox,
-  Loader2
+  Loader2,
+  Search,
+  ArrowUpDown,
+  Download,
+  ArrowLeft,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -32,13 +37,16 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
+import { Input } from '@/components/ui/input';
 import { FeedbackCard, FeedbackItem } from '@/components/admin/FeedbackCard';
 import { FeedbackImageModal } from '@/components/admin/FeedbackImageModal';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { createCsvContent, downloadCsv, formatDateForFilename } from '@/lib/csvExport';
 
 type StatusFilter = 'all' | 'new' | 'read' | 'resolved' | 'archived';
+type SortOrder = 'newest' | 'oldest';
 
 export default function AdminFeedbackPage() {
   const navigate = useNavigate();
@@ -49,6 +57,8 @@ export default function AdminFeedbackPage() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -196,6 +206,51 @@ export default function AdminFeedbackPage() {
     navigate('/settings', { replace: true });
   };
 
+  // Filter and sort feedback
+  const filteredAndSortedFeedback = useMemo(() => {
+    let result = [...feedbackList];
+    
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(item => 
+        item.message.toLowerCase().includes(query) ||
+        item.admin_notes?.toLowerCase().includes(query)
+      );
+    }
+    
+    // Sort
+    result.sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+    
+    return result;
+  }, [feedbackList, searchQuery, sortOrder]);
+
+  const handleExportCsv = () => {
+    const header = ['ID', 'Дата', 'Сообщение', 'Статус', 'Заметки админа', 'Изображение'];
+    
+    const rows = feedbackList.map(item => [
+      item.id,
+      new Date(item.created_at).toLocaleString('ru-RU'),
+      item.message,
+      item.status,
+      item.admin_notes || '',
+      item.image_url || '',
+    ]);
+    
+    const csvContent = createCsvContent(header, rows);
+    const filename = `feedback_${formatDateForFilename(new Date())}.csv`;
+    downloadCsv(filename, csvContent);
+    
+    toast({
+      title: "Экспорт завершён",
+      description: `Скачан файл ${filename}`,
+    });
+  };
+
   const newCount = feedbackList.filter(f => f.status === 'new').length;
 
   if (!isAuthenticated) {
@@ -207,11 +262,19 @@ export default function AdminFeedbackPage() {
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border/50 bg-card/80 backdrop-blur-xl">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-serif text-foreground">Архив посланий</h1>
-            <p className="text-xs text-muted-foreground">
-              Всего: {total} {newCount > 0 && `• Новых: ${newCount}`}
-            </p>
+          <div className="flex items-center gap-3">
+            <Link to="/admin/dashboard">
+              <Button variant="ghost" size="sm" className="gap-2">
+                <ArrowLeft className="h-4 w-4" />
+                <span className="hidden sm:inline">Назад</span>
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-lg font-serif text-foreground">Архив посланий</h1>
+              <p className="text-xs text-muted-foreground">
+                Всего: {total} {newCount > 0 && `• Новых: ${newCount}`}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button 
@@ -243,12 +306,33 @@ export default function AdminFeedbackPage() {
         </div>
       </header>
 
-      {/* Filters */}
-      <div className="max-w-4xl mx-auto px-4 py-4">
-        <div className="flex items-center gap-2">
+      {/* Filters & Search */}
+      <div className="max-w-4xl mx-auto px-4 py-4 space-y-3">
+        {/* Search bar */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Поиск по сообщениям..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 pr-9 h-9 bg-background/50"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        
+        {/* Filter row */}
+        <div className="flex flex-wrap items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" />
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-            <SelectTrigger className="w-[160px] h-8 text-sm">
+            <SelectTrigger className="w-[140px] h-8 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -259,7 +343,46 @@ export default function AdminFeedbackPage() {
               <SelectItem value="archived">В архиве</SelectItem>
             </SelectContent>
           </Select>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSortOrder(sortOrder === 'newest' ? 'oldest' : 'newest')}
+            className="h-8 gap-1.5 text-sm"
+          >
+            <ArrowUpDown className="h-3.5 w-3.5" />
+            {sortOrder === 'newest' ? 'Новые' : 'Старые'}
+          </Button>
+          
+          <div className="flex-1" />
+          
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportCsv}
+                  className="h-8 gap-1.5 text-sm"
+                  disabled={feedbackList.length === 0}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">CSV</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Экспорт в CSV</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
+        
+        {/* Results count */}
+        {searchQuery && (
+          <p className="text-xs text-muted-foreground">
+            Найдено: {filteredAndSortedFeedback.length} из {feedbackList.length}
+          </p>
+        )}
       </div>
 
       {/* Content */}
@@ -268,14 +391,16 @@ export default function AdminFeedbackPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        ) : feedbackList.length === 0 ? (
+        ) : filteredAndSortedFeedback.length === 0 ? (
           <div className="text-center py-12">
             <Inbox className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-            <p className="text-muted-foreground">Посланий пока нет</p>
+            <p className="text-muted-foreground">
+              {searchQuery ? 'Ничего не найдено' : 'Посланий пока нет'}
+            </p>
           </div>
         ) : (
           <div className="space-y-3">
-            {feedbackList.map(item => (
+            {filteredAndSortedFeedback.map(item => (
               <FeedbackCard
                 key={item.id}
                 item={item}

@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.admin-feedback-update]
 verify_jwt = false
+
+[functions.admin-system-health]
+verify_jwt = false
