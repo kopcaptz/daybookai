@@ -1,16 +1,26 @@
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
+import { Brain } from 'lucide-react';
 
 interface MoodSelectorProps {
   value: number;
   onChange: (value: number) => void;
+  suggestedMood?: number | null;
+  suggestionSource?: 'text' | 'discussion' | 'entry' | null;
+  onSuggestionAccept?: () => void;
 }
 
 // Cyber mood symbols
 const moodEmojis = ['😢', '😔', '😐', '🙂', '😊'];
 
-export function MoodSelector({ value, onChange }: MoodSelectorProps) {
-  const { t } = useI18n();
+export function MoodSelector({ 
+  value, 
+  onChange, 
+  suggestedMood,
+  suggestionSource,
+  onSuggestionAccept,
+}: MoodSelectorProps) {
+  const { t, language } = useI18n();
   
   const moodLabels = [
     t('mood.1'),
@@ -20,10 +30,41 @@ export function MoodSelector({ value, onChange }: MoodSelectorProps) {
     t('mood.5'),
   ];
 
+  const handleMoodClick = (mood: number) => {
+    onChange(mood);
+    // If clicking on suggested mood, call accept handler
+    if (mood === suggestedMood && onSuggestionAccept) {
+      onSuggestionAccept();
+    }
+  };
+
+  // Get source label for suggestion
+  const getSourceLabel = () => {
+    if (!suggestionSource) return '';
+    switch (suggestionSource) {
+      case 'text':
+        return language === 'ru' ? 'из текста' : 'from text';
+      case 'discussion':
+        return language === 'ru' ? 'из чата' : 'from chat';
+      case 'entry':
+        return language === 'ru' ? 'из записи' : 'from entry';
+      default:
+        return '';
+    }
+  };
+
   return (
     <div className="space-y-4 panel-glass p-4">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">{t('mood.title')}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">{t('mood.title')}</span>
+          {suggestedMood && suggestedMood !== value && (
+            <span className="flex items-center gap-1 text-xs text-cyber-sigil/70">
+              <Brain className="h-3 w-3" />
+              <span className="hidden sm:inline">{getSourceLabel()}</span>
+            </span>
+          )}
+        </div>
         <span className="text-sm text-muted-foreground">
           {moodEmojis[value - 1]} {moodLabels[value - 1]}
         </span>
@@ -45,25 +86,36 @@ export function MoodSelector({ value, onChange }: MoodSelectorProps) {
         
         {/* Mood buttons */}
         <div className="absolute inset-0 flex items-center justify-between">
-          {[1, 2, 3, 4, 5].map((mood) => (
-            <button
-              key={mood}
-              type="button"
-              onClick={() => onChange(mood)}
-              className={cn(
-                'relative z-10 flex h-10 w-10 items-center justify-center rounded-md text-lg transition-all duration-200',
-                'border',
-                value === mood
-                  ? 'bg-cyber-glow/10 border-cyber-glow/40 shadow-[0_0_12px_hsl(var(--glow-primary)/0.3)] scale-110'
-                  : 'bg-card border-border/50 hover:border-cyber-glow/30 hover:bg-cyber-glow/5'
-              )}
-            >
-              {moodEmojis[mood - 1]}
-              {value === mood && (
-                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyber-sigil animate-sigil-pulse" />
-              )}
-            </button>
-          ))}
+          {[1, 2, 3, 4, 5].map((mood) => {
+            const isSelected = value === mood;
+            const isSuggested = suggestedMood === mood && !isSelected;
+            
+            return (
+              <button
+                key={mood}
+                type="button"
+                onClick={() => handleMoodClick(mood)}
+                className={cn(
+                  'relative z-10 flex h-10 w-10 items-center justify-center rounded-md text-lg transition-all duration-200',
+                  'border',
+                  isSelected
+                    ? 'bg-cyber-glow/10 border-cyber-glow/40 shadow-[0_0_12px_hsl(var(--glow-primary)/0.3)] scale-110'
+                    : isSuggested
+                    ? 'bg-cyber-sigil/5 border-cyber-sigil/30 hover:border-cyber-sigil/50 hover:bg-cyber-sigil/10'
+                    : 'bg-card border-border/50 hover:border-cyber-glow/30 hover:bg-cyber-glow/5'
+                )}
+              >
+                {moodEmojis[mood - 1]}
+                {isSelected && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyber-sigil animate-sigil-pulse" />
+                )}
+                {/* Ghost dot for suggestions */}
+                {isSuggested && (
+                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-cyber-sigil/50 animate-pulse" />
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

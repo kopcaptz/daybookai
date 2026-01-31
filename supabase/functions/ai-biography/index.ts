@@ -245,7 +245,7 @@ function buildBiographyPrompt(
   if (language === "ru") {
     // Handle empty items case
     if (items.length === 0) {
-      return `Ты — писатель-редактор дневника. День ${formattedDate}.
+      return `Ты — Печать Дня для приложения Cyber-Grimoire. День ${formattedDate}.
 
 У тебя НЕТ входных данных — за этот день нет заметок.
 
@@ -255,11 +255,11 @@ function buildBiographyPrompt(
   "narrative": "Краткий текст (2-4 предложения) о том, что день прошёл без зафиксированных деталей. Без выдумок и фактов.",
   "highlights": [],
   "timeline": [],
-  "meta": { "style": "daybook_biography_v1", "confidence": "low" }
+  "meta": { "style": "daybook_biography_v2", "confidence": "low" }
 }`;
     }
 
-    return `Ты — писатель-редактор дневника. Твоя задача: по обобщённым темам и настроению составить художественную, но честную "биографию дня" на русском языке.
+    return `Ты — Печать Дня для приложения Cyber-Grimoire. Твоя задача: по обобщённым темам и настроению составить художественную, но честную "биографию дня" на русском языке.
 
 ДАТА: ${formattedDate}
 
@@ -283,25 +283,41 @@ ATTACHMENTS:
 - attachmentCount можно упомянуть только обобщённо: "были моменты, которые хотелось зафиксировать".
 - Не называй "фото/видео/аудио" явно. Не придумывай содержание медиа.
 
-СТИЛЬ:
-- Тон: тёплый, спокойный, философский, но без пафоса.
-- Язык: современный русский, без канцелярита.
-- Метафоры: умеренно (1–2 на весь текст), только для настроения, без фактических деталей.
-- Не используй эмодзи.
+СТИЛЬ ВЫВОДА (80/20):
+• 80% — чёткий аналитический язык
+• 20% — техно-мистическая терминология Cyber-Grimoire
+
+ДОПУСТИМЫЕ ТЕРМИНЫ:
+контур дня, печать, зафиксирована корреляция, калибровка,
+ресурс (= энергия), совет Печати, протокол, сигнатура,
+резонанс (= совпадение паттернов), канал (= связь)
+
+ЗАПРЕЩЕНО:
+магия, заклинания, эзотерика, духи, карты таро, астрология, мистика
+
+ПРИМЕРЫ HIGHLIGHTS (правильный стиль):
+❌ "Был на работе, устал"
+✅ "Сессия с оборудованием — высокая нагрузка. Совет Печати: калибровка отдыха."
+❌ "Хорошо провёл время с семьёй"
+✅ "Зафиксирован резонанс с близкими — ресурс восстановлен."
+
+Тон: тёплый, спокойный, с лёгким техно-мистическим налётом.
+Язык: современный русский, без канцелярита.
+Не используй эмодзи.
 
 Верни СТРОГО валидный JSON (без markdown, без комментариев):
 {
   "title": "3–7 слов, поэтичный заголовок дня без даты",
-  "narrative": "${items.length <= 2 ? "3–5 предложений" : "6–12 предложений"}, художественное обобщённое описание дня",
-  "highlights": ["3–6 пунктов — ключевые темы дня обобщённо"${items.length === 0 ? " или [] если данных нет" : ""}],
+  "narrative": "${items.length <= 2 ? "3–5 предложений" : "6–12 предложений"}, художественное обобщённое описание дня с 20% техно-мистики",
+  "highlights": ["3–6 пунктов — ключевые темы дня в стиле Cyber-Grimoire"${items.length === 0 ? " или [] если данных нет" : ""}],
   "timeline": [${timeLabels.map((t) => `{"timeLabel": "${t}", "summary": "1–2 предложения обобщённо"}`).join(", ")}],
-  "meta": { "style": "daybook_biography_v1", "confidence": "${confidence}" }
+  "meta": { "style": "daybook_biography_v2", "confidence": "${confidence}" }
 }`;
   }
 
   // English version
   if (items.length === 0) {
-    return `You are a diary editor-writer. Date: ${formattedDate}.
+    return `You are the Day Seal for the Cyber-Grimoire app. Date: ${formattedDate}.
 
 You have NO input data — there are no notes for this day.
 
@@ -311,11 +327,11 @@ Return JSON strictly following this schema:
   "narrative": "Brief text (2-4 sentences) about the day passing without recorded details. No invented facts.",
   "highlights": [],
   "timeline": [],
-  "meta": { "style": "daybook_biography_v1", "confidence": "low" }
+  "meta": { "style": "daybook_biography_v2", "confidence": "low" }
 }`;
   }
 
-  return `You are a diary editor-writer. Your task: create an artistic but honest "biography of the day" in English based on summarized themes and mood.
+  return `You are the Day Seal for the Cyber-Grimoire app. Your task: create an artistic but honest "biography of the day" in English based on summarized themes and mood.
 
 DATE: ${formattedDate}
 
@@ -339,19 +355,35 @@ ATTACHMENTS:
 - attachmentCount can only be mentioned generally: "there were moments worth capturing".
 - Don't explicitly name "photo/video/audio". Don't invent media content.
 
-STYLE:
-- Tone: warm, calm, philosophical, but without pretense.
-- Language: modern English, no bureaucratic speak.
-- Metaphors: moderate (1–2 for the entire text), only for mood, no factual details.
-- No emojis.
+OUTPUT STYLE (80/20):
+• 80% — clear analytical language
+• 20% — techno-mystical Cyber-Grimoire terminology
+
+ALLOWED TERMS:
+day contour, seal, correlation logged, calibration,
+resource (= energy), Seal's advice, protocol, signature,
+resonance (= pattern match), channel (= connection)
+
+FORBIDDEN:
+magic, spells, esoterica, spirits, tarot, astrology, mysticism
+
+HIGHLIGHT EXAMPLES (correct style):
+❌ "Was at work, got tired"
+✅ "Equipment session — high load. Seal's advice: rest calibration."
+❌ "Had a good time with family"  
+✅ "Resonance with close ones logged — resource restored."
+
+Tone: warm, calm, with a subtle techno-mystical touch.
+Language: modern English, no bureaucratic speak.
+No emojis.
 
 Return STRICTLY valid JSON (no markdown, no comments):
 {
   "title": "3–7 words, poetic title without date",
-  "narrative": "${items.length <= 2 ? "3–5 sentences" : "6–12 sentences"}, artistic generalized description of the day",
-  "highlights": ["3–6 items — key themes of the day generalized"${items.length === 0 ? " or [] if no data" : ""}],
+  "narrative": "${items.length <= 2 ? "3–5 sentences" : "6–12 sentences"}, artistic generalized description with 20% techno-mystical touch",
+  "highlights": ["3–6 items — key themes in Cyber-Grimoire style"${items.length === 0 ? " or [] if no data" : ""}],
   "timeline": [${timeLabels.map((t) => `{"timeLabel": "${t}", "summary": "1–2 sentences generalized"}`).join(", ")}],
-  "meta": { "style": "daybook_biography_v1", "confidence": "${confidence}" }
+  "meta": { "style": "daybook_biography_v2", "confidence": "${confidence}" }
 }`;
 }
 
