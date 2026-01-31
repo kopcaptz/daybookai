@@ -690,6 +690,11 @@
   animation: shake 0.5s ease-in-out;
 }
 
+/* Radial gradient utility */
+.bg-gradient-radial {
+  background: radial-gradient(circle, var(--tw-gradient-stops));
+}
+
 /* Legacy compatibility - map old classes to new */
 @layer utilities {
   .magic-glow { @apply cyber-glow; }

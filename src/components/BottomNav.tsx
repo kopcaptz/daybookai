@@ -39,14 +39,31 @@ export function BottomNav() {
           const Icon = item.icon;
 
           if (item.isCenter) {
+            const handleCenterClick = (e: React.MouseEvent) => {
+              e.preventDefault();
+              
+              // Haptic feedback
+              if (navigator.vibrate) {
+                navigator.vibrate(15);
+              }
+              
+              // Trigger ritual animation event
+              window.dispatchEvent(new CustomEvent('grimoire-ritual-start'));
+              
+              // Navigate after a brief delay for the ritual effect
+              setTimeout(() => {
+                window.location.href = item.path;
+              }, 400);
+            };
+            
             return (
-              <Link
+              <button
                 key={item.path}
-                to={item.path}
+                onClick={handleCenterClick}
                 className="flex -translate-y-3 items-center justify-center"
               >
                 <div className={cn(
-                  "flex h-14 w-14 items-center justify-center rounded-lg transition-all duration-300 active:scale-95",
+                  "flex h-14 w-14 items-center justify-center rounded-lg transition-all duration-300 active:scale-110",
                   "bg-gradient-to-br from-primary via-primary to-accent",
                   "border border-cyber-glow/30",
                   "hover:animate-pulse-glow",
@@ -56,7 +73,7 @@ export function BottomNav() {
                   <div className="absolute top-1 left-1 w-4 h-4 rounded-full bg-cyber-glow/20 blur-sm" />
                   <Icon className="h-6 w-6 text-primary-foreground relative z-10" />
                 </div>
-              </Link>
+              </button>
             );
           }
 
