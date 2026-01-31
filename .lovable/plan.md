@@ -1,50 +1,32 @@
 
 
-# План: Удаление иконки из header Today.tsx
+# План: Удаление иконки из header DiscussionsListPage.tsx
 
 ## Проблема
 
-Иконка `GrimoireIcon` в шапке страницы Today накладывается на глобальную кнопку "Связь с Мастером" (`FeedbackModal`), которая фиксирована в позиции `top-4 left-4`.
+Иконка `MessageSquare` в левой части шапки страницы "Обсуждения" накладывается на глобальную кнопку "Связь с Мастером" (FeedbackModal), которая фиксирована в позиции `top-4 left-4`.
 
 ## Решение
 
-Удалить иконку `GrimoireIcon` из header страницы Today.tsx, оставив только центрированный текст заголовка.
+Заменить иконку на пустой placeholder для сохранения симметрии верстки, аналогично исправлению в Today.tsx.
 
 ---
 
 ## Изменение
 
-**Файл:** `src/pages/Today.tsx`
+**Файл:** `src/pages/DiscussionsListPage.tsx`
 
-**Текущая структура header (строки 145-165):**
+**Текущая структура (строки 70-73):**
 ```tsx
-<div className="flex items-center justify-between">
-  <div className="relative shrink-0 w-10">
-    <GrimoireIcon className="h-8 w-8 text-cyber-sigil" />
-    <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyber-glow animate-sigil-pulse" />
-  </div>
-  <div className="flex-1 text-center">
-    <h1>...</h1>
-    <p>...</p>
-  </div>
-  <div className="shrink-0 w-10 flex justify-end">
-    {/* кнопка выбора */}
-  </div>
+<div className="relative shrink-0 w-10">
+  <MessageSquare className="h-6 w-6 text-cyber-sigil" />
+  <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyber-glow animate-sigil-pulse" />
 </div>
 ```
 
 **Новая структура:**
 ```tsx
-<div className="flex items-center justify-between">
-  <div className="shrink-0 w-10" /> {/* пустой placeholder для симметрии */}
-  <div className="flex-1 text-center">
-    <h1>...</h1>
-    <p>...</p>
-  </div>
-  <div className="shrink-0 w-10 flex justify-end">
-    {/* кнопка выбора */}
-  </div>
-</div>
+<div className="shrink-0 w-10" />
 ```
 
 ---
@@ -52,21 +34,23 @@
 ## Результат
 
 ```
-┌─────────────────────────────────────────────────────┐
-│ [Связь]     КИБЕР-ГРИМУАР           [Выбрать]      │
-│             ЛИЧНЫЙ ДНЕВНИК                          │
-└─────────────────────────────────────────────────────┘
++-----------------------------------------------------+
+| [Связь]     ОБСУЖДЕНИЯ              [+ Новое]      |
+|             ЧАТ С ЗАПИСЯМИ                          |
++-----------------------------------------------------+
 ```
 
-- Кнопка "Связь с Мастером" остаётся в левом верхнем углу без конфликтов
-- Заголовок остаётся центрированным
+- Кнопка "Связь с Мастером" остается в левом верхнем углу без конфликтов
+- Заголовок остается центрированным
 - Левый placeholder сохраняет симметрию верстки
 
 ---
 
-## Файл для изменения
+## Технические детали
 
 | Файл | Строки | Изменение |
 |------|--------|-----------|
-| `src/pages/Today.tsx` | 146-149 | Заменить `GrimoireIcon` на пустой `<div>` |
+| `src/pages/DiscussionsListPage.tsx` | 70-73 | Заменить `MessageSquare` + пульсирующую точку на пустой `<div className="shrink-0 w-10" />` |
+
+**Примечание:** Импорт `MessageSquare` используется также в пустом состоянии (строка 110), поэтому удалять его из импортов не нужно.
 
