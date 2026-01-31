@@ -67,20 +67,19 @@ function DiscussionsListContent() {
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
         {/* Brand header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <MessageSquare className="h-6 w-6 text-cyber-sigil" />
-              <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyber-glow animate-sigil-pulse" />
-            </div>
-            <div>
-              <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
-                {t('discussions.title')}
-              </h1>
-              <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
-                {language === 'ru' ? 'Чат с записями' : 'Chat with entries'}
-              </p>
-            </div>
+          <div className="relative shrink-0 w-10">
+            <MessageSquare className="h-6 w-6 text-cyber-sigil" />
+            <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyber-glow animate-sigil-pulse" />
           </div>
+          <div className="flex-1 text-center min-w-0">
+            <h1 className="text-xl font-serif font-medium text-foreground tracking-wide truncate">
+              {t('discussions.title')}
+            </h1>
+            <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
+              {language === 'ru' ? 'Чат с записями' : 'Chat with entries'}
+            </p>
+          </div>
+          <div className="shrink-0">
           
           <Button
             onClick={handleNewDiscussion}
@@ -95,6 +94,7 @@ function DiscussionsListContent() {
             )}
             {t('discussions.new')}
           </Button>
+          </div>
         </div>
         
         {/* Rune divider */}
