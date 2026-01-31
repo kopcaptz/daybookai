@@ -52,6 +52,15 @@ function DiscussionChatContent() {
     }
   }, [session?.modeDefault]);
   
+  // Auto-enable findMode when scope is empty
+  useEffect(() => {
+    if (session && 
+        session.scope.entryIds.length === 0 && 
+        session.scope.docIds.length === 0) {
+      setFindMode(true);
+    }
+  }, [session?.scope.entryIds.length, session?.scope.docIds.length]);
+  
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -200,10 +209,24 @@ function DiscussionChatContent() {
       <ScrollArea className="flex-1 px-4 py-4">
         <div className="space-y-4 max-w-2xl mx-auto">
           {(!messages || messages.length === 0) && (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">
-                {t('discussion.placeholder')}
-              </p>
+            <div className="text-center py-12 space-y-3">
+              {session.scope.entryIds.length === 0 && session.scope.docIds.length === 0 ? (
+                <>
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm">
+                    <Search className="h-3.5 w-3.5" />
+                    {language === 'ru' ? 'Режим «Найти в записях» активен' : 'Find in notes mode active'}
+                  </div>
+                  <p className="text-muted-foreground text-sm max-w-xs mx-auto">
+                    {language === 'ru' 
+                      ? 'AI будет искать релевантные записи автоматически. Или добавьте записи через кнопку «Контекст».'
+                      : 'AI will search for relevant entries automatically. Or add entries via the Context button.'}
+                  </p>
+                </>
+              ) : (
+                <p className="text-muted-foreground">
+                  {t('discussion.placeholder')}
+                </p>
+              )}
             </div>
           )}
           
