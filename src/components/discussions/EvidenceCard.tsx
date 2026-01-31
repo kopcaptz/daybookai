@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { FileText, ExternalLink, Book } from 'lucide-react';
+import { FileText, ExternalLink, Book, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { EvidenceRef } from '@/lib/librarian/contextPack';
 import { useI18n } from '@/lib/i18n';
@@ -9,10 +9,23 @@ interface EvidenceCardProps {
   highlighted?: boolean;
 }
 
+function getEvidenceIcon(type: EvidenceRef['type']) {
+  switch (type) {
+    case 'entry':
+      return FileText;
+    case 'biography':
+      return BookOpen;
+    case 'document':
+    case 'document_page':
+    default:
+      return Book;
+  }
+}
+
 export function EvidenceCard({ evidence, highlighted = false }: EvidenceCardProps) {
   const { t } = useI18n();
   
-  const Icon = evidence.type === 'entry' ? FileText : Book;
+  const Icon = getEvidenceIcon(evidence.type);
   
   return (
     <Link

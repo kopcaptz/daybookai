@@ -1,4 +1,4 @@
-import { db, DiaryEntry, DiscussionMode } from '@/lib/db';
+import { db, DiaryEntry, DiscussionMode, StoredBiography } from '@/lib/db';
 import { format } from 'date-fns';
 
 // Re-export DiscussionMode for convenience
@@ -6,14 +6,15 @@ export type { DiscussionMode } from '@/lib/db';
 
 // Evidence reference for AI citations
 export interface EvidenceRef {
-  type: 'entry' | 'document_page' | 'document';
-  id: string;                   // Stable ref ID like "E1", "D2"
+  type: 'entry' | 'document_page' | 'document' | 'biography';
+  id: string;                   // Stable ref ID like "E1", "D2", "B1"
   title: string;
   subtitle?: string;            // Time/page/folder path
   snippet?: string;
-  deepLink: string;             // /entry/:id or /documents/:id?page=N
-  entityId: number;             // entryId or docId
+  deepLink: string;             // /entry/:id or /documents/:id?page=N or /day/:date
+  entityId: number;             // entryId or docId (0 for biographies)
   pageIndex?: number;
+  biographyDate?: string;       // YYYY-MM-DD for biographies
 }
 
 export interface ContextPackOptions {
@@ -30,9 +31,10 @@ export interface ContextPackResult {
 
 // Context limits
 const CONTEXT_LIMITS = {
-  maxEvidence: 8,
+  maxEvidence: 12,              // Increased to accommodate biographies
+  maxBiographies: 4,            // Max chronicles per request
   maxSnippetChars: 600,
-  maxTotalContextChars: 10000,
+  maxTotalContextChars: 12000,  // Slightly increased for chronicles
 };
 
 /**
@@ -142,6 +144,66 @@ async function buildFromSearch(
 }
 
 /**
+ * Load relevant biographies for context
+ */
+async function loadRelevantBiographies(
+  entryIds: number[],
+  query: string,
+  findMode: boolean
+): Promise<StoredBiography[]> {
+  const biographies: StoredBiography[] = [];
+  const addedDates = new Set<string>();
+  
+  // 1. Get dates from selected entries (scope mode)
+  if (!findMode && entryIds.length > 0) {
+    const entries = await Promise.all(entryIds.map(id => db.entries.get(id)));
+    const dates = [...new Set(entries.filter(Boolean).map(e => e!.date))];
+    
+    for (const date of dates) {
+      const bio = await db.biographies.get(date);
+      if (bio && bio.status === 'complete' && bio.biography) {
+        biographies.push(bio);
+        addedDates.add(bio.date);
+      }
+    }
+  }
+  
+  // 2. Search by keywords (findMode or additional matches)
+  if (query.trim()) {
+    const allBios = await db.biographies.toArray();
+    const matches = allBios.filter(bio => {
+      if (bio.status !== 'complete' || !bio.biography) return false;
+      if (addedDates.has(bio.date)) return false;
+      
+      const searchText = `${bio.biography.title} ${bio.biography.narrative} ${bio.biography.highlights.join(' ')}`;
+      return calculateRelevanceScore(searchText, query) > 0;
+    });
+    
+    // Sort by relevance
+    matches.sort((a, b) => {
+      const scoreA = calculateRelevanceScore(
+        `${a.biography!.title} ${a.biography!.narrative}`,
+        query
+      );
+      const scoreB = calculateRelevanceScore(
+        `${b.biography!.title} ${b.biography!.narrative}`,
+        query
+      );
+      return scoreB - scoreA;
+    });
+    
+    for (const bio of matches) {
+      if (!addedDates.has(bio.date)) {
+        biographies.push(bio);
+        addedDates.add(bio.date);
+      }
+    }
+  }
+  
+  return biographies.slice(0, CONTEXT_LIMITS.maxBiographies);
+}
+
+/**
  * Build context pack for discussion AI
  */
 export async function buildContextPack(options: ContextPackOptions): Promise<ContextPackResult> {
@@ -158,12 +220,15 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
   }
   
   const { entries } = entriesData;
-  const selectedEntries = entries.slice(0, CONTEXT_LIMITS.maxEvidence);
+  // Reserve slots for biographies
+  const maxEntries = CONTEXT_LIMITS.maxEvidence - CONTEXT_LIMITS.maxBiographies;
+  const selectedEntries = entries.slice(0, maxEntries);
   
   const evidence: EvidenceRef[] = [];
   const contextParts: string[] = [];
   let totalChars = 0;
   
+  // Add entries to context
   for (let i = 0; i < selectedEntries.length; i++) {
     const entry = selectedEntries[i];
     const entryId = entry.id!;
@@ -201,6 +266,52 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
     
     contextParts.push(contextEntry);
     totalChars += contextEntry.length;
+  }
+  
+  // Load and add biographies
+  const biographies = await loadRelevantBiographies(
+    findMode ? [] : sessionScope.entryIds,
+    userQuery,
+    findMode
+  );
+  
+  for (let i = 0; i < biographies.length; i++) {
+    const bio = biographies[i];
+    const refId = `B${i + 1}`;
+    
+    // Build biography snippet with title + narrative + highlights
+    const bioContent = [
+      bio.biography!.title,
+      bio.biography!.narrative,
+      'Ключевые моменты: ' + bio.biography!.highlights.slice(0, 3).join('; '),
+    ].join('\n');
+    
+    const snippet = createSnippet(bioContent, CONTEXT_LIMITS.maxSnippetChars);
+    
+    // Format date for display
+    const dateFormatted = format(new Date(bio.date), 'dd.MM.yyyy');
+    
+    evidence.push({
+      type: 'biography',
+      id: refId,
+      title: `Хроника ${dateFormatted}`,
+      subtitle: bio.biography!.title,
+      snippet,
+      deepLink: `/day/${bio.date}`,
+      entityId: 0,
+      biographyDate: bio.date,
+    });
+    
+    // Build context text for biography
+    const contextBio = `[${refId}] Chronicle ${bio.date}: ${bio.biography!.title}\n${snippet}`;
+    
+    // Check total char limit
+    if (totalChars + contextBio.length > CONTEXT_LIMITS.maxTotalContextChars) {
+      break;
+    }
+    
+    contextParts.push(contextBio);
+    totalChars += contextBio.length;
   }
   
   const contextText = contextParts.join('\n\n---\n\n');

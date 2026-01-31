@@ -213,7 +213,7 @@ export interface DiscussionMessage {
   content: string;
   createdAt: number;
   evidenceRefs?: Array<{
-    type: 'entry' | 'document_page' | 'document';
+    type: 'entry' | 'document_page' | 'document' | 'biography';
     id: string;
     title: string;
     subtitle?: string;
@@ -221,6 +221,7 @@ export interface DiscussionMessage {
     deepLink: string;
     entityId: number;
     pageIndex?: number;
+    biographyDate?: string;  // YYYY-MM-DD for biographies
   }>;
   status?: 'ok' | 'error';
   meta?: {
