@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Mail, X, Paperclip, Send, Sparkles, Loader2 } from 'lucide-react';
+import { X, Paperclip, Send, Sparkles, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { GrimoireIcon } from '@/components/icons/SigilIcon';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -131,22 +132,22 @@ export function FeedbackModal() {
       <DialogTrigger asChild>
         <button
           className={cn(
-            "fixed top-4 right-4 z-50",
-            "p-2.5 rounded-lg",
+            "fixed top-4 left-4 z-50",
+            "p-2 rounded-lg",
             "bg-card/80 backdrop-blur-sm",
             "border border-border/50",
-            "text-muted-foreground",
+            "text-cyber-sigil",
             "transition-all duration-300",
-            "hover:text-cyber-sigil hover:border-cyber-sigil/50",
-            "hover:shadow-[0_0_15px_rgba(139,92,246,0.3)]",
+            "hover:border-cyber-sigil/50",
+            "hover:shadow-[0_0_15px_hsl(var(--sigil)/0.3)]",
             "focus:outline-none focus:ring-2 focus:ring-cyber-sigil/50",
             "group"
           )}
-          aria-label="Магическая почта"
+          aria-label="Связь с Мастером"
         >
           <div className="relative">
-            <Mail className="h-5 w-5" />
-            <Sparkles className="absolute -top-1 -right-1 h-3 w-3 text-cyber-sigil opacity-0 group-hover:opacity-100 transition-opacity" />
+            <GrimoireIcon className="h-6 w-6" />
+            <Sparkles className="absolute -top-1 -right-1 h-3 w-3 text-cyber-glow opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
         </button>
       </DialogTrigger>
