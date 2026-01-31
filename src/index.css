@@ -414,6 +414,51 @@
     animation: rune-flicker 4s ease-in-out infinite;
   }
 
+  /* Chat FAB slide-in animation */
+  @keyframes chat-slide-in-right {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes chat-slide-in-bottom {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .animate-slide-in {
+    animation: chat-slide-in-right 400ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  @media (max-width: 768px) {
+    .animate-slide-in {
+      animation: chat-slide-in-bottom 400ms cubic-bezier(0.32, 0.72, 0, 1);
+    }
+  }
+
+  /* Ping animation for FAB */
+  @keyframes ping-slow {
+    75%, 100% {
+      transform: scale(1.5);
+      opacity: 0;
+    }
+  }
+
+  .animate-ping-slow {
+    animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
   /* Grimoire shadow */
   .grimoire-shadow {
     box-shadow: 
