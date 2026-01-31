@@ -143,23 +143,22 @@ function TodayContent() {
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
         {/* Brand header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <GrimoireIcon className="h-7 w-7 text-cyber-sigil" />
-              <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyber-glow animate-sigil-pulse" />
-            </div>
-            <div>
-              <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
-                {t('app.name')}
-              </h1>
-              <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
-                {t('app.subtitle')}
-              </p>
-            </div>
+          <div className="relative shrink-0 w-10">
+            <GrimoireIcon className="h-7 w-7 text-cyber-sigil" />
+            <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyber-glow animate-sigil-pulse" />
           </div>
+          <div className="flex-1 text-center min-w-0">
+            <h1 className="text-xl font-serif font-medium text-foreground tracking-wide truncate">
+              {t('app.name')}
+            </h1>
+            <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
+              {t('app.subtitle')}
+            </p>
+          </div>
+          <div className="shrink-0 w-10 flex justify-end">
           
           {/* Select button - only show when there are entries */}
-          {entries.length > 0 && !selectionMode && (
+          {entries.length > 0 && !selectionMode ? (
             <Button
               variant="ghost"
               size="sm"
@@ -169,7 +168,8 @@ function TodayContent() {
               <CheckSquare className="h-4 w-4" />
               {t('today.select')}
             </Button>
-          )}
+          ) : null}
+          </div>
         </div>
 
         {/* Date, entry count, and quick reminder button */}

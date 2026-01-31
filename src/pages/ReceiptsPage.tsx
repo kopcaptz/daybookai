@@ -112,23 +112,21 @@ function ReceiptsContent() {
     <div className="min-h-screen pb-24 cyber-noise rune-grid">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/settings")}
-              className="shrink-0"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
-                {language === "ru" ? "Чеки" : "Receipts"}
-              </h1>
-              <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
-                {language === "ru" ? "Сканирование и учёт" : "Scan & Track"}
-              </p>
-            </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/settings")}
+            className="shrink-0"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className="flex-1 text-center min-w-0">
+            <h1 className="text-xl font-serif font-medium text-foreground tracking-wide truncate">
+              {language === "ru" ? "Чеки" : "Receipts"}
+            </h1>
+            <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
+              {language === "ru" ? "Сканирование и учёт" : "Scan & Track"}
+            </p>
           </div>
           {/* Header actions */}
           {receipts && receipts.length > 0 && (

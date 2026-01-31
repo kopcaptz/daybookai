@@ -59,11 +59,11 @@ function SearchContent() {
     <div className="min-h-screen pb-24 cyber-noise rune-grid">
       <header className="sticky top-0 z-40 space-y-3 bg-background/80 backdrop-blur-xl px-4 py-4 border-b border-border/50">
         {/* Brand header */}
-        <div className="flex items-center gap-3 mb-3">
-          <div className="relative">
+        <div className="flex items-center justify-between mb-3">
+          <div className="relative shrink-0 w-8">
             <SearchIcon className="h-6 w-6 text-cyber-sigil" />
           </div>
-          <div>
+          <div className="flex-1 text-center">
             <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
               {t('app.name')}
             </h1>
@@ -71,6 +71,7 @@ function SearchContent() {
               {t('app.subtitle')}
             </p>
           </div>
+          <div className="shrink-0 w-8" />
         </div>
         
         {/* Search input */}
