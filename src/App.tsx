@@ -13,6 +13,7 @@ import { GlobalAIPinDialog } from "@/components/GlobalAIPinDialog";
 import { HeroTransitionProvider } from "@/components/HeroTransition";
 import { FloatingChatButton } from "@/components/FloatingChatButton";
 import { FeedbackModal } from "@/components/FeedbackModal";
+import MagicActionPanel from "@/components/MagicActionPanel";
 import { I18nProvider } from "@/lib/i18n";
 import { initNotificationListeners, setNavigationCallback } from "@/lib/notifications";
 import { reconcileReminderNotifications } from "@/lib/reminderNotifications";
@@ -125,6 +126,7 @@ function AppContent() {
           </PageTransition>
           {!hideNav && <BottomNav />}
           {!hideFloatingChat && <FloatingChatButton />}
+          <MagicActionPanel />
           <FeedbackModal />
           <InstallPrompt />
         </div>
