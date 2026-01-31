@@ -67,7 +67,7 @@ function DiscussionsListContent() {
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
         {/* Brand header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <div className="relative">
               <MessageSquare className="h-6 w-6 text-cyber-sigil" />
               <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyber-glow animate-sigil-pulse" />
