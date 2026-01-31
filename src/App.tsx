@@ -37,6 +37,8 @@ const ReminderDetailPage = lazy(() => import("./pages/ReminderDetailPage"));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const DiscussionsListPage = lazy(() => import("./pages/DiscussionsListPage"));
 const DiscussionChatPage = lazy(() => import("./pages/DiscussionChatPage"));
+const AdminLoginPage = lazy(() => import("./pages/AdminLoginPage"));
+const AdminFeedbackPage = lazy(() => import("./pages/AdminFeedbackPage"));
 
 const queryClient = new QueryClient();
 
@@ -78,19 +80,24 @@ function AppContent() {
     reconcileReminderNotifications(storedLang as 'ru' | 'en');
   }, [navigate]);
   
-  // Hide bottom nav on entry editor, receipt pages, discussion chat, and onboarding
-  // Hide floating chat on chat page, entry editor, and onboarding
+  // Hide bottom nav on entry editor, receipt pages, discussion chat, admin pages, and onboarding
+  // Hide floating chat on chat page, entry editor, admin pages, and onboarding
   const hideNav = location.pathname === '/new' || 
     location.pathname.startsWith('/entry/') || 
     location.pathname === '/receipts' || 
     location.pathname.startsWith('/receipts/') || 
     location.pathname.startsWith('/discussions/') ||
+    location.pathname.startsWith('/admin') ||
     location.pathname === '/onboarding';
 
   const hideFloatingChat = location.pathname === '/chat' || 
     location.pathname === '/new' || 
     location.pathname.startsWith('/entry/') ||
+    location.pathname.startsWith('/admin') ||
     location.pathname === '/onboarding';
+  
+  // Hide feedback modal on admin pages
+  const hideFeedback = location.pathname.startsWith('/admin');
 
   return (
     <HeroTransitionProvider>
@@ -120,6 +127,11 @@ function AppContent() {
               <Route path="/receipts/analytics" element={<OnboardingGuard><ReceiptAnalyticsPage /></OnboardingGuard>} />
               <Route path="/receipts/:id" element={<OnboardingGuard><ReceiptDetailPage /></OnboardingGuard>} />
               <Route path="/reminder/:id" element={<OnboardingGuard><ReminderDetailPage /></OnboardingGuard>} />
+              
+              {/* Admin routes - no onboarding guard */}
+              <Route path="/admin" element={<AdminLoginPage />} />
+              <Route path="/admin/feedback" element={<AdminFeedbackPage />} />
+              
               <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
@@ -127,7 +139,7 @@ function AppContent() {
           {!hideNav && <BottomNav />}
           {!hideFloatingChat && <FloatingChatButton />}
           
-          <FeedbackModal />
+          {!hideFeedback && <FeedbackModal />}
           <InstallPrompt />
         </div>
       </div>
