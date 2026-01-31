@@ -10,6 +10,7 @@ import { InstallPrompt } from "@/components/InstallPrompt";
 import { PageTransition } from "@/components/PageTransition";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { GlobalAIPinDialog } from "@/components/GlobalAIPinDialog";
+import { HeroTransitionProvider } from "@/components/HeroTransition";
 import { I18nProvider } from "@/lib/i18n";
 import { initNotificationListeners, setNavigationCallback } from "@/lib/notifications";
 import { reconcileReminderNotifications } from "@/lib/reminderNotifications";
@@ -83,12 +84,13 @@ function AppContent() {
     location.pathname === '/onboarding';
 
   return (
-    <div className="min-h-screen bg-background starry-bg moon-vignette relative">
-      <NotificationBanner />
-      <div className="relative z-10">
-        <PageTransition>
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
+    <HeroTransitionProvider>
+      <div className="min-h-screen bg-background starry-bg moon-vignette relative">
+        <NotificationBanner />
+        <div className="relative z-10">
+          <PageTransition>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
               {/* Onboarding route - no guard needed */}
               <Route path="/onboarding" element={<OnboardingPage />} />
               
@@ -110,13 +112,14 @@ function AppContent() {
               <Route path="/receipts/:id" element={<OnboardingGuard><ReceiptDetailPage /></OnboardingGuard>} />
               <Route path="/reminder/:id" element={<OnboardingGuard><ReminderDetailPage /></OnboardingGuard>} />
               <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </PageTransition>
-        {!hideNav && <BottomNav />}
-        <InstallPrompt />
+              </Routes>
+            </Suspense>
+          </PageTransition>
+          {!hideNav && <BottomNav />}
+          <InstallPrompt />
+        </div>
       </div>
-    </div>
+    </HeroTransitionProvider>
   );
 }
 
