@@ -17,3 +17,15 @@ verify_jwt = false
 
 [functions.ai-whisper]
 verify_jwt = false
+
+[functions.feedback-submit]
+verify_jwt = false
+
+[functions.admin-pin-verify]
+verify_jwt = false
+
+[functions.admin-feedback-list]
+verify_jwt = false
+
+[functions.admin-feedback-update]
+verify_jwt = false

@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Mail, X, Paperclip, Send, Sparkles } from 'lucide-react';
+import { Mail, X, Paperclip, Send, Sparkles, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -11,17 +11,30 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
 export function FeedbackModal() {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Check file size
+      if (file.size > MAX_IMAGE_SIZE) {
+        toast({
+          title: "Файл слишком большой",
+          description: "Максимальный размер изображения — 5 МБ",
+          variant: "destructive",
+        });
+        return;
+      }
       // Clean up previous preview URL
       if (previewUrl) {
         URL.revokeObjectURL(previewUrl);
@@ -42,25 +55,59 @@ export function FeedbackModal() {
     }
   };
 
-  const handleSubmit = () => {
-    console.log('Feedback submitted:', {
-      message,
-      file: selectedFile ? {
-        name: selectedFile.name,
-        size: selectedFile.size,
-        type: selectedFile.type,
-      } : null,
-    });
+  const handleSubmit = async () => {
+    if (!message.trim() || isSubmitting) return;
 
-    toast({
-      title: "Сообщение отправлено в архив",
-      description: "Мастер получит ваше послание",
-    });
+    setIsSubmitting(true);
 
-    // Reset form
-    setMessage('');
-    handleRemoveFile();
-    setOpen(false);
+    try {
+      // Collect device info
+      const deviceInfo = {
+        userAgent: navigator.userAgent,
+        language: navigator.language,
+        viewport: {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      // Create form data
+      const formData = new FormData();
+      formData.append('message', message.trim());
+      formData.append('device_info', JSON.stringify(deviceInfo));
+      if (selectedFile) {
+        formData.append('image', selectedFile);
+      }
+
+      // Submit to edge function
+      const { data, error } = await supabase.functions.invoke('feedback-submit', {
+        body: formData,
+      });
+
+      if (error || !data?.success) {
+        throw new Error(data?.error || error?.message || 'Unknown error');
+      }
+
+      toast({
+        title: "Сообщение отправлено в архив",
+        description: "Мастер получит ваше послание",
+      });
+
+      // Reset form
+      setMessage('');
+      handleRemoveFile();
+      setOpen(false);
+    } catch (error) {
+      console.error('Feedback submit error:', error);
+      toast({
+        title: "Ошибка отправки",
+        description: "Не удалось отправить сообщение. Попробуйте позже.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -197,7 +244,7 @@ export function FeedbackModal() {
           {/* Submit button */}
           <Button
             onClick={handleSubmit}
-            disabled={!message.trim()}
+            disabled={!message.trim() || isSubmitting}
             className={cn(
               "w-full gap-2",
               "bg-gradient-to-r from-violet-600 to-indigo-600",
@@ -209,8 +256,12 @@ export function FeedbackModal() {
               "disabled:opacity-50 disabled:shadow-none"
             )}
           >
-            <Send className="h-4 w-4" />
-            Отправить в эфир
+            {isSubmitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            {isSubmitting ? "Отправка..." : "Отправить в эфир"}
           </Button>
         </div>
       </DialogContent>
