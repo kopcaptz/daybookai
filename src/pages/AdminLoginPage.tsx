@@ -16,7 +16,7 @@ export default function AdminLoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/admin/feedback', { replace: true });
+      navigate('/admin/dashboard', { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
@@ -26,7 +26,7 @@ export default function AdminLoginPage() {
 
     const success = await verifyPin(pin);
     if (success) {
-      navigate('/admin/feedback', { replace: true });
+      navigate('/admin/dashboard', { replace: true });
     }
   };
 
