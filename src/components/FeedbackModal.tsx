@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { MessageSquare, X, Paperclip, Send } from 'lucide-react';
+import { Mail, X, Paperclip, Send, Sparkles } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -85,11 +85,15 @@ export function FeedbackModal() {
             "transition-all duration-300",
             "hover:text-cyber-sigil hover:border-cyber-sigil/50",
             "hover:shadow-[0_0_15px_rgba(139,92,246,0.3)]",
-            "focus:outline-none focus:ring-2 focus:ring-cyber-sigil/50"
+            "focus:outline-none focus:ring-2 focus:ring-cyber-sigil/50",
+            "group"
           )}
-          aria-label="Обратная связь"
+          aria-label="Магическая почта"
         >
-          <MessageSquare className="h-5 w-5" />
+          <div className="relative">
+            <Mail className="h-5 w-5" />
+            <Sparkles className="absolute -top-1 -right-1 h-3 w-3 text-cyber-sigil opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
         </button>
       </DialogTrigger>
 
