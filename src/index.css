@@ -1,5 +1,5 @@
 /* Cyber-Grimoire Design System — Кибер-Гримуар */
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+/* Google Fonts loaded asynchronously in index.html to avoid render-blocking */
 
 @tailwind base;
 @tailwind components;
