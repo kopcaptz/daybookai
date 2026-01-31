@@ -14,7 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      feedback: {
+        Row: {
+          admin_notes: string | null
+          created_at: string | null
+          device_info: Json | null
+          id: string
+          image_url: string | null
+          message: string
+          status: Database["public"]["Enums"]["feedback_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string | null
+          device_info?: Json | null
+          id?: string
+          image_url?: string | null
+          message: string
+          status?: Database["public"]["Enums"]["feedback_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string | null
+          device_info?: Json | null
+          id?: string
+          image_url?: string | null
+          message?: string
+          status?: Database["public"]["Enums"]["feedback_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +55,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      feedback_status: "new" | "read" | "resolved" | "archived"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +182,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      feedback_status: ["new", "read", "resolved", "archived"],
+    },
   },
 } as const
