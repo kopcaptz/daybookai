@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useRef, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Sun, Moon, Monitor, Download, Trash2, AlertTriangle, HardDrive, Smartphone, Globe, Clock, Shield, Receipt, Bell, Coffee, Zap } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { exportAllData, clearAllData, STORAGE_WARNINGS, loadBioSettings, saveBioSettings } from '@/lib/db';
@@ -39,6 +39,7 @@ function SettingsContent() {
   const storage = useStorageUsage();
   const { theme, setTheme } = useTheme();
   const { t, language, setLanguage } = useI18n();
+  const navigate = useNavigate();
   const [isExporting, setIsExporting] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [bioTime, setBioTime] = useState(() => loadBioSettings().bioTime);
@@ -48,6 +49,26 @@ function SettingsContent() {
     () => loadReminderNotificationSettings().enabled
   );
   const [isTestingNotification, setIsTestingNotification] = useState(false);
+  
+  // Secret admin access via long press on version
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  const handleVersionLongPressStart = useCallback(() => {
+    longPressTimerRef.current = setTimeout(() => {
+      // Haptic feedback
+      if (navigator.vibrate) {
+        navigator.vibrate([50, 50, 50]);
+      }
+      navigate('/admin');
+    }, 1500); // 1.5 seconds long press
+  }, [navigate]);
+  
+  const handleVersionLongPressEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
   
   const handleReminderNotificationsToggle = async (enabled: boolean) => {
     if (enabled) {
@@ -459,7 +480,7 @@ function SettingsContent() {
           </CardContent>
         </Card>
 
-        {/* App Info */}
+        {/* App Info - Long press version for admin access */}
         <Card className="panel-glass border-cyber-glow/20">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -469,7 +490,17 @@ function SettingsContent() {
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p className="text-xs uppercase tracking-widest text-cyber-sigil/60">{t('app.tagline')}</p>
-            <p>{t('settings.version')}: 1.0.0</p>
+            <p
+              className="cursor-default select-none"
+              onMouseDown={handleVersionLongPressStart}
+              onMouseUp={handleVersionLongPressEnd}
+              onMouseLeave={handleVersionLongPressEnd}
+              onTouchStart={handleVersionLongPressStart}
+              onTouchEnd={handleVersionLongPressEnd}
+              onTouchCancel={handleVersionLongPressEnd}
+            >
+              {t('settings.version')}: 1.0.0
+            </p>
             <p className="text-xs text-muted-foreground/60 font-mono">
               Build: {import.meta.env.MODE === 'production' ? new Date().toISOString().slice(0, 16).replace('T', ' ') : 'dev'}
             </p>
