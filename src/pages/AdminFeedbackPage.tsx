@@ -15,6 +15,22 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
 import { FeedbackCard, FeedbackItem } from '@/components/admin/FeedbackCard';
 import { FeedbackImageModal } from '@/components/admin/FeedbackImageModal';
@@ -32,6 +48,7 @@ export default function AdminFeedbackPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -170,9 +187,13 @@ export default function AdminFeedbackPage() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const handleLogoutConfirm = () => {
     logout();
-    navigate('/admin', { replace: true });
+    navigate('/settings', { replace: true });
   };
 
   const newCount = feedbackList.filter(f => f.status === 'new').length;
@@ -201,14 +222,23 @@ export default function AdminFeedbackPage() {
             >
               <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
             </Button>
-            <Button 
-              size="sm" 
-              variant="ghost" 
-              onClick={handleLogout}
-              className="text-muted-foreground"
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={handleLogoutClick}
+                    className="text-muted-foreground"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Выйти из архива</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </header>
@@ -263,6 +293,24 @@ export default function AdminFeedbackPage() {
         imageUrl={selectedImage} 
         onClose={() => setSelectedImage(null)} 
       />
+
+      {/* Logout confirmation dialog */}
+      <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Выйти из архива?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Вы вернётесь в настройки. Для повторного входа потребуется PIN-код.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLogoutConfirm}>
+              Выйти
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
