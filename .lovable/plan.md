@@ -1,257 +1,513 @@
 
+# Shared Element Transition: "Opening the Grimoire" Hero Animation
 
-# Cyber-Grimoire: 3 Улучшения Empty State «Start Your Day»
+## Overview
 
-## Текущее состояние
-
-Empty State сейчас:
-- Статичная иконка `GrimoireIcon` в `panel-glass` контейнере
-- Два `SealGlyph` в углах (opacity 40%/30%)
-- Заголовок "Открой день" + подсказка
-- Декоративная линия с глифами
-
-**Проблема:** Экран статичен. Нет ощущения "живого" артефакта. Нет AI-присутствия. Кнопка `+` — обычный переход.
+This plan implements a smooth Shared Element Transition (Hero animation) that transforms the central icon in the BottomNav into the full "Create Entry" page, creating the sensation of "opening" a digital grimoire.
 
 ---
 
-## УЛУЧШЕНИЕ 1: Живой Сигил (Дышащий артефакт)
+## Current State Analysis
 
-**Цель:** Превратить статичную иконку в "пульсирующее сердце" гримуара.
+**BottomNav Center Button:**
+- Located in `src/components/BottomNav.tsx` (lines 41-77)
+- 14x14 (56px) rounded-lg button with Feather icon
+- Currently dispatches `grimoire-ritual-start` event and navigates after 400ms delay
+- Has glow accent and `grimoire-shadow` styling
 
-### Визуальные изменения:
+**Today Empty State:**
+- `BreathingSigil` component in `src/components/icons/BreathingSigil.tsx`
+- Contains `GrimoireIcon` with breathing animation, orbital particles, ambient glow
+- Responds to `ritualActive` state for visual feedback
 
-```
-┌─────────────────────────────┐
-│    ╔═══════════════╗        │
-│    ║   ◇    ◇     ║        │
-│    ║      ◊       ║  ← Центральный сигил
-│    ║   [SIGIL]    ║    с orbital particles
-│    ║      ◊       ║        │
-│    ╚═══════════════╝        │
-│                             │
-│    Orbital particles        │
-│    медленно вращаются       │
-└─────────────────────────────┘
-```
-
-### Технические детали:
-
-1. **Breathing Animation** — иконка плавно масштабируется (scale 1.0 → 1.03 → 1.0) за 4 секунды
-2. **Orbital Particles** — 3 маленьких светящихся точки на орбите вокруг иконки (CSS animation, 12s period)
-3. **Ambient Glow** — градиентное свечение под иконкой, реагирующее на время суток:
-   - Утро (6-12): теплый amber
-   - День (12-18): нейтральный
-   - Вечер (18-22): violet tint
-   - Ночь (22-6): холодный cyan
-
-### Новые CSS keyframes:
-
-```css
-@keyframes breathe {
-  0%, 100% { transform: scale(1); opacity: 0.85; }
-  50% { transform: scale(1.03); opacity: 1; }
-}
-
-@keyframes orbit {
-  from { transform: rotate(0deg) translateX(40px) rotate(0deg); }
-  to { transform: rotate(360deg) translateX(40px) rotate(-360deg); }
-}
-```
-
-### Новый компонент: `BreathingSigil`
-
-```tsx
-// Три orbital particles на разных скоростях
-<div className="absolute inset-0">
-  <div className="absolute w-1.5 h-1.5 rounded-full bg-cyber-glow animate-orbit-slow" />
-  <div className="absolute w-1 h-1 rounded-full bg-cyber-rune animate-orbit-medium" />
-  <div className="absolute w-1.5 h-1.5 rounded-full bg-cyber-sigil/60 animate-orbit-fast" />
-</div>
-```
-
-**Результат:** Пустой экран "живёт", гримуар словно ждёт пользователя.
+**PageTransition Component:**
+- Currently empty wrapper (no actual transitions) in `src/components/PageTransition.tsx`
+- Perfect candidate for enhancement
 
 ---
 
-## УЛУЧШЕНИЕ 2: AI-Шёпот Дня (Oracle Whisper)
+## Architecture: View Transition API + CSS Fallback
 
-**Цель:** Добавить AI-слой прямо на Empty State — персонализированное приглашение от "Оракула".
-
-### Концепция:
-
-Под заголовком "Открой день" появляется короткая AI-генерированная фраза (1 предложение), меняющаяся ежедневно. Фраза генерируется локально при первом открытии дня (до создания записей).
-
-### Примеры фраз (AI генерирует на основе даты/времени года/дня недели):
-
-- 🌅 Утро понедельника: *"Новая неделя — чистая страница гримуара."*
-- 🌙 Пятница вечер: *"Финальные штрихи к неделе. Что запомнится?"*
-- ❄️ Зимний день: *"Короткий день снаружи — бесконечный внутри."*
-- 🌸 Первый день весны: *"Природа пишет новую главу. И ты?"*
-
-### Технические детали:
-
-1. **Триггер:** При `entries.length === 0` и первом открытии дня
-2. **Кэширование:** LocalStorage ключ `whisper-{date}` (не дублировать запросы)
-3. **Fallback:** Набор из 30+ локальных фраз, если AI недоступен
-4. **Edge Function:** Лёгкий запрос (`/ai-whisper`) с контекстом: `{ date, dayOfWeek, season, timeOfDay }`
-5. **Prompt:** "Ты — мистический Оракул приложения Cyber-Grimoire. Сгенерируй одну короткую, поэтичную фразу-приглашение начать день (макс 10 слов). Стиль: техно-эзотерика, загадочность, тепло."
-
-### UI компонент:
-
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│                    SHARED ELEMENT TRANSITION FLOW                   │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌─────────────┐     ┌──────────────┐     ┌────────────────────┐   │
+│  │ BottomNav   │     │  Transition  │     │    NewEntry Page   │   │
+│  │ [+] Button  │────>│    Layer     │────>│   (expanded view)  │   │
+│  │   (56px)    │     │  (overlay)   │     │   (fullscreen)     │   │
+│  └─────────────┘     └──────────────┘     └────────────────────┘   │
+│        │                    │                       │               │
+│        │  1. Capture        │  2. Animate           │  3. Morph     │
+│        │     position       │     expand            │     to page   │
+│        └────────────────────┴───────────────────────┘               │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
-┌─────────────────────────────────┐
-│         [BREATHING SIGIL]       │
-│                                 │
-│       ✧ Открой день ✧           │
-│                                 │
-│   "Новая неделя — чистая        │
-│    страница гримуара."          │  ← Oracle Whisper
-│                                 │
-│   Нажми +, чтобы добавить...    │
-└─────────────────────────────────┘
-```
-
-### Стилизация:
-
-```tsx
-<p className="text-sm text-cyber-sigil/80 italic font-serif animate-fade-in">
-  "{whisper}"
-</p>
-```
-
-**Результат:** AI присутствует с первой секунды, создавая ощущение "живого" советника.
 
 ---
 
-## УЛУЧШЕНИЕ 3: Ритуал Активации (Entry Creation Ritual)
+## Implementation Strategy
 
-**Цель:** Превратить нажатие `+` в осязаемый "магический ритуал".
+### Approach: CSS + React State Transition Layer
 
-### Текущее поведение:
-`+` → мгновенный переход на `/new`
+Since we're using React Router (not Next.js), we'll create a **transition overlay layer** that:
 
-### Новое поведение:
+1. Captures the button's position via `getBoundingClientRect()`
+2. Creates a floating "ghost" element that animates from button → fullscreen
+3. Uses CSS `transform` and `opacity` for GPU-accelerated performance
+4. Fades in the destination page as the animation completes
 
-**Фаза 1: Haptic + Visual Pulse (0-150ms)**
-```
-[+] нажатие → haptic feedback (если поддерживается)
-            → кнопка расширяется (scale 1.1)
-            → glow pulse усиливается
-```
+---
 
-**Фаза 2: Sigil Resonance (150-400ms)**
-```
-Центральный сигил "откликается":
-- Brightness увеличивается
-- Orbital particles ускоряются на 0.2s
-- Ripple wave распространяется от сигила
-```
+## File Changes
 
-**Фаза 3: Portal Transition (400-600ms)**
-```
-Экран "втягивается" в точку (scale down + fade)
-→ Navigate to /new
-→ NewEntry появляется с "expand from center"
-```
+### 1. NEW: `src/components/HeroTransition.tsx`
 
-### Технические детали:
+Central component managing the transition animation:
 
-1. **Haptic API:**
 ```tsx
-navigator.vibrate?.(15); // Короткий тактильный отклик
-```
-
-2. **Ripple Wave CSS:**
-```css
-@keyframes ritual-ripple {
-  0% { 
-    transform: scale(0.8); 
-    opacity: 0.6;
-    box-shadow: 0 0 0 0 hsl(var(--sigil) / 0.4);
-  }
-  100% { 
-    transform: scale(1.5); 
-    opacity: 0;
-    box-shadow: 0 0 0 30px transparent;
-  }
+interface HeroTransitionState {
+  isActive: boolean;
+  sourceRect: DOMRect | null;
+  targetPath: string;
 }
 ```
 
-3. **Portal Transition:**
+**Features:**
+- Portal-rendered overlay (z-index: 100)
+- Morphing "ghost" sigil element
+- Background dim/glow effect
+- GPU-accelerated transforms only
+
+### 2. NEW: `src/hooks/useHeroTransition.ts`
+
+Hook providing transition control:
+
 ```tsx
-// В PageTransition.tsx — добавить вариант "portal"
-const portalVariants = {
-  initial: { scale: 1, opacity: 1 },
-  exit: { 
-    scale: 0.8, 
-    opacity: 0,
-    filter: 'blur(4px)',
-    transition: { duration: 0.25 }
-  },
-  enter: {
-    scale: [0.9, 1],
-    opacity: [0, 1],
-    transition: { duration: 0.3 }
-  }
-};
+const { startTransition, isTransitioning } = useHeroTransition();
+
+// In BottomNav:
+startTransition(buttonRef, '/new');
 ```
 
-4. **Обработчик в BottomNav:**
+### 3. MODIFY: `src/components/BottomNav.tsx`
+
 ```tsx
-const handleCenterButtonClick = async (e: React.MouseEvent) => {
+// Add ref to capture button position
+const centerButtonRef = useRef<HTMLButtonElement>(null);
+const { startTransition } = useHeroTransition();
+
+const handleCenterClick = (e: React.MouseEvent) => {
   e.preventDefault();
   navigator.vibrate?.(15);
   
-  // Trigger ritual animation via event
-  window.dispatchEvent(new CustomEvent('grimoire-ritual-start'));
-  
-  await new Promise(r => setTimeout(r, 400));
-  navigate('/new');
+  // Start hero transition
+  startTransition(centerButtonRef.current, '/new');
 };
 ```
 
-5. **Listener в Today.tsx (Empty State):**
+### 4. MODIFY: `src/pages/NewEntry.tsx`
+
+Add entrance animation classes:
+
 ```tsx
-useEffect(() => {
-  const handleRitual = () => setRitualActive(true);
-  window.addEventListener('grimoire-ritual-start', handleRitual);
-  return () => window.removeEventListener('grimoire-ritual-start', handleRitual);
-}, []);
+// Wrap content with entrance animation
+<div className={cn(
+  "min-h-screen",
+  isEntering && "animate-portal-enter"
+)}>
 ```
 
-**Результат:** Каждое создание записи — маленький ритуал, усиливающий эмоциональную связь.
+### 5. ADD TO: `tailwind.config.ts`
+
+New keyframes for the hero animation:
+
+```typescript
+keyframes: {
+  // Existing...
+  
+  // Hero transition: button → fullscreen
+  "hero-expand": {
+    "0%": { 
+      transform: "translate(var(--start-x), var(--start-y)) scale(0.1)",
+      borderRadius: "0.5rem",
+      opacity: "1"
+    },
+    "60%": {
+      transform: "translate(50%, 40%) scale(0.5)",
+      borderRadius: "1rem",
+      opacity: "1"
+    },
+    "100%": { 
+      transform: "translate(0, 0) scale(1)",
+      borderRadius: "0",
+      opacity: "0"
+    }
+  },
+  
+  // Page entrance (after hero)
+  "page-materialize": {
+    "0%": { 
+      opacity: "0",
+      transform: "scale(1.02)",
+      filter: "blur(4px)"
+    },
+    "100%": { 
+      opacity: "1",
+      transform: "scale(1)",
+      filter: "blur(0)"
+    }
+  },
+  
+  // Glow pulse during transition
+  "transition-glow": {
+    "0%, 100%": { 
+      boxShadow: "0 0 60px 20px hsl(var(--glow-primary) / 0.3)"
+    },
+    "50%": { 
+      boxShadow: "0 0 100px 40px hsl(var(--glow-primary) / 0.5)"
+    }
+  }
+}
+```
+
+### 6. ADD TO: `src/index.css`
+
+```css
+/* Hero Transition Overlay */
+.hero-transition-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  background: transparent;
+}
+
+.hero-transition-ghost {
+  position: fixed;
+  will-change: transform, opacity, border-radius;
+  transform-origin: center center;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--primary)),
+    hsl(var(--accent))
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Performance: GPU compositing */
+.hero-transition-ghost,
+.hero-transition-overlay {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Backdrop dim during transition */
+.hero-backdrop {
+  position: fixed;
+  inset: 0;
+  background: hsl(var(--background) / 0.8);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 300ms ease-out;
+}
+
+.hero-backdrop.active {
+  opacity: 1;
+}
+```
 
 ---
 
-## Файлы для изменения
+## Detailed Component: HeroTransition.tsx
 
-| Файл | Изменения |
-|------|-----------|
-| `src/pages/Today.tsx` | Empty State с BreathingSigil, Oracle Whisper, ritual listener |
-| `src/components/icons/SigilIcon.tsx` | Добавить `BreathingSigil` компонент с orbital particles |
-| `src/components/BottomNav.tsx` | Haptic feedback + ritual trigger на center button |
-| `src/index.css` | Новые keyframes: breathe, orbit-slow/medium/fast, ritual-ripple, portal |
-| `src/lib/i18n.tsx` | Fallback whisper фразы (30+) для EN/RU |
-| `supabase/functions/ai-whisper/index.ts` (новый) | Лёгкий endpoint для генерации daily whisper |
-| `src/lib/whisperService.ts` (новый) | Логика получения/кэширования whisper |
+```tsx
+import { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { GrimoireIcon } from '@/components/icons/SigilIcon';
+import { cn } from '@/lib/utils';
+
+interface TransitionState {
+  phase: 'idle' | 'preparing' | 'expanding' | 'complete';
+  sourceRect: DOMRect | null;
+  targetPath: string | null;
+}
+
+const TRANSITION_DURATION = 500; // ms
+
+export function HeroTransitionProvider({ children }: { children: React.ReactNode }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [state, setState] = useState<TransitionState>({
+    phase: 'idle',
+    sourceRect: null,
+    targetPath: null,
+  });
+
+  const startTransition = useCallback((sourceElement: HTMLElement | null, path: string) => {
+    if (!sourceElement) {
+      navigate(path);
+      return;
+    }
+
+    const rect = sourceElement.getBoundingClientRect();
+    
+    setState({
+      phase: 'preparing',
+      sourceRect: rect,
+      targetPath: path,
+    });
+
+    // Start expansion after next frame
+    requestAnimationFrame(() => {
+      setState(prev => ({ ...prev, phase: 'expanding' }));
+    });
+
+    // Navigate after animation
+    setTimeout(() => {
+      navigate(path);
+      setState({ phase: 'complete', sourceRect: null, targetPath: null });
+      
+      // Reset after page loads
+      setTimeout(() => {
+        setState({ phase: 'idle', sourceRect: null, targetPath: null });
+      }, 100);
+    }, TRANSITION_DURATION);
+  }, [navigate]);
+
+  // Expose via context
+  return (
+    <HeroTransitionContext.Provider value={{ startTransition, phase: state.phase }}>
+      {children}
+      {state.phase !== 'idle' && state.sourceRect && (
+        <TransitionOverlay 
+          sourceRect={state.sourceRect} 
+          phase={state.phase}
+        />
+      )}
+    </HeroTransitionContext.Provider>
+  );
+}
+
+function TransitionOverlay({ 
+  sourceRect, 
+  phase 
+}: { 
+  sourceRect: DOMRect; 
+  phase: string;
+}) {
+  const isExpanding = phase === 'expanding' || phase === 'complete';
+  
+  // Calculate center position for the ghost element
+  const ghostStyle: React.CSSProperties = isExpanding
+    ? {
+        // Animate to fullscreen
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        borderRadius: 0,
+        opacity: 0,
+        transition: `all ${TRANSITION_DURATION}ms cubic-bezier(0.4, 0, 0.2, 1)`,
+      }
+    : {
+        // Start at button position
+        top: sourceRect.top,
+        left: sourceRect.left,
+        width: sourceRect.width,
+        height: sourceRect.height,
+        borderRadius: '0.5rem',
+        opacity: 1,
+      };
+
+  return createPortal(
+    <div className="hero-transition-overlay">
+      {/* Backdrop dim */}
+      <div className={cn(
+        "hero-backdrop",
+        isExpanding && "active"
+      )} />
+      
+      {/* Morphing ghost element */}
+      <div 
+        className={cn(
+          "hero-transition-ghost",
+          isExpanding && "animate-transition-glow"
+        )}
+        style={ghostStyle}
+      >
+        <GrimoireIcon 
+          className={cn(
+            "text-primary-foreground transition-all",
+            isExpanding ? "h-0 w-0 opacity-0" : "h-6 w-6"
+          )}
+          style={{ 
+            transitionDuration: `${TRANSITION_DURATION}ms`,
+            transitionDelay: '100ms'
+          }}
+        />
+      </div>
+    </div>,
+    document.body
+  );
+}
+```
 
 ---
 
-## Итог
+## Visual Effect: Glow + Pulse on Tappable Icon
 
-| # | Улучшение | Эффект |
-|---|-----------|--------|
-| 1 | **Живой Сигил** | Экран "дышит", создаёт ощущение магического присутствия |
-| 2 | **AI-Шёпот** | Персонализированное AI-приглашение усиливает связь с "Оракулом" |
-| 3 | **Ритуал Активации** | Haptic + visual transition делает создание записи значимым |
+### Current State Enhancement
 
-Все три улучшения работают вместе: пользователь видит живой, дышащий артефакт → читает AI-шёпот → нажимает `+` → переживает ритуал перехода → начинает запись в правильном настрое.
+The center button already has:
+- `hover:animate-pulse-glow` 
+- `grimoire-shadow`
+
+### Add Idle Pulsing Indicator
+
+```tsx
+// In BottomNav center button:
+<div className={cn(
+  "flex h-14 w-14 items-center justify-center rounded-lg",
+  "bg-gradient-to-br from-primary via-primary to-accent",
+  "border border-cyber-glow/30",
+  "relative overflow-hidden grimoire-shadow",
+  // NEW: Subtle idle pulse
+  "animate-pulse-glow-subtle"
+)}>
+  {/* Glow accent */}
+  <div className="absolute top-1 left-1 w-4 h-4 rounded-full bg-cyber-glow/20 blur-sm" />
+  
+  {/* NEW: Pulsing ring indicator */}
+  <div className="absolute inset-0 rounded-lg border-2 border-cyber-glow/30 animate-ping-slow opacity-50" />
+  
+  <Icon className="h-6 w-6 text-primary-foreground relative z-10" />
+</div>
+```
+
+### New Animation for Subtle Affordance
+
+```typescript
+// tailwind.config.ts
+keyframes: {
+  "pulse-glow-subtle": {
+    "0%, 100%": { 
+      boxShadow: "0 0 12px hsl(var(--glow-primary) / 0.15)"
+    },
+    "50%": { 
+      boxShadow: "0 0 20px hsl(var(--glow-primary) / 0.25)"
+    }
+  },
+  "ping-slow": {
+    "0%": { transform: "scale(1)", opacity: "0.4" },
+    "50%": { transform: "scale(1.05)", opacity: "0" },
+    "100%": { transform: "scale(1)", opacity: "0" }
+  }
+}
+```
 
 ---
 
-## Приоритет реализации
+## Performance Considerations
 
-1. **Живой Сигил** — чисто CSS, быстро, большой визуальный эффект
-2. **Ритуал Активации** — средняя сложность, сильный UX-эффект
-3. **AI-Шёпот** — требует edge function, но добавляет уникальность
+### GPU Acceleration
+- Use only `transform` and `opacity` for animations
+- Apply `will-change: transform, opacity` during transition
+- Use `translateZ(0)` to force GPU compositing
 
+### Avoid Layout Thrashing
+- Capture `getBoundingClientRect()` once at start
+- Don't read layout during animation
+- Use CSS custom properties for position if needed
+
+### Memory
+- Remove portal overlay after transition completes
+- Don't keep ghost elements in DOM when idle
+
+---
+
+## Background Color Transition
+
+The ghost element uses a gradient matching the button:
+
+```css
+background: linear-gradient(
+  135deg,
+  hsl(var(--primary)),
+  hsl(var(--accent))
+);
+```
+
+During expansion, it transitions to:
+
+```css
+background: hsl(var(--background));
+opacity: 0; /* Fades out as page appears */
+```
+
+The page (`NewEntry`) has `bg-background` which provides seamless handoff.
+
+---
+
+## Files Summary
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `src/components/HeroTransition.tsx` | CREATE | Transition overlay + context |
+| `src/hooks/useHeroTransition.ts` | CREATE | Hook for triggering transition |
+| `src/components/BottomNav.tsx` | MODIFY | Add ref, use transition hook |
+| `src/pages/NewEntry.tsx` | MODIFY | Add entrance animation |
+| `src/App.tsx` | MODIFY | Wrap with HeroTransitionProvider |
+| `tailwind.config.ts` | MODIFY | Add transition keyframes |
+| `src/index.css` | MODIFY | Add transition overlay styles |
+
+---
+
+## Demo Flow
+
+1. User sees center button with subtle pulsing glow
+2. User taps the `+` button
+3. Haptic feedback fires (15ms vibrate)
+4. `grimoire-ritual-start` event dispatched (for Today page sigil reaction)
+5. Ghost element captures button position
+6. Ghost expands from 56px → fullscreen over 500ms
+7. Background dims with blur
+8. Icon inside ghost fades out
+9. At 500ms: navigate to `/new`
+10. `NewEntry` page fades in with slight scale-down (1.02 → 1)
+11. Transition overlay unmounts
+12. User is now in entry creation mode
+
+---
+
+## Accessibility
+
+- Respects `prefers-reduced-motion`: Skip animation, instant navigate
+- Focus management: Auto-focus textarea on NewEntry
+- No content blocked during transition (overlay is pointer-events: none)
+
+---
+
+## Known Limitations
+
+1. **No reverse animation**: Back navigation uses standard behavior (could be Phase 2)
+2. **Single trigger source**: Only BottomNav button for now (Today empty state click could be added)
+3. **No View Transitions API**: Safari doesn't fully support it yet; using CSS fallback
+
+---
+
+## Acceptance Criteria
+
+- [ ] Tapping `+` triggers smooth 500ms expand animation
+- [ ] Icon morphs/fades as ghost expands
+- [ ] Background dims during transition
+- [ ] `NewEntry` page appears with subtle entrance
+- [ ] No jank or layout shifts
+- [ ] Works on mobile (touch) and desktop (click)
+- [ ] Respects reduced motion preference
+- [ ] Haptic feedback fires on tap
