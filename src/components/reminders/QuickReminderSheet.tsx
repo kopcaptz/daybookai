@@ -132,13 +132,35 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
     setCustomDate(undefined);
   };
   
-  // Handle custom date selection (clears chip)
+  // Handle custom date selection (clears chip, closes popover)
   const handleCustomDateSelect = (date: Date | undefined) => {
     setCustomDate(date);
     if (date) {
       setSelectedChip(null);
+      setShowDatePicker(false); // Close calendar after selection
     }
   };
+  
+  // Clear custom date selection
+  const handleClearCustomDate = () => {
+    setCustomDate(undefined);
+    setCustomTime('09:00');
+  };
+  
+  // Format chip time preview
+  const getChipTimePreview = (): string | null => {
+    if (!selectedChip) return null;
+    const chip = TIME_CHIPS.find(c => c.id === selectedChip);
+    if (!chip) return null;
+    const timestamp = chip.getTimestamp();
+    const date = new Date(timestamp);
+    const dateStr = format(date, language === 'ru' ? 'd MMM, HH:mm' : 'MMM d, HH:mm', { 
+      locale: language === 'ru' ? ru : enUS 
+    });
+    return dateStr;
+  };
+  
+  const chipTimePreview = getChipTimePreview();
   
   // Format custom selection for display
   const formatCustomSelection = (): string | null => {
@@ -210,9 +232,17 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
               ))}
             </div>
             
+            {/* Chip time preview */}
+            {chipTimePreview && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {chipTimePreview}
+              </p>
+            )}
+            
             {/* Custom time picker */}
             <div className="flex items-center gap-2 pt-2">
-              <Popover open={showDatePicker} onOpenChange={setShowDatePicker}>
+              <Popover open={showDatePicker} onOpenChange={setShowDatePicker} modal={false}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -226,10 +256,10 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
                     <CalendarIcon className="h-4 w-4 mr-2" />
                     {customDate 
                       ? format(customDate, 'dd.MM.yyyy')
-                      : (language === 'ru' ? 'Выбрать время…' : 'Pick time…')}
+                      : (language === 'ru' ? 'Выбрать дату…' : 'Pick date…')}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto p-0 z-[60]" align="start">
                   <Calendar
                     mode="single"
                     selected={customDate}
@@ -242,13 +272,25 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
               </Popover>
               
               {customDate && (
-                <Input
-                  type="time"
-                  value={customTime}
-                  onChange={(e) => setCustomTime(e.target.value)}
-                  disabled={isCreating}
-                  className="w-24"
-                />
+                <>
+                  <Input
+                    type="time"
+                    value={customTime}
+                    onChange={(e) => setCustomTime(e.target.value)}
+                    disabled={isCreating}
+                    className="w-24"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearCustomDate}
+                    disabled={isCreating}
+                    className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground"
+                    aria-label={language === 'ru' ? 'Очистить дату' : 'Clear date'}
+                  >
+                    ×
+                  </Button>
+                </>
               )}
             </div>
             
