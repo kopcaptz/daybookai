@@ -1,80 +1,75 @@
-# Техническое задание: Админ-панель для управления фидбеком
 
-## Статус реализации
 
-### ✅ Фаза 1: Инфраструктура (бэкенд) — ГОТОВО
-1. ✅ Создана таблица `feedback` с RLS
-2. ✅ Создан Storage bucket `feedback-attachments`
-3. ✅ Добавлен секрет `ADMIN_PIN`
-4. ✅ Создана Edge Function `feedback-submit`
-5. ✅ Создана Edge Function `admin-pin-verify`
+# План исправления: загрузка изображений в фидбеке
 
-### ✅ Фаза 2: Отправка фидбека — ГОТОВО
-6. ✅ Обновлён `FeedbackModal` для отправки данных на сервер
-7. ✅ Добавлен индикатор загрузки и обработка ошибок
-8. ✅ Ограничение размера изображения (макс. 5 МБ)
+## Проблема
 
-### ✅ Фаза 3: Админ-панель (UI) — ГОТОВО
-9. ✅ Создана страница `/admin` с PIN-авторизацией
-10. ✅ Создан хук `useAdminAccess`
-11. ✅ Создана Edge Function `admin-feedback-list`
-12. ✅ Создана Edge Function `admin-feedback-update`
-13. ✅ Создана страница `/admin/feedback` со списком
-14. ✅ Добавлено модальное окно просмотра изображений
-15. ✅ Добавлено управление статусом и заметками
+Изображения не загружаются потому что `supabase.functions.invoke()` не поддерживает отправку `FormData` с файлами корректно. SDK автоматически сериализует тело запроса в JSON, из-за чего файл теряется.
 
-### ⏳ Фаза 4: Улучшения (опционально)
-- [ ] Добавить уведомления (Telegram)
-- [ ] Добавить пагинацию для большого количества записей
-- [ ] Добавить экспорт в CSV
+База данных подтверждает: `image_url = null` для записи "Test feedback message".
 
----
+## Решение
 
-## Архитектура
+Использовать прямой `fetch` запрос к edge function вместо `supabase.functions.invoke`:
 
 ```text
-+------------------+      +-------------------+      +------------------+
-|  FeedbackModal   | ---> |  feedback-submit  | ---> |   Lovable Cloud  |
-|  (Пользователь)  |      |  Edge Function    |      |   Database       |
-+------------------+      +-------------------+      +------------------+
-                                                            |
-                                                            v
-                          +-------------------+      +------------------+
-                          |  Admin Panel      | <--- |   Storage Bucket |
-                          |  /admin/feedback  |      |   (images)       |
-                          +-------------------+      +------------------+
+┌─────────────────┐       fetch + FormData        ┌────────────────────┐
+│  FeedbackModal  │  ─────────────────────────►   │  feedback-submit   │
+│   (клиент)      │   multipart/form-data         │   (edge function)  │
+└─────────────────┘                               └────────────────────┘
 ```
 
-## Структура файлов
+## Изменения
 
-```text
-src/
-├── pages/
-│   ├── AdminLoginPage.tsx      # PIN-авторизация
-│   └── AdminFeedbackPage.tsx   # Список фидбеков
-├── components/admin/
-│   ├── FeedbackCard.tsx        # Карточка фидбека
-│   └── FeedbackImageModal.tsx  # Просмотр изображений
-├── hooks/
-│   └── useAdminAccess.ts       # Управление админ-токеном
-└── lib/
-    └── adminTokenService.ts    # Работа с токеном
+### 1. Файл: `src/components/FeedbackModal.tsx`
 
-supabase/functions/
-├── feedback-submit/index.ts
-├── admin-pin-verify/index.ts
-├── admin-feedback-list/index.ts
-└── admin-feedback-update/index.ts
+Заменить вызов `supabase.functions.invoke` на прямой `fetch`:
+
+```typescript
+// Было:
+const { data, error } = await supabase.functions.invoke('feedback-submit', {
+  body: formData,
+});
+
+// Станет:
+const response = await fetch(
+  `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/feedback-submit`,
+  {
+    method: 'POST',
+    body: formData,
+    // Важно: НЕ устанавливать Content-Type, 
+    // браузер сам добавит multipart/form-data с boundary
+  }
+);
+const data = await response.json();
 ```
 
-## Маршруты
+### 2. Файл: `supabase/functions/feedback-submit/index.ts`
 
-- `/admin` — страница входа (PIN)
-- `/admin/feedback` — список посланий
+Добавить логирование для отладки и убедиться что `req.formData()` правильно парсит данные:
 
-## Безопасность
+```typescript
+// Добавить логи
+console.log({ 
+  requestId, 
+  action: "feedback_received", 
+  hasImage: !!image,
+  imageSize: image?.size,
+  imageName: image?.name 
+});
+```
 
-- RLS включён, политик нет → доступ только через service_role
-- HMAC-токены с TTL 24 часа для админов
-- Отдельный ADMIN_PIN (не путать с AI_ACCESS_PIN)
-- Signed URLs для изображений с TTL 1 час
+## Технические детали
+
+| Аспект | До | После |
+|--------|-----|-------|
+| Метод вызова | `supabase.functions.invoke` | Прямой `fetch` |
+| Content-Type | JSON (неверно) | multipart/form-data |
+| Файл | Теряется при сериализации | Передаётся корректно |
+
+## Проверка после исправления
+
+1. Отправить фидбек с изображением через "Магическую почту"
+2. Перейти в `/admin/feedback`
+3. Убедиться что изображение отображается в карточке
+
