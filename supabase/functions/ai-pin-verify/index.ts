@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // CORS configuration - allow known origins
 const ALLOWED_ORIGINS = [
@@ -10,8 +11,23 @@ const ALLOWED_ORIGINS = [
 const LOVABLE_PREVIEW_PATTERN = /^https:\/\/[a-z0-9-]+\.lovable\.app$/;
 const LOVABLE_PROJECT_PATTERN = /^https:\/\/[a-z0-9-]+\.lovableproject\.com$/;
 
+// Rate limit configuration
+const RATE_LIMIT = {
+  MAX_ATTEMPTS: 5,
+  BLOCK_DURATION_MS: 15 * 60 * 1000, // 15 minutes
+};
+
+// Rate limit record type
+interface RateLimitRecord {
+  identifier: string;
+  endpoint: string;
+  fail_count: number;
+  last_attempt_at: string;
+  blocked_until: string | null;
+}
+
 function isAllowedOrigin(origin: string | null): boolean {
-  if (!origin) return true; // Allow non-browser requests (curl, etc.)
+  if (!origin) return true;
   if (ALLOWED_ORIGINS.includes(origin)) return true;
   if (LOVABLE_PREVIEW_PATTERN.test(origin)) return true;
   if (LOVABLE_PROJECT_PATTERN.test(origin)) return true;
@@ -28,14 +44,109 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
+function getClientIdentifier(req: Request): string {
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  const ip = forwardedFor?.split(",")[0]?.trim() || "unknown";
+  return ip;
+}
+
+// deno-lint-ignore no-explicit-any
+async function checkRateLimit(
+  supabase: any,
+  identifier: string,
+  endpoint: string
+): Promise<{ allowed: boolean; retryAfter?: number; remainingAttempts?: number }> {
+  const { data } = await supabase
+    .from("rate_limits")
+    .select("*")
+    .eq("identifier", identifier)
+    .eq("endpoint", endpoint)
+    .maybeSingle();
+
+  const record = data as RateLimitRecord | null;
+  if (!record) return { allowed: true, remainingAttempts: RATE_LIMIT.MAX_ATTEMPTS };
+
+  // Check if blocked
+  if (record.blocked_until && new Date(record.blocked_until) > new Date()) {
+    const retryAfter = Math.ceil(
+      (new Date(record.blocked_until).getTime() - Date.now()) / 1000
+    );
+    return { allowed: false, retryAfter };
+  }
+
+  // If block expired, reset counter
+  if (record.blocked_until && new Date(record.blocked_until) <= new Date()) {
+    await supabase
+      .from("rate_limits")
+      .update({ fail_count: 0, blocked_until: null })
+      .eq("identifier", identifier)
+      .eq("endpoint", endpoint);
+    return { allowed: true, remainingAttempts: RATE_LIMIT.MAX_ATTEMPTS };
+  }
+
+  return { 
+    allowed: true, 
+    remainingAttempts: Math.max(0, RATE_LIMIT.MAX_ATTEMPTS - record.fail_count) 
+  };
+}
+
+// deno-lint-ignore no-explicit-any
+async function recordFailedAttempt(
+  supabase: any,
+  identifier: string,
+  endpoint: string
+): Promise<{ blocked: boolean; retryAfter?: number }> {
+  const { data } = await supabase
+    .from("rate_limits")
+    .select("fail_count")
+    .eq("identifier", identifier)
+    .eq("endpoint", endpoint)
+    .maybeSingle();
+
+  const record = data as { fail_count: number } | null;
+  const newCount = (record?.fail_count || 0) + 1;
+  const shouldBlock = newCount >= RATE_LIMIT.MAX_ATTEMPTS;
+  const blockedUntil = shouldBlock
+    ? new Date(Date.now() + RATE_LIMIT.BLOCK_DURATION_MS).toISOString()
+    : null;
+
+  await supabase.from("rate_limits").upsert(
+    {
+      identifier,
+      endpoint,
+      fail_count: newCount,
+      last_attempt_at: new Date().toISOString(),
+      blocked_until: blockedUntil,
+    },
+    { onConflict: "identifier,endpoint" }
+  );
+
+  return {
+    blocked: shouldBlock,
+    retryAfter: shouldBlock ? Math.ceil(RATE_LIMIT.BLOCK_DURATION_MS / 1000) : undefined,
+  };
+}
+
+// deno-lint-ignore no-explicit-any
+async function clearRateLimit(
+  supabase: any,
+  identifier: string,
+  endpoint: string
+): Promise<void> {
+  await supabase
+    .from("rate_limits")
+    .delete()
+    .eq("identifier", identifier)
+    .eq("endpoint", endpoint);
+}
+
 // Token generation using HMAC-SHA256
 async function createToken(secret: string, ttlMs: number): Promise<{ token: string; expiresAt: number }> {
   const now = Date.now();
   const expiresAt = now + ttlMs;
   const payload = JSON.stringify({ iat: now, exp: expiresAt });
   const payloadBase64 = btoa(payload);
-  
-  // Create HMAC signature
+
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
@@ -44,10 +155,10 @@ async function createToken(secret: string, ttlMs: number): Promise<{ token: stri
     false,
     ["sign"]
   );
-  
+
   const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(payloadBase64));
   const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
-  
+
   return {
     token: `${payloadBase64}.${signatureBase64}`,
     expiresAt,
@@ -58,7 +169,7 @@ serve(async (req) => {
   const requestId = crypto.randomUUID();
   const origin = req.headers.get("Origin");
   const corsHeaders = getCorsHeaders(origin);
-  
+
   const responseHeaders = (extra?: Record<string, string>) => ({
     ...corsHeaders,
     "Content-Type": "application/json",
@@ -89,7 +200,33 @@ serve(async (req) => {
     );
   }
 
+  // Initialize Supabase client with service role for rate limiting
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  const clientId = getClientIdentifier(req);
+  const endpoint = "ai-pin";
+
   try {
+    // Check rate limit BEFORE parsing body
+    const rateCheck = await checkRateLimit(supabase, clientId, endpoint);
+    if (!rateCheck.allowed) {
+      console.log({ requestId, action: "pin_verify_rate_limited", clientId, retryAfter: rateCheck.retryAfter });
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: "rate_limited", 
+          retryAfter: rateCheck.retryAfter,
+          requestId 
+        }),
+        { 
+          status: 429, 
+          headers: responseHeaders({ "Retry-After": String(rateCheck.retryAfter) }) 
+        }
+      );
+    }
+
     const body = await req.json();
     const { pin } = body;
 
@@ -112,10 +249,10 @@ serve(async (req) => {
       );
     }
 
-    // Validate PIN (constant-time comparison to prevent timing attacks)
+    // Validate PIN (constant-time comparison)
     const pinBuffer = new TextEncoder().encode(pin.padEnd(16, "\0"));
     const expectedBuffer = new TextEncoder().encode(AI_ACCESS_PIN.padEnd(16, "\0"));
-    
+
     let match = true;
     for (let i = 0; i < 16; i++) {
       if (pinBuffer[i] !== expectedBuffer[i]) {
@@ -124,14 +261,39 @@ serve(async (req) => {
     }
 
     if (!match) {
-      console.log({ requestId, action: "pin_verify_failed" });
+      // Record failed attempt
+      const failResult = await recordFailedAttempt(supabase, clientId, endpoint);
+      console.log({ 
+        requestId, 
+        action: "pin_verify_failed", 
+        clientId,
+        blocked: failResult.blocked 
+      });
+
+      if (failResult.blocked) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: "rate_limited", 
+            retryAfter: failResult.retryAfter,
+            requestId 
+          }),
+          { 
+            status: 429, 
+            headers: responseHeaders({ "Retry-After": String(failResult.retryAfter) }) 
+          }
+        );
+      }
+
       return new Response(
         JSON.stringify({ success: false, error: "invalid_pin", requestId }),
         { status: 200, headers: responseHeaders() }
       );
     }
 
-    // Generate token with 7-day TTL
+    // Success - clear rate limit and generate token
+    await clearRateLimit(supabase, clientId, endpoint);
+
     const TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
     const { token, expiresAt } = await createToken(AI_TOKEN_SECRET, TTL_MS);
 
@@ -139,6 +301,7 @@ serve(async (req) => {
       requestId,
       timestamp: new Date().toISOString(),
       action: "pin_verify_success",
+      clientId,
       expiresAt: new Date(expiresAt).toISOString(),
     });
 
