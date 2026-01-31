@@ -28,6 +28,14 @@ serve(async (req) => {
     const image = formData.get("image") as File | null;
     const deviceInfoStr = formData.get("device_info") as string;
 
+    console.log({ 
+      requestId, 
+      action: "feedback_received", 
+      hasImage: !!image,
+      imageSize: image?.size,
+      imageName: image?.name 
+    });
+
     if (!message || typeof message !== "string" || !message.trim()) {
       return new Response(
         JSON.stringify({ success: false, error: "message_required", requestId }),
