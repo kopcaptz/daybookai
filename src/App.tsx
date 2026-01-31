@@ -11,6 +11,7 @@ import { PageTransition } from "@/components/PageTransition";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { GlobalAIPinDialog } from "@/components/GlobalAIPinDialog";
 import { HeroTransitionProvider } from "@/components/HeroTransition";
+import { FloatingChatButton } from "@/components/FloatingChatButton";
 import { I18nProvider } from "@/lib/i18n";
 import { initNotificationListeners, setNavigationCallback } from "@/lib/notifications";
 import { reconcileReminderNotifications } from "@/lib/reminderNotifications";
@@ -76,11 +77,17 @@ function AppContent() {
   }, [navigate]);
   
   // Hide bottom nav on entry editor, receipt pages, discussion chat, and onboarding
+  // Hide floating chat on chat page, entry editor, and onboarding
   const hideNav = location.pathname === '/new' || 
     location.pathname.startsWith('/entry/') || 
     location.pathname === '/receipts' || 
     location.pathname.startsWith('/receipts/') || 
     location.pathname.startsWith('/discussions/') ||
+    location.pathname === '/onboarding';
+
+  const hideFloatingChat = location.pathname === '/chat' || 
+    location.pathname === '/new' || 
+    location.pathname.startsWith('/entry/') ||
     location.pathname === '/onboarding';
 
   return (
@@ -116,6 +123,7 @@ function AppContent() {
             </Suspense>
           </PageTransition>
           {!hideNav && <BottomNav />}
+          {!hideFloatingChat && <FloatingChatButton />}
           <InstallPrompt />
         </div>
       </div>
