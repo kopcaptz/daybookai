@@ -98,9 +98,11 @@ function AppContent() {
     location.pathname.startsWith('/admin') ||
     location.pathname === '/onboarding';
   
-  // Hide feedback modal on admin pages and onboarding
+  // Hide feedback modal on admin pages, onboarding, and entry editor
   const hideFeedback = location.pathname.startsWith('/admin') || 
-    location.pathname === '/onboarding';
+    location.pathname === '/onboarding' ||
+    location.pathname === '/new' ||
+    location.pathname.startsWith('/entry/');
 
   return (
     <HeroTransitionProvider>
