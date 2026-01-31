@@ -109,6 +109,48 @@ export default {
           "0%, 100%": { opacity: "0.7" },
           "50%": { opacity: "1" },
         },
+        // Breathing animation for sigil
+        "breathe": {
+          "0%, 100%": { transform: "scale(1)", opacity: "0.85" },
+          "50%": { transform: "scale(1.03)", opacity: "1" },
+        },
+        // Orbital particles
+        "orbit-slow": {
+          from: { transform: "rotate(0deg) translateX(48px) rotate(0deg)" },
+          to: { transform: "rotate(360deg) translateX(48px) rotate(-360deg)" },
+        },
+        "orbit-medium": {
+          from: { transform: "rotate(120deg) translateX(40px) rotate(-120deg)" },
+          to: { transform: "rotate(480deg) translateX(40px) rotate(-480deg)" },
+        },
+        "orbit-counter": {
+          from: { transform: "rotate(240deg) translateX(44px) rotate(-240deg)" },
+          to: { transform: "rotate(-120deg) translateX(44px) rotate(120deg)" },
+        },
+        "orbit-fast": {
+          from: { transform: "rotate(0deg) translateX(48px) rotate(0deg)" },
+          to: { transform: "rotate(360deg) translateX(48px) rotate(-360deg)" },
+        },
+        "orbit-fast-counter": {
+          from: { transform: "rotate(240deg) translateX(44px) rotate(-240deg)" },
+          to: { transform: "rotate(-120deg) translateX(44px) rotate(120deg)" },
+        },
+        // Ritual ripple
+        "ritual-ripple": {
+          "0%": { 
+            transform: "scale(0.8)", 
+            opacity: "0.6",
+          },
+          "100%": { 
+            transform: "scale(2)", 
+            opacity: "0",
+          },
+        },
+        // Portal transition
+        "portal-enter": {
+          from: { transform: "scale(0.9)", opacity: "0", filter: "blur(4px)" },
+          to: { transform: "scale(1)", opacity: "1", filter: "blur(0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -118,6 +160,14 @@ export default {
         "slide-down": "slide-down 0.3s ease-out",
         "pulse-glow": "pulse-glow 3s ease-in-out infinite",
         "sigil-pulse": "sigil-pulse 2s ease-in-out infinite",
+        "breathe": "breathe 4s ease-in-out infinite",
+        "orbit-slow": "orbit-slow 12s linear infinite",
+        "orbit-medium": "orbit-medium 8s linear infinite",
+        "orbit-counter": "orbit-counter 10s linear infinite",
+        "orbit-fast": "orbit-fast 2s linear infinite",
+        "orbit-fast-counter": "orbit-fast-counter 2s linear infinite",
+        "ritual-ripple": "ritual-ripple 0.6s ease-out forwards",
+        "portal-enter": "portal-enter 0.3s ease-out",
       },
     },
   },

@@ -17,7 +17,9 @@ import { getBiography, StoredBiography, getTodayDate } from '@/lib/biographyServ
 import { loadAISettings } from '@/lib/aiConfig';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
-import { GrimoireIcon, SealGlyph } from '@/components/icons/SigilIcon';
+import { GrimoireIcon } from '@/components/icons/SigilIcon';
+import { BreathingSigil } from '@/components/icons/BreathingSigil';
+import { useOracleWhisper } from '@/hooks/useOracleWhisper';
 import { cn } from '@/lib/utils';
 
 function TodayContent() {
@@ -41,12 +43,30 @@ function TodayContent() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [creatingDiscussion, setCreatingDiscussion] = useState(false);
   
+  // Ritual animation state
+  const [ritualActive, setRitualActive] = useState(false);
+  
+  // Oracle whisper for empty state
+  const { whisper } = useOracleWhisper();
+  
   // Check if we should enter select mode from URL
   useEffect(() => {
     if (searchParams.get('selectMode') === 'true') {
       setSelectionMode(true);
     }
   }, [searchParams]);
+  
+  // Listen for ritual activation from BottomNav
+  useEffect(() => {
+    const handleRitual = () => {
+      setRitualActive(true);
+      // Reset after animation completes
+      setTimeout(() => setRitualActive(false), 600);
+    };
+    
+    window.addEventListener('grimoire-ritual-start', handleRitual);
+    return () => window.removeEventListener('grimoire-ritual-start', handleRitual);
+  }, []);
   
   // Load biography for today
   useEffect(() => {
@@ -194,26 +214,33 @@ function TodayContent() {
         />
         
         {entries.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="mb-6 p-8 panel-glass relative">
-              <GrimoireIcon className="h-12 w-12 text-muted-foreground" />
-              {/* Seal glyph accents */}
-              <div className="absolute top-3 right-3 text-cyber-sigil/40">
-                <SealGlyph size={12} />
-              </div>
-              <div className="absolute bottom-3 left-3 text-cyber-rune/30">
-                <SealGlyph size={12} />
-              </div>
+          <div className={cn(
+            "flex flex-col items-center justify-center py-16 text-center transition-all duration-300",
+            ritualActive && "scale-95 opacity-60"
+          )}>
+            {/* Breathing Sigil with orbital particles */}
+            <div className="mb-6">
+              <BreathingSigil ritualActive={ritualActive} />
             </div>
+            
             <h3 className="mb-2 text-xl font-serif font-medium">{t('today.startDay')}</h3>
+            
+            {/* Oracle Whisper */}
+            {whisper && (
+              <p className="max-w-xs text-sm text-cyber-sigil/80 italic font-serif animate-fade-in mb-3">
+                "{whisper}"
+              </p>
+            )}
+            
             <p className="max-w-xs text-sm text-muted-foreground leading-relaxed">
               {t('today.startDayHint')}
             </p>
+            
             {/* Rune decoration */}
             <div className="mt-6 flex items-center gap-3 text-cyber-sigil/30">
-              <SealGlyph size={10} />
+              <span className="text-[8px]">◇</span>
               <div className="w-16 h-px bg-gradient-to-r from-transparent via-cyber-glow/30 to-transparent" />
-              <SealGlyph size={10} />
+              <span className="text-[8px]">◇</span>
             </div>
           </div>
         ) : (
