@@ -80,13 +80,20 @@ export function FeedbackModal() {
         formData.append('image', selectedFile);
       }
 
-      // Submit to edge function
-      const { data, error } = await supabase.functions.invoke('feedback-submit', {
-        body: formData,
-      });
+      // Submit via direct fetch (supabase.functions.invoke doesn't handle FormData correctly)
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/feedback-submit`,
+        {
+          method: 'POST',
+          body: formData,
+          // Important: do NOT set Content-Type, browser adds multipart/form-data with boundary
+        }
+      );
 
-      if (error || !data?.success) {
-        throw new Error(data?.error || error?.message || 'Unknown error');
+      const data = await response.json();
+
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.error || 'Unknown error');
       }
 
       toast({
