@@ -102,7 +102,8 @@ function AppContent() {
   const hideFeedback = location.pathname.startsWith('/admin') || 
     location.pathname === '/onboarding' ||
     location.pathname === '/new' ||
-    location.pathname.startsWith('/entry/');
+    location.pathname.startsWith('/entry/') ||
+    location.pathname.startsWith('/discussions/');
 
   return (
     <HeroTransitionProvider>
