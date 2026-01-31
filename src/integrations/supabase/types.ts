@@ -47,6 +47,36 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limits: {
+        Row: {
+          blocked_until: string | null
+          created_at: string | null
+          endpoint: string
+          fail_count: number | null
+          id: string
+          identifier: string
+          last_attempt_at: string | null
+        }
+        Insert: {
+          blocked_until?: string | null
+          created_at?: string | null
+          endpoint: string
+          fail_count?: number | null
+          id?: string
+          identifier: string
+          last_attempt_at?: string | null
+        }
+        Update: {
+          blocked_until?: string | null
+          created_at?: string | null
+          endpoint?: string
+          fail_count?: number | null
+          id?: string
+          identifier?: string
+          last_attempt_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
