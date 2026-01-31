@@ -70,10 +70,16 @@ function buildSystemPrompt(
 
 ПРАВИЛА:
 1. Используй ТОЛЬКО предоставленный КОНТЕКСТ. Не выдумывай факты.
-2. Цитируй источники, используя ID типа [E1], [E2] и т.д.
+2. Цитируй источники, используя ID типа [E1], [E2], [B1] и т.д.
 3. НИКОГДА не цитируй записи дословно — только перефразируй.
 4. Отвечай на русском языке.
 5. Будь кратким и полезным.
+
+ТИПЫ ИСТОЧНИКОВ:
+- [E1], [E2]... — записи дневника (конкретные события, мысли)
+- [B1], [B2]... — хроники (AI-сводки дней с общей картиной)
+
+Хроники содержат структурированный анализ дня. Используй их для понимания общей картины и контекста.
 
 ${modeInstruction}
 
@@ -82,8 +88,8 @@ ${contextText || 'Контекст не предоставлен.'}
 
 ФОРМАТ ОТВЕТА (JSON):
 {
-  "answer": "Твой ответ с цитатами [E1] источников",
-  "usedEvidenceIds": ["E1", "E2"],
+  "answer": "Твой ответ с цитатами [E1], [B1] источников",
+  "usedEvidenceIds": ["E1", "B1"],
   "draftArtifact": null,
   "questions": []
 }
@@ -98,10 +104,16 @@ ${contextText || 'Контекст не предоставлен.'}
 
 RULES:
 1. Use ONLY the provided CONTEXT. Do not invent facts.
-2. Cite sources using evidence IDs like [E1], [E2], etc.
+2. Cite sources using evidence IDs like [E1], [E2], [B1], etc.
 3. NEVER quote entries verbatim — only paraphrase.
 4. Respond in English.
 5. Keep responses focused and helpful.
+
+SOURCE TYPES:
+- [E1], [E2]... — diary entries (specific events, thoughts)
+- [B1], [B2]... — chronicles (AI summaries of days with overall picture)
+
+Chronicles contain structured day analysis. Use them to understand the big picture and context.
 
 ${modeInstruction}
 
@@ -110,8 +122,8 @@ ${contextText || 'No context provided.'}
 
 RESPONSE FORMAT (JSON):
 {
-  "answer": "Your response text with [E1] citations",
-  "usedEvidenceIds": ["E1", "E2"],
+  "answer": "Your response text with [E1], [B1] citations",
+  "usedEvidenceIds": ["E1", "B1"],
   "draftArtifact": null,
   "questions": []
 }
