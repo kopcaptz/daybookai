@@ -302,6 +302,18 @@ export const translations = {
   'aiPin.retrying': { ru: 'Повторный запрос...', en: 'Retrying...' },
   'aiPin.requestId': { ru: 'ID запроса', en: 'Request ID' },
   
+  // Auto-screenshot
+  'autoScreenshot.title': { ru: 'Автоскриншот', en: 'Auto-screenshot' },
+  'autoScreenshot.description': { ru: 'Автоматически захватывать экран при открытии чата', en: 'Automatically capture screen when opening chat' },
+  'autoScreenshot.capturing': { ru: 'Захват экрана...', en: 'Capturing screen...' },
+  'autoScreenshot.preview': { ru: 'Превью скриншота', en: 'Screenshot preview' },
+  'autoScreenshot.send': { ru: 'Отправить', en: 'Send' },
+  'autoScreenshot.dismiss': { ru: 'Отмена', en: 'Cancel' },
+  'autoScreenshot.edit': { ru: 'Редактировать', en: 'Edit' },
+  'autoScreenshot.failed': { ru: 'Не удалось захватить экран', en: 'Failed to capture screen' },
+  'autoScreenshot.blurPrivate': { ru: 'Размывать приватные поля', en: 'Blur private fields' },
+  'autoScreenshot.blurPrivateHint': { ru: 'Скрывать пароли и PIN на скриншоте', en: 'Hide passwords and PINs in screenshot' },
+  
   // Navigation - Discussions
   'nav.discussions': { ru: 'Обсуждения', en: 'Discussions' },
   
