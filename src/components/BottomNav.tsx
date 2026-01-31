@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Scroll, Calendar, MessageSquare, Settings, Feather } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -5,10 +6,13 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { getPendingReminderCount } from '@/lib/db';
 import { Badge } from '@/components/ui/badge';
+import { useHeroTransition } from '@/hooks/useHeroTransition';
 
 export function BottomNav() {
   const location = useLocation();
   const { t } = useI18n();
+  const { startTransition } = useHeroTransition();
+  const centerButtonRef = useRef<HTMLButtonElement>(null);
   
   // Reactive pending reminders count for badge
   const pendingCount = useLiveQuery(() => getPendingReminderCount(), [], 0);
@@ -47,18 +51,17 @@ export function BottomNav() {
                 navigator.vibrate(15);
               }
               
-              // Trigger ritual animation event
+              // Trigger ritual animation event for Today page sigil
               window.dispatchEvent(new CustomEvent('grimoire-ritual-start'));
               
-              // Navigate after a brief delay for the ritual effect
-              setTimeout(() => {
-                window.location.href = item.path;
-              }, 400);
+              // Start hero transition animation
+              startTransition(centerButtonRef.current, item.path);
             };
             
             return (
               <button
                 key={item.path}
+                ref={centerButtonRef}
                 onClick={handleCenterClick}
                 className="flex -translate-y-3 items-center justify-center"
               >
@@ -66,11 +69,14 @@ export function BottomNav() {
                   "flex h-14 w-14 items-center justify-center rounded-lg transition-all duration-300 active:scale-110",
                   "bg-gradient-to-br from-primary via-primary to-accent",
                   "border border-cyber-glow/30",
-                  "hover:animate-pulse-glow",
                   "relative overflow-hidden grimoire-shadow"
                 )}>
                   {/* Glow accent */}
                   <div className="absolute top-1 left-1 w-4 h-4 rounded-full bg-cyber-glow/20 blur-sm" />
+                  
+                  {/* Pulsing ring indicator for tappability */}
+                  <div className="absolute inset-0 rounded-lg border-2 border-cyber-glow/20 animate-ping-slow" />
+                  
                   <Icon className="h-6 w-6 text-primary-foreground relative z-10" />
                 </div>
               </button>

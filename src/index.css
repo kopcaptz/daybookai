@@ -709,3 +709,52 @@
   .starlight { @apply sigil-glow; }
   .flourish { @apply heading-rune; }
 }
+
+/* ===== Hero Transition Overlay ===== */
+.hero-transition-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  background: transparent;
+}
+
+.hero-transition-ghost {
+  position: fixed;
+  will-change: transform, opacity, border-radius;
+  transform-origin: center center;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--primary)),
+    hsl(var(--accent))
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* GPU compositing */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.hero-transition-glow {
+  box-shadow: 
+    0 0 60px 20px hsl(var(--glow-primary) / 0.3),
+    0 0 100px 40px hsl(var(--glow-primary) / 0.15);
+}
+
+/* Backdrop dim during transition */
+.hero-backdrop {
+  position: fixed;
+  inset: 0;
+  background: hsl(var(--background) / 0.85);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 350ms ease-out;
+  /* GPU compositing */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.hero-backdrop.active {
+  opacity: 1;
+}

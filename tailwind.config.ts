@@ -151,6 +151,25 @@ export default {
           from: { transform: "scale(0.9)", opacity: "0", filter: "blur(4px)" },
           to: { transform: "scale(1)", opacity: "1", filter: "blur(0)" },
         },
+        // Page materialize (entrance after hero transition)
+        "page-materialize": {
+          "0%": { 
+            opacity: "0",
+            transform: "scale(1.02)",
+            filter: "blur(4px)"
+          },
+          "100%": { 
+            opacity: "1",
+            transform: "scale(1)",
+            filter: "blur(0)"
+          }
+        },
+        // Slow ping for tappability indicator
+        "ping-slow": {
+          "0%": { transform: "scale(1)", opacity: "0.3" },
+          "50%": { transform: "scale(1.08)", opacity: "0" },
+          "100%": { transform: "scale(1)", opacity: "0" }
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -168,6 +187,8 @@ export default {
         "orbit-fast-counter": "orbit-fast-counter 2s linear infinite",
         "ritual-ripple": "ritual-ripple 0.6s ease-out forwards",
         "portal-enter": "portal-enter 0.3s ease-out",
+        "page-materialize": "page-materialize 0.35s ease-out forwards",
+        "ping-slow": "ping-slow 2s ease-in-out infinite",
       },
     },
   },
