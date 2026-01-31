@@ -1,5 +1,4 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { createHmac } from "node:crypto";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,23 +6,41 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-admin-token",
 };
 
-// Verify admin token
-function verifyAdminToken(token: string, secret: string): boolean {
+// Verify admin token using Web Crypto API (same as token creation)
+async function verifyAdminToken(token: string, secret: string): Promise<boolean> {
   try {
-    const [payload, signature] = token.split(".");
-    if (!payload || !signature) return false;
+    const [payloadBase64, signatureBase64] = token.split(".");
+    if (!payloadBase64 || !signatureBase64) return false;
 
-    const expectedSig = createHmac("sha256", secret)
-      .update(payload)
-      .digest("base64url");
+    // Verify signature
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
 
-    if (signature !== expectedSig) return false;
+    // Decode base64 signature
+    const signatureBytes = Uint8Array.from(atob(signatureBase64), c => c.charCodeAt(0));
+    
+    const isValid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      signatureBytes,
+      encoder.encode(payloadBase64)
+    );
 
-    const data = JSON.parse(atob(payload));
-    if (data.exp < Date.now()) return false;
+    if (!isValid) return false;
+
+    // Check expiration
+    const payload = JSON.parse(atob(payloadBase64));
+    if (payload.exp < Date.now()) return false;
 
     return true;
-  } catch {
+  } catch (error) {
+    console.error("[admin-system-health] Token verification error:", error);
     return false;
   }
 }
@@ -40,13 +57,16 @@ Deno.serve(async (req) => {
     const tokenSecret = Deno.env.get("AI_TOKEN_SECRET");
 
     if (!adminToken || !tokenSecret) {
+      console.log("[admin-system-health] Missing token or secret");
       return new Response(
         JSON.stringify({ success: false, error: "unauthorized" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (!verifyAdminToken(adminToken, tokenSecret)) {
+    const isValidToken = await verifyAdminToken(adminToken, tokenSecret);
+    if (!isValidToken) {
+      console.log("[admin-system-health] Invalid token");
       return new Response(
         JSON.stringify({ success: false, error: "invalid_token" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
