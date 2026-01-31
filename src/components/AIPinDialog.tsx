@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { KeyRound, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Loader2, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -7,14 +7,14 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { SigilIcon } from '@/components/icons/SigilIcon';
+import { getRateLimitRemainingSeconds } from '@/lib/aiTokenService';
 
 interface AIPinDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onVerify: (pin: string) => Promise<{ success: boolean; error?: string }>;
+  onVerify: (pin: string) => Promise<{ success: boolean; error?: string; retryAfter?: number }>;
   isVerifying: boolean;
   language: 'ru' | 'en';
 }
@@ -31,23 +31,55 @@ export function AIPinDialog({
   const [digits, setDigits] = useState<string[]>(['', '', '', '']);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   
-  // Reset state when dialog opens
+  // Check for existing rate limit on open
   useEffect(() => {
     if (open) {
+      const remaining = getRateLimitRemainingSeconds();
+      setLockoutSeconds(remaining);
       setDigits(['', '', '', '']);
       setError(null);
       setSuccess(false);
-      // Focus first input after a short delay
-      setTimeout(() => {
-        inputRefs.current[0]?.focus();
-      }, 100);
+      
+      if (remaining === 0) {
+        setTimeout(() => {
+          inputRefs.current[0]?.focus();
+        }, 100);
+      }
     }
   }, [open]);
   
+  // Countdown timer for lockout
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return;
+    
+    const interval = setInterval(() => {
+      setLockoutSeconds(prev => {
+        const next = prev - 1;
+        if (next <= 0) {
+          // Re-focus input when lockout ends
+          setTimeout(() => {
+            inputRefs.current[0]?.focus();
+          }, 100);
+        }
+        return Math.max(0, next);
+      });
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [lockoutSeconds]);
+  
+  const formatLockoutTime = useCallback((seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }, []);
+  
   const handleDigitChange = (index: number, value: string) => {
-    // Only allow digits
+    if (lockoutSeconds > 0) return;
+    
     const digit = value.replace(/\D/g, '').slice(-1);
     
     const newDigits = [...digits];
@@ -55,12 +87,10 @@ export function AIPinDialog({
     setDigits(newDigits);
     setError(null);
     
-    // Auto-advance to next input
     if (digit && index < PIN_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
     
-    // Auto-submit when all digits entered
     if (digit && index === PIN_LENGTH - 1) {
       const pin = newDigits.join('');
       if (pin.length === PIN_LENGTH) {
@@ -70,6 +100,8 @@ export function AIPinDialog({
   };
   
   const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (lockoutSeconds > 0) return;
+    
     if (e.key === 'Backspace' && !digits[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
@@ -83,6 +115,8 @@ export function AIPinDialog({
   };
   
   const handlePaste = (e: React.ClipboardEvent) => {
+    if (lockoutSeconds > 0) return;
+    
     e.preventDefault();
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, PIN_LENGTH);
     
@@ -93,7 +127,6 @@ export function AIPinDialog({
       }
       setDigits(newDigits);
       
-      // Focus last filled input or submit
       if (pasted.length === PIN_LENGTH) {
         handleSubmit(pasted);
       } else {
@@ -103,13 +136,16 @@ export function AIPinDialog({
   };
   
   const handleSubmit = async (pin: string) => {
-    if (isVerifying) return;
+    if (isVerifying || lockoutSeconds > 0) return;
     
     const result = await onVerify(pin);
     
     if (result.success) {
       setSuccess(true);
-      // Dialog will close via onVerify callback
+    } else if (result.error === 'rate_limited' && result.retryAfter) {
+      setLockoutSeconds(result.retryAfter);
+      setDigits(['', '', '', '']);
+      setError(null);
     } else {
       setError(getErrorMessage(result.error, language));
       setDigits(['', '', '', '']);
@@ -127,6 +163,8 @@ export function AIPinDialog({
         return lang === 'ru' ? 'Ошибка сети' : 'Network error';
       case 'service_not_configured':
         return lang === 'ru' ? 'Сервис не настроен' : 'Service not configured';
+      case 'rate_limited':
+        return lang === 'ru' ? 'Слишком много попыток' : 'Too many attempts';
       default:
         return lang === 'ru' ? 'Ошибка проверки' : 'Verification error';
     }
@@ -139,7 +177,13 @@ export function AIPinDialog({
       : 'Enter 4-digit PIN to enable AI features',
     verifying: language === 'ru' ? 'Проверка...' : 'Verifying...',
     success: language === 'ru' ? 'Доступ открыт!' : 'Access granted!',
+    lockoutTitle: language === 'ru' ? 'Доступ заблокирован' : 'Access blocked',
+    lockoutDescription: language === 'ru'
+      ? 'Слишком много неудачных попыток. Подождите:'
+      : 'Too many failed attempts. Please wait:',
   };
+  
+  const isLocked = lockoutSeconds > 0;
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -148,21 +192,40 @@ export function AIPinDialog({
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-cyber-glow/10 border border-cyber-glow/30">
             {success ? (
               <CheckCircle2 className="h-7 w-7 text-cyber-sigil animate-pulse" />
+            ) : isLocked ? (
+              <Clock className="h-7 w-7 text-destructive animate-pulse" />
             ) : (
               <SigilIcon className="h-7 w-7 text-cyber-sigil" />
             )}
           </div>
           <DialogTitle className="font-serif text-xl">
-            {t.title}
+            {isLocked ? t.lockoutTitle : t.title}
           </DialogTitle>
           <DialogDescription className="text-sm">
-            {success ? t.success : t.description}
+            {success ? t.success : isLocked ? t.lockoutDescription : t.description}
           </DialogDescription>
         </DialogHeader>
         
-        {!success && (
+        {/* Lockout Timer */}
+        {isLocked && !success && (
           <div className="mt-4 space-y-4">
-            {/* PIN Input Grid */}
+            <div className="flex flex-col items-center gap-3">
+              <div className="text-4xl font-mono font-bold text-destructive">
+                {formatLockoutTime(lockoutSeconds)}
+              </div>
+              <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                <div 
+                  className="h-full bg-destructive/50 transition-all duration-1000 ease-linear"
+                  style={{ width: `${Math.min(100, (lockoutSeconds / 900) * 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* PIN Input */}
+        {!success && !isLocked && (
+          <div className="mt-4 space-y-4">
             <div className="flex justify-center gap-3">
               {digits.map((digit, index) => (
                 <input
@@ -193,7 +256,6 @@ export function AIPinDialog({
               ))}
             </div>
             
-            {/* Error Message */}
             {error && (
               <div className="flex items-center justify-center gap-2 text-sm text-destructive animate-fade-in">
                 <AlertCircle className="h-4 w-4" />
@@ -201,7 +263,6 @@ export function AIPinDialog({
               </div>
             )}
             
-            {/* Loading State */}
             {isVerifying && (
               <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />

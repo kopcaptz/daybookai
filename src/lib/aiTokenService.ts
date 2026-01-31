@@ -3,10 +3,15 @@
 
 const TOKEN_STORAGE_KEY = 'daybook-ai-token';
 const TOKEN_EXPIRY_KEY = 'daybook-ai-token-expires';
+const RATE_LIMIT_KEY = 'daybook-ai-rate-limit';
 
 export interface AIToken {
   token: string;
   expiresAt: number;
+}
+
+export interface RateLimitState {
+  blockedUntil: number;
 }
 
 /**
@@ -38,6 +43,8 @@ export function setAIToken(token: string, expiresAt: number): void {
   try {
     localStorage.setItem(TOKEN_STORAGE_KEY, token);
     localStorage.setItem(TOKEN_EXPIRY_KEY, expiresAt.toString());
+    // Clear rate limit on successful auth
+    localStorage.removeItem(RATE_LIMIT_KEY);
   } catch (e) {
     console.warn('Failed to store AI token:', e);
   }
@@ -104,13 +111,66 @@ export function formatTokenExpiry(language: 'ru' | 'en'): string {
 }
 
 /**
+ * Get rate limit state from localStorage
+ */
+export function getRateLimitState(): RateLimitState | null {
+  try {
+    const data = localStorage.getItem(RATE_LIMIT_KEY);
+    if (!data) return null;
+    
+    const state = JSON.parse(data) as RateLimitState;
+    if (state.blockedUntil <= Date.now()) {
+      localStorage.removeItem(RATE_LIMIT_KEY);
+      return null;
+    }
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Set rate limit state
+ */
+export function setRateLimitState(retryAfterSeconds: number): void {
+  try {
+    const state: RateLimitState = {
+      blockedUntil: Date.now() + retryAfterSeconds * 1000,
+    };
+    localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.warn('Failed to store rate limit state:', e);
+  }
+}
+
+/**
+ * Get remaining lockout time in seconds
+ */
+export function getRateLimitRemainingSeconds(): number {
+  const state = getRateLimitState();
+  if (!state) return 0;
+  return Math.max(0, Math.ceil((state.blockedUntil - Date.now()) / 1000));
+}
+
+/**
  * Verify PIN with server and store token
  */
 export async function verifyPinAndGetToken(pin: string): Promise<{
   success: boolean;
   error?: string;
   requestId?: string;
+  retryAfter?: number;
 }> {
+  // Check local rate limit first
+  const localRateLimit = getRateLimitRemainingSeconds();
+  if (localRateLimit > 0) {
+    return {
+      success: false,
+      error: 'rate_limited',
+      retryAfter: localRateLimit,
+    };
+  }
+
   try {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     
@@ -123,6 +183,18 @@ export async function verifyPinAndGetToken(pin: string): Promise<{
     });
     
     const data = await response.json();
+    
+    // Handle rate limiting
+    if (response.status === 429 || data.error === 'rate_limited') {
+      const retryAfter = data.retryAfter || 900;
+      setRateLimitState(retryAfter);
+      return {
+        success: false,
+        error: 'rate_limited',
+        retryAfter,
+        requestId: data.requestId,
+      };
+    }
     
     if (data.success && data.token && data.expiresAt) {
       setAIToken(data.token, data.expiresAt);
