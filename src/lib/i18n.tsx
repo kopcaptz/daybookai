@@ -63,6 +63,12 @@ export const translations = {
   'mood.3': { ru: 'Ровно', en: 'Steady' },
   'mood.4': { ru: 'Хорошо', en: 'Good' },
   'mood.5': { ru: 'Отлично', en: 'Great' },
+  'mood.autoTitle': { ru: 'Авто-настроение', en: 'Auto Mood' },
+  'mood.autoHint': { ru: 'Определять настроение по тексту записи', en: 'Detect mood from entry text' },
+  'mood.liveSuggestions': { ru: 'Живые подсказки', en: 'Live Suggestions' },
+  'mood.liveSuggestionsHint': { ru: 'Показывать подсказки во время ввода', en: 'Show suggestions while typing' },
+  'mood.inheritFromChat': { ru: 'Наследовать из чата', en: 'Inherit from Chat' },
+  'mood.inheritFromChatHint': { ru: 'Использовать настроение из Обсуждений', en: 'Use mood from Discussions' },
   
   // Tags
   'tags.title': { ru: 'Теги', en: 'Tags' },

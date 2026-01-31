@@ -26,6 +26,7 @@ import {
   getBiography,
 } from '@/lib/biographyService';
 import { loadAISettings } from '@/lib/aiConfig';
+import { usePredictiveMood } from '@/hooks/usePredictiveMood';
 import { detectActionableText, type SuggestedTime } from '@/lib/reminderDetection';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -96,6 +97,19 @@ function EntryEditorContent() {
   const [reminderPromptSuggestedTime, setReminderPromptSuggestedTime] = useState<SuggestedTime>('tomorrow_morning');
 
   const allTags = useLiveQuery(() => getAllTags(), []);
+
+  // Predictive mood tracking
+  const predictiveMood = usePredictiveMood({
+    text,
+    currentMood: mood,
+    enabled: true,
+  });
+
+  // Handle mood change with user override tracking
+  const handleMoodChange = (newMood: number) => {
+    setMood(newMood);
+    predictiveMood.setUserOverride();
+  };
 
   // Draft autosave
   useDraft({
@@ -596,8 +610,18 @@ function EntryEditorContent() {
           </p>
         )}
 
-        {/* Mood selector */}
-        <MoodSelector value={mood} onChange={setMood} />
+        {/* Mood selector with predictive suggestions */}
+        <MoodSelector 
+          value={mood} 
+          onChange={handleMoodChange}
+          suggestedMood={predictiveMood.suggestedMood}
+          suggestionSource={predictiveMood.source}
+          onSuggestionAccept={() => {
+            if (predictiveMood.suggestedMood) {
+              setMood(predictiveMood.suggestedMood);
+            }
+          }}
+        />
 
         {/* Tag selector */}
         <TagSelector value={tags} onChange={setTags} allTags={allTags} />

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Zap, Gauge, Wifi, WifiOff, Shield, ShieldCheck, KeyRound, Clock } from 'lucide-react';
+import { Zap, Gauge, Wifi, WifiOff, Shield, ShieldCheck, KeyRound, Clock, Brain } from 'lucide-react';
 import { 
   AIProfile, 
   AISettings, 
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useI18n } from '@/lib/i18n';
@@ -185,6 +186,68 @@ export function AISettingsCard({ onSettingsChange }: AISettingsCardProps) {
             onCheckedChange={(checked) => updateSettings({ strictPrivacy: checked })}
           />
         </div>
+
+        {/* Auto-Mood / Mood Sensor */}
+        <Collapsible>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Brain className={cn(
+                "h-5 w-5",
+                settings.autoMood ? "text-cyber-sigil" : "text-muted-foreground"
+              )} />
+              <div>
+                <Label htmlFor="auto-mood" className="text-sm font-medium">
+                  {t('mood.autoTitle')}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {t('mood.autoHint')}
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="auto-mood"
+              checked={settings.autoMood}
+              onCheckedChange={(checked) => updateSettings({ autoMood: checked })}
+            />
+          </div>
+          
+          {/* Sub-settings for auto-mood */}
+          {settings.autoMood && (
+            <CollapsibleContent className="pl-8 mt-3 space-y-3 border-l-2 border-cyber-glow/20 ml-2.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="live-suggestions" className="text-sm">
+                    {t('mood.liveSuggestions')}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t('mood.liveSuggestionsHint')}
+                  </p>
+                </div>
+                <Switch
+                  id="live-suggestions"
+                  checked={settings.autoMoodLiveSuggestions}
+                  onCheckedChange={(checked) => updateSettings({ autoMoodLiveSuggestions: checked })}
+                />
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="inherit-chat" className="text-sm">
+                    {t('mood.inheritFromChat')}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t('mood.inheritFromChatHint')}
+                  </p>
+                </div>
+                <Switch
+                  id="inherit-chat"
+                  checked={settings.autoMoodInheritFromChat}
+                  onCheckedChange={(checked) => updateSettings({ autoMoodInheritFromChat: checked })}
+                />
+              </div>
+            </CollapsibleContent>
+          )}
+        </Collapsible>
 
         {/* Chat Profile Selection */}
         <div className="space-y-2">

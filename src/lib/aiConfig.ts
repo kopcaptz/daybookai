@@ -61,6 +61,9 @@ export interface AISettings {
   chatProfile: AIProfile;
   bioProfile: AIProfile;
   strictPrivacy: boolean; // Never quote verbatim, paraphrase only
+  autoMood: boolean; // Predictive mood tracking
+  autoMoodLiveSuggestions: boolean; // Show live suggestions while typing
+  autoMoodInheritFromChat: boolean; // Inherit mood from discussions
 }
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
@@ -68,6 +71,9 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   chatProfile: 'balanced',
   bioProfile: 'biography',
   strictPrivacy: true, // ON by default
+  autoMood: false, // OFF by default (opt-in)
+  autoMoodLiveSuggestions: true, // ON by default (if autoMood enabled)
+  autoMoodInheritFromChat: true, // ON by default (if autoMood enabled)
 };
 
 // Storage key
