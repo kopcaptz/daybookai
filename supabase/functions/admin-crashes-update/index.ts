@@ -7,34 +7,31 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Verify admin token
-async function verifyAdminToken(token: string): Promise<boolean> {
-  const adminPin = Deno.env.get("ADMIN_PIN");
-  if (!adminPin) return false;
-  
+// Verify admin token (same as admin-feedback-list)
+async function verifyToken(token: string, secret: string): Promise<boolean> {
   try {
-    const [payload, signature] = token.split('.');
-    if (!payload || !signature) return false;
-    
-    const data = JSON.parse(atob(payload));
-    if (data.exp < Date.now()) return false;
-    
+    const [payloadBase64, signatureBase64] = token.split(".");
+    if (!payloadBase64 || !signatureBase64) return false;
+
+    const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
       "raw",
-      new TextEncoder().encode(adminPin),
+      encoder.encode(secret),
       { name: "HMAC", hash: "SHA-256" },
       false,
-      ["sign"]
+      ["verify"]
     );
+
+    const signatureBytes = Uint8Array.from(atob(signatureBase64), c => c.charCodeAt(0));
+    const valid = await crypto.subtle.verify("HMAC", key, signatureBytes, encoder.encode(payloadBase64));
     
-    const expectedSig = await crypto.subtle.sign(
-      "HMAC",
-      key,
-      new TextEncoder().encode(payload)
-    );
-    
-    const expectedSigB64 = btoa(String.fromCharCode(...new Uint8Array(expectedSig)));
-    return signature === expectedSigB64;
+    if (!valid) return false;
+
+    const payload = JSON.parse(atob(payloadBase64));
+    if (payload.exp < Date.now()) return false;
+    if (payload.type !== "admin") return false;
+
+    return true;
   } catch {
     return false;
   }
@@ -54,15 +51,25 @@ serve(async (req) => {
     );
   }
 
-  const adminToken = req.headers.get("x-admin-token");
-  if (!adminToken || !(await verifyAdminToken(adminToken))) {
-    return new Response(
-      JSON.stringify({ success: false, error: "unauthorized", requestId }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
-
   try {
+    const adminToken = req.headers.get("x-admin-token");
+    const tokenSecret = Deno.env.get("AI_TOKEN_SECRET");
+
+    if (!adminToken || !tokenSecret) {
+      return new Response(
+        JSON.stringify({ success: false, error: "unauthorized", requestId }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const isValid = await verifyToken(adminToken, tokenSecret);
+    if (!isValid) {
+      return new Response(
+        JSON.stringify({ success: false, error: "invalid_token", requestId }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const body = await req.json();
     const { id, status } = body;
 
