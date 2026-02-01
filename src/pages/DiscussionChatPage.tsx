@@ -18,6 +18,10 @@ import { ModeSelector, ModePill } from '@/components/discussions/ModeSelector';
 import { EvidenceList } from '@/components/discussions/EvidenceCard';
 import { ContextDrawer } from '@/components/discussions/ContextDrawer';
 import { DraftArtifact } from '@/components/discussions/DraftArtifact';
+import { PlanArtifact } from '@/components/discussions/PlanArtifact';
+import { AnalysisArtifact } from '@/components/discussions/AnalysisArtifact';
+import { ComputeArtifact } from '@/components/discussions/ComputeArtifact';
+import { FollowUpQuestions } from '@/components/discussions/FollowUpQuestions';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Toggle } from '@/components/ui/toggle';
@@ -25,6 +29,30 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+
+// Dynamic placeholders for each mode
+const MODE_PLACEHOLDERS: Record<DiscussionMode, { ru: string; en: string }> = {
+  discuss: { 
+    ru: 'Что ты думаешь о...', 
+    en: 'What do you think about...' 
+  },
+  analyze: { 
+    ru: 'Проанализируй закономерности в...', 
+    en: 'Analyze patterns in...' 
+  },
+  draft: { 
+    ru: 'Напиши письмо о...', 
+    en: 'Write an email about...' 
+  },
+  compute: { 
+    ru: 'Посчитай сколько...', 
+    en: 'Calculate how much...' 
+  },
+  plan: { 
+    ru: 'Составь план для...', 
+    en: 'Create a plan for...' 
+  },
+};
 
 function DiscussionChatContent() {
   const { id } = useParams<{ id: string }>();
@@ -133,6 +161,10 @@ function DiscussionChatContent() {
         meta: {
           mode,
           draftArtifact: response.draftArtifact,
+          analysisArtifact: response.analysisArtifact,
+          computeArtifact: response.computeArtifact,
+          planArtifact: response.planArtifact,
+          questions: response.questions,
         },
       });
       
@@ -239,7 +271,12 @@ function DiscussionChatContent() {
           )}
           
           {messages?.map((message) => (
-            <MessageBubble key={message.id} message={message} language={language} />
+            <MessageBubble 
+              key={message.id} 
+              message={message} 
+              language={language}
+              onSelectQuestion={setInputText}
+            />
           ))}
           
           {sending && (
@@ -284,7 +321,7 @@ function DiscussionChatContent() {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={t('discussion.placeholder')}
+              placeholder={MODE_PLACEHOLDERS[mode][language as 'ru' | 'en'] || t('discussion.placeholder')}
               disabled={sending}
               className="min-h-[44px] max-h-[150px] resize-none"
               rows={1}
@@ -322,9 +359,10 @@ function DiscussionChatContent() {
 interface MessageBubbleProps {
   message: DiscussionMessage;
   language: string;
+  onSelectQuestion?: (question: string) => void;
 }
 
-function MessageBubble({ message, language }: MessageBubbleProps) {
+function MessageBubble({ message, language, onSelectQuestion }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isError = message.status === 'error';
   
@@ -371,6 +409,37 @@ function MessageBubble({ message, language }: MessageBubbleProps) {
         {message.meta?.draftArtifact && (
           <div className="mt-3 w-full">
             <DraftArtifact artifact={message.meta.draftArtifact} />
+          </div>
+        )}
+        
+        {/* Analysis Artifact */}
+        {message.meta?.analysisArtifact && (
+          <div className="mt-3 w-full">
+            <AnalysisArtifact artifact={message.meta.analysisArtifact} />
+          </div>
+        )}
+        
+        {/* Compute Artifact */}
+        {message.meta?.computeArtifact && (
+          <div className="mt-3 w-full">
+            <ComputeArtifact artifact={message.meta.computeArtifact} />
+          </div>
+        )}
+        
+        {/* Plan Artifact */}
+        {message.meta?.planArtifact && (
+          <div className="mt-3 w-full">
+            <PlanArtifact artifact={message.meta.planArtifact} />
+          </div>
+        )}
+        
+        {/* Follow-up Questions */}
+        {message.meta?.questions && message.meta.questions.length > 0 && onSelectQuestion && (
+          <div className="mt-3 w-full">
+            <FollowUpQuestions 
+              questions={message.meta.questions} 
+              onSelect={onSelectQuestion}
+            />
           </div>
         )}
         

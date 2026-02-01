@@ -1,10 +1,19 @@
+# ТЗ: Улучшение 5 режимов AI — ЗАВЕРШЕНО ✅
 
+## Реализованные компоненты
 
-# ТЗ: Улучшение 5 режимов AI (иконки над чатом)
+| Компонент | Файл | Статус |
+|-----------|------|--------|
+| PlanArtifact | `src/components/discussions/PlanArtifact.tsx` | ✅ |
+| AnalysisArtifact | `src/components/discussions/AnalysisArtifact.tsx` | ✅ |
+| ComputeArtifact | `src/components/discussions/ComputeArtifact.tsx` | ✅ |
+| FollowUpQuestions | `src/components/discussions/FollowUpQuestions.tsx` | ✅ |
+| Динамические плейсхолдеры | `src/pages/DiscussionChatPage.tsx` | ✅ |
+| Обновлённые промпты | `src/lib/ai/discussions.ts` | ✅ |
+
+---
 
 ## Текущее состояние
-
-На скриншоте видно 5 иконок-режимов:
 1. **Обсудить** (MessageSquare) — свободный диалог
 2. **Анализ** (BarChart3) — выявление закономерностей  
 3. **Черновик** (FileEdit) — создание текстов
