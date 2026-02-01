@@ -74,10 +74,10 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   chatProfile: 'balanced',
   bioProfile: 'biography',
   strictPrivacy: true, // ON by default
-  autoMood: false, // OFF by default (opt-in)
+  autoMood: true, // ON by default
   autoMoodLiveSuggestions: true, // ON by default (if autoMood enabled)
   autoMoodInheritFromChat: true, // ON by default (if autoMood enabled)
-  autoTags: false, // OFF by default (opt-in)
+  autoTags: true, // ON by default
   autoScreenshot: false, // OFF by default (opt-in)
   autoScreenshotBlurPrivate: true, // ON by default
 };
