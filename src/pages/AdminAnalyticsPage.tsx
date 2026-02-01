@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -10,6 +10,18 @@ import {
   Sparkles,
   Calendar,
 } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -82,6 +94,34 @@ export default function AdminAnalyticsPage() {
     fetchAnalytics();
   }, [tokenData, days]);
 
+  // Prepare chart data
+  const chartData = useMemo(() => {
+    if (!analytics?.dailyData) return [];
+    return analytics.dailyData
+      .slice()
+      .reverse()
+      .map(day => ({
+        date: new Date(day.date).toLocaleDateString('ru-RU', { 
+          day: 'numeric', 
+          month: 'short' 
+        }),
+        sessions: day.sessions,
+        entries: day.entries,
+        aiMessages: day.aiMessages,
+      }));
+  }, [analytics]);
+
+  const aiUsageData = useMemo(() => {
+    if (!analytics) return [];
+    const m = analytics.aggregatedMetrics;
+    return [
+      { name: 'Чат', value: m.aiChatMessages },
+      { name: 'Биографии', value: m.aiBiographiesGenerated },
+      { name: 'Авто-теги', value: m.autoTagsAccepted },
+      { name: 'Авто-mood', value: m.autoMoodAccepted },
+    ];
+  }, [analytics]);
+
   const calcConversion = (accepted: number, suggested: number) => {
     if (suggested === 0) return 0;
     return Math.round((accepted / suggested) * 100);
@@ -102,7 +142,7 @@ export default function AdminAnalyticsPage() {
             </Link>
             <div className="flex-1">
               <h1 className="text-lg font-serif flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-violet-400" />
+                <BarChart3 className="h-5 w-5 text-primary" />
                 Аналитика
               </h1>
               <p className="text-xs text-muted-foreground">
@@ -208,11 +248,144 @@ export default function AdminAnalyticsPage() {
               </Card>
             </div>
 
+            {/* Daily Activity LineChart */}
+            {chartData.length > 0 && (
+              <Card className="bg-card/60">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                    Активность по дням
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                        <CartesianGrid 
+                          strokeDasharray="3 3" 
+                          className="stroke-border" 
+                          opacity={0.3} 
+                        />
+                        <XAxis 
+                          dataKey="date" 
+                          tick={{ fontSize: 11 }}
+                          className="fill-muted-foreground"
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis 
+                          tick={{ fontSize: 11 }}
+                          className="fill-muted-foreground"
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                          }}
+                          labelStyle={{ color: 'hsl(var(--foreground))' }}
+                        />
+                        <Legend 
+                          wrapperStyle={{ fontSize: '12px' }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="sessions" 
+                          stroke="hsl(var(--chart-1))" 
+                          strokeWidth={2}
+                          dot={{ r: 3, fill: 'hsl(var(--chart-1))' }}
+                          name="Сессии"
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="entries" 
+                          stroke="hsl(var(--chart-2))" 
+                          strokeWidth={2}
+                          dot={{ r: 3, fill: 'hsl(var(--chart-2))' }}
+                          name="Записи"
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="aiMessages" 
+                          stroke="hsl(var(--chart-3))" 
+                          strokeWidth={2}
+                          strokeDasharray="5 5"
+                          dot={{ r: 3, fill: 'hsl(var(--chart-3))' }}
+                          name="AI чат"
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* AI Usage BarChart */}
+            <Card className="bg-card/60">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  Использование AI
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart 
+                      data={aiUsageData} 
+                      layout="vertical" 
+                      margin={{ top: 5, right: 30, left: 70, bottom: 5 }}
+                    >
+                      <CartesianGrid 
+                        strokeDasharray="3 3" 
+                        className="stroke-border" 
+                        opacity={0.3} 
+                        horizontal={false}
+                      />
+                      <XAxis 
+                        type="number"
+                        tick={{ fontSize: 11 }}
+                        className="fill-muted-foreground"
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis 
+                        type="category" 
+                        dataKey="name"
+                        tick={{ fontSize: 12 }}
+                        className="fill-foreground"
+                        axisLine={false}
+                        tickLine={false}
+                        width={65}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                        }}
+                        formatter={(value) => [value, 'Использований']}
+                        labelStyle={{ color: 'hsl(var(--foreground))' }}
+                      />
+                      <Bar 
+                        dataKey="value" 
+                        radius={[0, 4, 4, 0]}
+                        fill="hsl(var(--primary))"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Conversion metrics */}
             <Card className="bg-card/60">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-green-500" />
+                  <TrendingUp className="h-4 w-4 text-chart-3" />
                   Конверсия AI-функций
                 </CardTitle>
               </CardHeader>
@@ -231,7 +404,7 @@ export default function AdminAnalyticsPage() {
                     </div>
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div 
-                        className="h-full bg-gradient-to-r from-violet-600 to-indigo-600 rounded-full transition-all"
+                        className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all"
                         style={{ 
                           width: `${calcConversion(
                             analytics.aggregatedMetrics.autoMoodAccepted,
@@ -258,7 +431,7 @@ export default function AdminAnalyticsPage() {
                     </div>
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div 
-                        className="h-full bg-gradient-to-r from-violet-600 to-indigo-600 rounded-full transition-all"
+                        className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all"
                         style={{ 
                           width: `${calcConversion(
                             analytics.aggregatedMetrics.autoTagsAccepted,
@@ -280,7 +453,7 @@ export default function AdminAnalyticsPage() {
               <Card className="bg-card/60">
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-violet-400" />
+                    <Sparkles className="h-4 w-4 text-primary" />
                     Версии приложения
                   </CardTitle>
                 </CardHeader>
@@ -293,36 +466,6 @@ export default function AdminAnalyticsPage() {
                       >
                         v{version}
                       </span>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Daily chart placeholder */}
-            {analytics.dailyData.length > 0 && (
-              <Card className="bg-card/60">
-                <CardHeader>
-                  <CardTitle className="text-base">По дням</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {analytics.dailyData.slice(0, 7).map(day => (
-                      <div key={day.date} className="flex items-center gap-4 text-sm">
-                        <span className="w-20 text-muted-foreground">
-                          {new Date(day.date).toLocaleDateString('ru-RU', { 
-                            day: 'numeric', 
-                            month: 'short' 
-                          })}
-                        </span>
-                        <div className="flex-1 flex items-center gap-2">
-                          <div 
-                            className="h-4 bg-violet-500/50 rounded"
-                            style={{ width: `${Math.min(day.entries * 10, 100)}%` }}
-                          />
-                          <span className="text-xs">{day.entries} записей</span>
-                        </div>
-                      </div>
                     ))}
                   </div>
                 </CardContent>
