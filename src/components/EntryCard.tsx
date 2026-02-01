@@ -59,6 +59,16 @@ export function EntryCard({ entry, showDate = false, selectable = false, selecte
         
         {/* Content */}
         <div className="flex-1 min-w-0">
+          {/* Title row (if exists) */}
+          {entry.title && (
+            <h4 className="text-sm font-medium text-foreground mb-1 line-clamp-1">
+              {entry.title}
+              {entry.titleSource === 'ai' && (
+                <span className="ml-1 text-xs text-cyber-glow/60">✨</span>
+              )}
+            </h4>
+          )}
+          
           {/* Time & date row */}
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1.5">
             <span className="font-mono">{timeFormatted}</span>
