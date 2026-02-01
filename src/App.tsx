@@ -18,6 +18,8 @@ import { I18nProvider } from "@/lib/i18n";
 import { initNotificationListeners, setNavigationCallback } from "@/lib/notifications";
 import { reconcileReminderNotifications } from "@/lib/reminderNotifications";
 import { isOnboarded } from "@/lib/onboarding";
+import { initUsageTracker, trackPageVisit } from "@/lib/usageTracker";
+import { trackNavigation } from "@/lib/crashReporter";
 
 // Lazy load pages to reduce initial bundle size
 const Today = lazy(() => import("./pages/Today"));
@@ -41,6 +43,8 @@ const AdminLoginPage = lazy(() => import("./pages/AdminLoginPage"));
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
 const AdminFeedbackPage = lazy(() => import("./pages/AdminFeedbackPage"));
 const AdminSystemPage = lazy(() => import("./pages/AdminSystemPage"));
+const AdminCrashesPage = lazy(() => import("./pages/AdminCrashesPage"));
+const AdminAnalyticsPage = lazy(() => import("./pages/AdminAnalyticsPage"));
 
 const queryClient = new QueryClient();
 
@@ -76,11 +80,20 @@ function AppContent() {
     
     initNotificationListeners();
     
+    // Initialize usage tracker
+    initUsageTracker();
+    
     // Reconcile reminder notifications on app start
     // Get language from localStorage or default to 'ru'
     const storedLang = localStorage.getItem('daybook-language') || 'ru';
     reconcileReminderNotifications(storedLang as 'ru' | 'en');
   }, [navigate]);
+  
+  // Track page visits for analytics and crash breadcrumbs
+  useEffect(() => {
+    trackPageVisit(location.pathname);
+    trackNavigation(location.pathname);
+  }, [location.pathname]);
   
   // Hide bottom nav on entry editor, receipt pages, discussion chat, admin pages, and onboarding
   // Hide floating chat on chat page, entry editor, admin pages, and onboarding
@@ -139,6 +152,8 @@ function AppContent() {
               <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
               <Route path="/admin/feedback" element={<AdminFeedbackPage />} />
               <Route path="/admin/system" element={<AdminSystemPage />} />
+              <Route path="/admin/crashes" element={<AdminCrashesPage />} />
+              <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
               
               <Route path="*" element={<NotFound />} />
               </Routes>

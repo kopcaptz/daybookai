@@ -14,11 +14,64 @@ export type Database = {
   }
   public: {
     Tables: {
+      crash_reports: {
+        Row: {
+          app_version: string | null
+          breadcrumbs: Json | null
+          component_stack: string | null
+          created_at: string | null
+          device_info: Json | null
+          first_seen_at: string | null
+          id: string
+          last_seen_at: string | null
+          message: string
+          occurrence_count: number | null
+          session_id: string | null
+          stack: string | null
+          status: string | null
+          url: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          breadcrumbs?: Json | null
+          component_stack?: string | null
+          created_at?: string | null
+          device_info?: Json | null
+          first_seen_at?: string | null
+          id?: string
+          last_seen_at?: string | null
+          message: string
+          occurrence_count?: number | null
+          session_id?: string | null
+          stack?: string | null
+          status?: string | null
+          url?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          breadcrumbs?: Json | null
+          component_stack?: string | null
+          created_at?: string | null
+          device_info?: Json | null
+          first_seen_at?: string | null
+          id?: string
+          last_seen_at?: string | null
+          message?: string
+          occurrence_count?: number | null
+          session_id?: string | null
+          stack?: string | null
+          status?: string | null
+          url?: string | null
+        }
+        Relationships: []
+      }
       feedback: {
         Row: {
           admin_notes: string | null
+          app_version: string | null
           created_at: string | null
           device_info: Json | null
+          diagnostics: Json | null
           id: string
           image_url: string | null
           message: string
@@ -27,8 +80,10 @@ export type Database = {
         }
         Insert: {
           admin_notes?: string | null
+          app_version?: string | null
           created_at?: string | null
           device_info?: Json | null
+          diagnostics?: Json | null
           id?: string
           image_url?: string | null
           message: string
@@ -37,8 +92,10 @@ export type Database = {
         }
         Update: {
           admin_notes?: string | null
+          app_version?: string | null
           created_at?: string | null
           device_info?: Json | null
+          diagnostics?: Json | null
           id?: string
           image_url?: string | null
           message?: string
@@ -74,6 +131,36 @@ export type Database = {
           id?: string
           identifier?: string
           last_attempt_at?: string | null
+        }
+        Relationships: []
+      }
+      usage_analytics: {
+        Row: {
+          app_version: string | null
+          created_at: string | null
+          date: string
+          device_info: Json | null
+          id: string
+          metrics: Json
+          session_id: string
+        }
+        Insert: {
+          app_version?: string | null
+          created_at?: string | null
+          date: string
+          device_info?: Json | null
+          id?: string
+          metrics: Json
+          session_id: string
+        }
+        Update: {
+          app_version?: string | null
+          created_at?: string | null
+          date?: string
+          device_info?: Json | null
+          id?: string
+          metrics?: Json
+          session_id?: string
         }
         Relationships: []
       }

@@ -11,8 +11,12 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
 import { GrimoireIcon } from '@/components/icons/SigilIcon';
+import { APP_VERSION, BUILD_TIMESTAMP } from '@/lib/appVersion';
+import { getExtendedDeviceInfo } from '@/lib/deviceInfo';
+import { getScanStats } from '@/lib/scanDiagnostics';
+import { loadAISettings } from '@/lib/aiConfig';
+import { trackUsageEvent } from '@/lib/usageTracker';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -62,21 +66,35 @@ export function FeedbackModal() {
     setIsSubmitting(true);
 
     try {
-      // Collect device info
-      const deviceInfo = {
-        userAgent: navigator.userAgent,
-        language: navigator.language,
-        viewport: {
-          width: window.innerWidth,
-          height: window.innerHeight,
+      // Collect extended device info
+      const deviceInfo = await getExtendedDeviceInfo();
+      
+      // Get AI settings
+      const aiSettings = loadAISettings();
+      
+      // Get scan statistics
+      const scanStats = await getScanStats();
+      
+      // Build diagnostics object
+      const diagnostics = {
+        aiSettings: {
+          enabled: aiSettings.enabled,
+          autoMood: aiSettings.autoMood,
+          autoTags: aiSettings.autoTags,
+          autoScreenshot: aiSettings.autoScreenshot,
+          chatProfile: aiSettings.chatProfile,
         },
-        timestamp: new Date().toISOString(),
+        scanStats,
       };
 
       // Create form data
       const formData = new FormData();
       formData.append('message', message.trim());
       formData.append('device_info', JSON.stringify(deviceInfo));
+      formData.append('app_version', APP_VERSION);
+      formData.append('build_timestamp', BUILD_TIMESTAMP);
+      formData.append('diagnostics', JSON.stringify(diagnostics));
+      
       if (selectedFile) {
         formData.append('image', selectedFile);
       }
@@ -96,6 +114,9 @@ export function FeedbackModal() {
       if (!response.ok || !data?.success) {
         throw new Error(data?.error || 'Unknown error');
       }
+
+      // Track feedback submission
+      trackUsageEvent('feedbackSubmitted');
 
       toast({
         title: "Сообщение отправлено в архив",

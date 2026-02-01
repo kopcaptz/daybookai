@@ -32,3 +32,18 @@ verify_jwt = false
 
 [functions.admin-system-health]
 verify_jwt = false
+
+[functions.crash-report]
+verify_jwt = false
+
+[functions.analytics-submit]
+verify_jwt = false
+
+[functions.admin-crashes-list]
+verify_jwt = false
+
+[functions.admin-crashes-update]
+verify_jwt = false
+
+[functions.admin-analytics-summary]
+verify_jwt = false
