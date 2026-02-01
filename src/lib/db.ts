@@ -23,6 +23,9 @@ export interface DiaryEntry {
   moodSource?: 'user' | 'ai';      // Who set the mood
   semanticTags?: string[];          // AI-generated hidden tags for search
   aiAnalyzedAt?: number;            // Timestamp of last AI analysis
+  // Smart Titles (v13)
+  title?: string;                   // AI-generated or user-set title
+  titleSource?: 'ai' | 'user';      // Who created the title
 }
 
 // Типы для вложений
@@ -490,6 +493,30 @@ class DaybookDatabase extends Dexie {
       discussionSessions: '++id, updatedAt, lastMessageAt, pinned',
       discussionMessages: '++id, sessionId, [sessionId+createdAt]',
       analysisQueue: '++id, entryId, status, createdAt',
+    });
+
+    // Version 13: Add Smart Entry Titles (title, titleSource)
+    this.version(13).stores({
+      entries: '++id, date, mood, *tags, *semanticTags, isPrivate, aiAllowed, createdAt, updatedAt, aiAnalyzedAt',
+      attachments: '++id, entryId, kind, createdAt',
+      drafts: 'id, updatedAt',
+      biographies: 'date, status, generatedAt',
+      attachmentInsights: 'attachmentId, createdAt',
+      receipts: '++id, entryId, date, storeName, createdAt, updatedAt',
+      receiptItems: '++id, receiptId, category',
+      scanLogs: '++id, timestamp',
+      reminders: '++id, entryId, status, dueAt, createdAt',
+      discussionSessions: '++id, updatedAt, lastMessageAt, pinned',
+      discussionMessages: '++id, sessionId, [sessionId+createdAt]',
+      analysisQueue: '++id, entryId, status, createdAt',
+    }).upgrade(tx => {
+      // Initialize title fields for existing entries
+      return tx.table('entries').toCollection().modify(entry => {
+        if (entry.title === undefined) {
+          entry.title = null;
+          entry.titleSource = undefined;
+        }
+      });
     });
   }
 }

@@ -17,6 +17,7 @@ interface AnalysisResult {
   mood: number;
   confidence: number;
   semanticTags: string[];
+  titleSuggestion?: string;  // AI-generated title in cyber-mystic style
   requestId: string;
 }
 
@@ -169,6 +170,12 @@ async function processQueueItem(item: AnalysisQueueItem): Promise<void> {
       updates.moodSource = 'ai';
     }
 
+    // Add AI title if generated and entry doesn't have one
+    if (result.titleSuggestion && !entry.title) {
+      updates.title = result.titleSuggestion;
+      updates.titleSource = 'ai';
+    }
+
     await updateEntry(item.entryId, updates);
 
     // Success — remove from queue
@@ -279,7 +286,10 @@ export async function analyzeEntryInBackground(
   try {
     const result = await callAnalyzeEdgeFunction(text, tags, language);
 
-    console.log(`[EntryAnalysis] Result: mood=${result.mood}, confidence=${result.confidence}, semanticTags=[${result.semanticTags.join(', ')}]`);
+    console.log(`[EntryAnalysis] Result: mood=${result.mood}, confidence=${result.confidence}, semanticTags=[${result.semanticTags.join(', ')}], title=${result.titleSuggestion || 'none'}`);
+
+    // Get current entry to check if title already exists
+    const currentEntry = await db.entries.get(entryId);
 
     // Build updates object
     const updates: Partial<DiaryEntry> = {
@@ -295,6 +305,13 @@ export async function analyzeEntryInBackground(
     } else {
       // Mark that user set the mood
       updates.moodSource = 'user';
+    }
+
+    // Add AI title if generated and entry doesn't have one
+    if (result.titleSuggestion && (!currentEntry?.title)) {
+      updates.title = result.titleSuggestion;
+      updates.titleSource = 'ai';
+      console.log(`[EntryAnalysis] Applying AI title: ${result.titleSuggestion}`);
     }
 
     // Update entry in database
