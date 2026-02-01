@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { MessageCircle, X, Camera } from 'lucide-react';
+import { ScanEye, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -125,7 +125,7 @@ export function FloatingChatButton({ className }: FloatingChatButtonProps) {
         <div className="absolute inset-0 rounded-full border-2 border-glow-primary/20 animate-ping opacity-75" 
              style={{ animationDuration: '2s' }} />
         
-        <MessageCircle className="h-6 w-6 text-primary-foreground relative z-10" strokeWidth={2} />
+        <ScanEye className="h-6 w-6 text-primary-foreground relative z-10" strokeWidth={2} />
       </button>
 
       {/* Chat Sheet Modal */}
@@ -152,7 +152,7 @@ export function FloatingChatButton({ className }: FloatingChatButtonProps) {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                  <MessageCircle className="h-4 w-4 text-primary-foreground" />
+                  <ScanEye className="h-4 w-4 text-primary-foreground" />
                 </div>
                 <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-background" />
               </div>
