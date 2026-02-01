@@ -655,6 +655,7 @@ function EntryEditorContent() {
           suggestedMood={predictiveMood.suggestedMood}
           confirmedMood={predictiveMood.confirmedMood}
           isAnalyzing={predictiveMood.isAnalyzing}
+          isAIAnalyzing={predictiveMood.isAIAnalyzing}
           suggestionSource={predictiveMood.source}
           onSuggestionAccept={() => {
             if (predictiveMood.suggestedMood) {
@@ -662,6 +663,7 @@ function EntryEditorContent() {
               trackUsageEvent('autoMoodAccepted');
             }
           }}
+          onBlur={predictiveMood.triggerAIAnalysis}
         />
 
         {/* Tag selector with auto-suggestions */}

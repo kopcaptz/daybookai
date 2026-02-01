@@ -64,6 +64,9 @@ export interface AISettings {
   autoMood: boolean; // Predictive mood tracking
   autoMoodLiveSuggestions: boolean; // Show live suggestions while typing
   autoMoodInheritFromChat: boolean; // Inherit mood from discussions
+  autoMoodAIEnabled: boolean; // Use AI for mood prediction (v2)
+  autoMoodAIOnBlur: boolean; // Trigger AI on textarea blur
+  autoMoodAIOnPause: boolean; // Trigger AI on typing pause (2s)
   autoTags: boolean; // Auto-suggest tags based on text content
   autoScreenshot: boolean; // Auto-capture screen on FAB open (default: false)
   autoScreenshotBlurPrivate: boolean; // Blur .blur-private elements (default: true)
@@ -77,6 +80,9 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   autoMood: true, // ON by default
   autoMoodLiveSuggestions: true, // ON by default (if autoMood enabled)
   autoMoodInheritFromChat: true, // ON by default (if autoMood enabled)
+  autoMoodAIEnabled: true, // ON by default (v2 AI mood prediction)
+  autoMoodAIOnBlur: true, // ON by default
+  autoMoodAIOnPause: true, // ON by default
   autoTags: true, // ON by default
   autoScreenshot: false, // OFF by default (opt-in)
   autoScreenshotBlurPrivate: true, // ON by default
