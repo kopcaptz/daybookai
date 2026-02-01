@@ -53,3 +53,12 @@ verify_jwt = false
 
 [functions.admin-analytics-summary]
 verify_jwt = false
+
+[functions.ethereal_join]
+verify_jwt = false
+
+[functions.ethereal_messages]
+verify_jwt = false
+
+[functions.ethereal_members]
+verify_jwt = false

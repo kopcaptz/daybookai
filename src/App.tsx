@@ -46,6 +46,14 @@ const AdminSystemPage = lazy(() => import("./pages/AdminSystemPage"));
 const AdminCrashesPage = lazy(() => import("./pages/AdminCrashesPage"));
 const AdminAnalyticsPage = lazy(() => import("./pages/AdminAnalyticsPage"));
 
+// Ethereal Layer (hidden feature)
+const EtherealGate = lazy(() => import("./components/ethereal/EtherealGate").then(m => ({ default: m.EtherealGate })));
+const EtherealHome = lazy(() => import("./pages/ethereal/EtherealHome"));
+const EtherealChat = lazy(() => import("./pages/ethereal/EtherealChat"));
+const EtherealChronicles = lazy(() => import("./pages/ethereal/EtherealChronicles"));
+const EtherealTasks = lazy(() => import("./pages/ethereal/EtherealTasks"));
+const EtherealCalendar = lazy(() => import("./pages/ethereal/EtherealCalendar"));
+
 const queryClient = new QueryClient();
 
 // Guard component for onboarding redirect
@@ -95,28 +103,31 @@ function AppContent() {
     trackNavigation(location.pathname);
   }, [location.pathname]);
   
-  // Hide bottom nav on entry editor, receipt pages, discussion chat, admin pages, and onboarding
-  // Hide floating chat on chat page, entry editor, admin pages, and onboarding
+  // Hide bottom nav on entry editor, receipt pages, discussion chat, admin pages, ethereal, and onboarding
+  // Hide floating chat on chat page, entry editor, admin pages, ethereal, and onboarding
   const hideNav = location.pathname === '/new' || 
     location.pathname.startsWith('/entry/') || 
     location.pathname === '/receipts' || 
     location.pathname.startsWith('/receipts/') || 
     location.pathname.startsWith('/discussions/') ||
     location.pathname.startsWith('/admin') ||
+    location.pathname.startsWith('/e/') ||
     location.pathname === '/onboarding';
 
   const hideFloatingChat = location.pathname === '/chat' || 
     location.pathname === '/new' || 
     location.pathname.startsWith('/entry/') ||
     location.pathname.startsWith('/admin') ||
+    location.pathname.startsWith('/e/') ||
     location.pathname === '/onboarding';
   
-  // Hide feedback modal on admin pages, onboarding, and entry editor
+  // Hide feedback modal on admin pages, onboarding, ethereal, and entry editor
   const hideFeedback = location.pathname.startsWith('/admin') || 
     location.pathname === '/onboarding' ||
     location.pathname === '/new' ||
     location.pathname.startsWith('/entry/') ||
-    location.pathname.startsWith('/discussions/');
+    location.pathname.startsWith('/discussions/') ||
+    location.pathname.startsWith('/e/');
 
   return (
     <HeroTransitionProvider>
@@ -154,6 +165,15 @@ function AppContent() {
               <Route path="/admin/system" element={<AdminSystemPage />} />
               <Route path="/admin/crashes" element={<AdminCrashesPage />} />
               <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
+              
+              {/* Ethereal Layer routes - hidden */}
+              <Route path="/e" element={<EtherealGate />}>
+                <Route path="home" element={<EtherealHome />} />
+                <Route path="chat" element={<EtherealChat />} />
+                <Route path="chronicles" element={<EtherealChronicles />} />
+                <Route path="tasks" element={<EtherealTasks />} />
+                <Route path="calendar" element={<EtherealCalendar />} />
+              </Route>
               
               <Route path="*" element={<NotFound />} />
               </Routes>

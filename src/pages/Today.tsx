@@ -21,6 +21,8 @@ import { GrimoireIcon } from '@/components/icons/SigilIcon';
 import { BreathingSigil } from '@/components/icons/BreathingSigil';
 import { useOracleWhisper } from '@/hooks/useOracleWhisper';
 import { useHeroTransition } from '@/hooks/useHeroTransition';
+import { useSecretGesture } from '@/hooks/useSecretGesture';
+import { EtherealPinModal } from '@/components/ethereal/EtherealPinModal';
 import { cn } from '@/lib/utils';
 
 function TodayContent() {
@@ -53,6 +55,12 @@ function TodayContent() {
   // Hero transition for sigil click
   const { startTransition } = useHeroTransition();
   const sigilRef = useRef<HTMLButtonElement>(null);
+  
+  // Ethereal Layer secret gesture
+  const [showEtherealPin, setShowEtherealPin] = useState(false);
+  const { handlers: secretHandlers, EasterEggAnimation } = useSecretGesture({
+    onSuccess: () => setShowEtherealPin(true),
+  });
   
   // Check if we should enter select mode from URL
   useEffect(() => {
@@ -144,13 +152,17 @@ function TodayContent() {
         {/* Brand header */}
         <div className="flex items-center justify-between">
           <div className="shrink-0 w-10" />
-          <div className="flex-1 text-center min-w-0">
+          <div 
+            className="flex-1 text-center min-w-0 relative select-none"
+            {...secretHandlers}
+          >
             <h1 className="text-xl font-serif font-medium text-foreground tracking-wide truncate">
               {t('app.name')}
             </h1>
             <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
               {t('app.subtitle')}
             </p>
+            {EasterEggAnimation}
           </div>
           <div className="shrink-0 w-10 flex justify-end">
           
@@ -324,6 +336,12 @@ function TodayContent() {
       <QuickReminderSheet
         open={quickReminderOpen}
         onOpenChange={setQuickReminderOpen}
+      />
+      
+      {/* Ethereal PIN Modal */}
+      <EtherealPinModal
+        open={showEtherealPin}
+        onOpenChange={setShowEtherealPin}
       />
     </div>
   );
