@@ -70,6 +70,49 @@ function calculateRelevanceScore(text: string, query: string): number {
 }
 
 /**
+ * Calculate enhanced relevance score including semantic tags
+ */
+function calculateEnhancedRelevanceScore(entry: DiaryEntry, query: string): number {
+  if (!query.trim()) return 0;
+  const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 2);
+  
+  let score = 0;
+  
+  // 1. Text match (weight: 1.0)
+  const lowerText = entry.text.toLowerCase();
+  for (const keyword of keywords) {
+    if (lowerText.includes(keyword)) {
+      score += 1;
+      // Bonus for exact word match
+      const wordRegex = new RegExp(`\\b${keyword}\\b`, 'i');
+      if (wordRegex.test(entry.text)) {
+        score += 0.5;
+      }
+    }
+  }
+  
+  // 2. User-visible tags match (weight: 1.5)
+  for (const tag of entry.tags) {
+    const lowerTag = tag.toLowerCase();
+    if (keywords.some(k => lowerTag.includes(k))) {
+      score += 1.5;
+    }
+  }
+  
+  // 3. Semantic tags match (weight: 2.0) - AI-generated, high precision
+  if (entry.semanticTags && entry.semanticTags.length > 0) {
+    for (const stag of entry.semanticTags) {
+      const lowerStag = stag.toLowerCase();
+      if (keywords.some(k => lowerStag.includes(k))) {
+        score += 2.0;
+      }
+    }
+  }
+  
+  return score;
+}
+
+/**
  * Build entry title from date and time
  */
 function buildEntryTitle(entry: DiaryEntry): string {
@@ -99,7 +142,8 @@ async function buildFromScope(
     const entry = await db.entries.get(id);
     if (entry && !entry.isPrivate && entry.aiAllowed !== false) {
       entries.push(entry);
-      const score = calculateRelevanceScore(entry.text + ' ' + entry.tags.join(' '), query);
+      // Use enhanced scoring with semantic tags
+      const score = calculateEnhancedRelevanceScore(entry, query);
       scores.set(entry.id!, score);
     }
   }
@@ -135,10 +179,10 @@ async function buildFromSearch(
   const hasSearchTerms = searchTerms.length > 0;
   
   if (hasSearchTerms) {
-    // Score and filter entries by keyword relevance
+    // Score and filter entries using enhanced scoring (includes semantic tags)
     const matchedEntries = eligibleEntries
       .map(entry => {
-        const score = calculateRelevanceScore(entry.text + ' ' + entry.tags.join(' '), query);
+        const score = calculateEnhancedRelevanceScore(entry, query);
         scores.set(entry.id!, score);
         return { entry, score };
       })
