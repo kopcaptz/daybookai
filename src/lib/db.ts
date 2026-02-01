@@ -193,6 +193,21 @@ export interface Reminder {
   updatedAt: number;
 }
 
+// Analysis Queue for offline retry
+export type AnalysisQueueStatus = 'pending' | 'processing' | 'failed';
+
+export interface AnalysisQueueItem {
+  id?: number;
+  entryId: number;
+  userSetMood: boolean;
+  language: 'ru' | 'en';
+  createdAt: number;
+  lastAttempt?: number;
+  attempts: number;
+  status: AnalysisQueueStatus;
+  errorMessage?: string;
+}
+
 // Discussion types for Discussions feature
 export type DiscussionMode = 'discuss' | 'analyze' | 'draft' | 'compute' | 'plan';
 
@@ -307,6 +322,7 @@ class DaybookDatabase extends Dexie {
   reminders!: EntityTable<Reminder, 'id'>;
   discussionSessions!: EntityTable<DiscussionSession, 'id'>;
   discussionMessages!: EntityTable<DiscussionMessage, 'id'>;
+  analysisQueue!: EntityTable<AnalysisQueueItem, 'id'>;
 
   constructor() {
     super('DaybookDB');
@@ -458,6 +474,22 @@ class DaybookDatabase extends Dexie {
         }
         // aiAnalyzedAt remains undefined for old entries
       });
+    });
+
+    // Version 12: Add analysis queue for offline retry
+    this.version(12).stores({
+      entries: '++id, date, mood, *tags, *semanticTags, isPrivate, aiAllowed, createdAt, updatedAt, aiAnalyzedAt',
+      attachments: '++id, entryId, kind, createdAt',
+      drafts: 'id, updatedAt',
+      biographies: 'date, status, generatedAt',
+      attachmentInsights: 'attachmentId, createdAt',
+      receipts: '++id, entryId, date, storeName, createdAt, updatedAt',
+      receiptItems: '++id, receiptId, category',
+      scanLogs: '++id, timestamp',
+      reminders: '++id, entryId, status, dueAt, createdAt',
+      discussionSessions: '++id, updatedAt, lastMessageAt, pinned',
+      discussionMessages: '++id, sessionId, [sessionId+createdAt]',
+      analysisQueue: '++id, entryId, status, createdAt',
     });
   }
 }
