@@ -118,7 +118,10 @@ function EntryEditorContent() {
   // Handle mood change with user override tracking
   const handleMoodChange = (newMood: number) => {
     setMood(newMood);
-    predictiveMood.setUserOverride();
+    // Only set override if rejecting an active suggestion
+    if (predictiveMood.suggestedMood !== null && newMood !== predictiveMood.suggestedMood) {
+      predictiveMood.setUserOverride();
+    }
   };
 
   // Draft autosave
@@ -633,10 +636,13 @@ function EntryEditorContent() {
           value={mood} 
           onChange={handleMoodChange}
           suggestedMood={predictiveMood.suggestedMood}
+          confirmedMood={predictiveMood.confirmedMood}
+          isAnalyzing={predictiveMood.isAnalyzing}
           suggestionSource={predictiveMood.source}
           onSuggestionAccept={() => {
             if (predictiveMood.suggestedMood) {
               setMood(predictiveMood.suggestedMood);
+              trackUsageEvent('autoMoodAccepted');
             }
           }}
         />

@@ -1,11 +1,13 @@
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import { Brain } from 'lucide-react';
+import { Brain, Check } from 'lucide-react';
 
 interface MoodSelectorProps {
   value: number;
   onChange: (value: number) => void;
   suggestedMood?: number | null;
+  confirmedMood?: number | null;
+  isAnalyzing?: boolean;
   suggestionSource?: 'text' | 'discussion' | 'entry' | null;
   onSuggestionAccept?: () => void;
 }
@@ -17,6 +19,8 @@ export function MoodSelector({
   value, 
   onChange, 
   suggestedMood,
+  confirmedMood,
+  isAnalyzing,
   suggestionSource,
   onSuggestionAccept,
 }: MoodSelectorProps) {
@@ -53,15 +57,29 @@ export function MoodSelector({
     }
   };
 
+  const showBrainIndicator = isAnalyzing || suggestedMood !== null && suggestedMood !== undefined;
+
   return (
     <div className="space-y-4 panel-glass p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{t('mood.title')}</span>
-          {suggestedMood && suggestedMood !== value && (
+          {/* Brain indicator: pulsing when analyzing, static when suggestion active */}
+          {showBrainIndicator && (
             <span className="flex items-center gap-1 text-xs text-cyber-sigil/70">
-              <Brain className="h-3 w-3" />
-              <span className="hidden sm:inline">{getSourceLabel()}</span>
+              <Brain className={cn("h-3 w-3", isAnalyzing && "animate-pulse")} />
+              {!isAnalyzing && suggestionSource && (
+                <span className="hidden sm:inline">{getSourceLabel()}</span>
+              )}
+            </span>
+          )}
+          {/* Confirmed indicator */}
+          {confirmedMood !== null && confirmedMood === value && !isAnalyzing && (
+            <span className="flex items-center gap-1 text-xs text-green-500/80">
+              <Check className="h-3 w-3" />
+              <span className="hidden sm:inline">
+                {language === 'ru' ? 'подтверждено' : 'confirmed'}
+              </span>
             </span>
           )}
         </div>
@@ -89,6 +107,7 @@ export function MoodSelector({
           {[1, 2, 3, 4, 5].map((mood) => {
             const isSelected = value === mood;
             const isSuggested = suggestedMood === mood && !isSelected;
+            const isConfirmed = confirmedMood === mood && isSelected;
             
             return (
               <button
@@ -106,8 +125,15 @@ export function MoodSelector({
                 )}
               >
                 {moodEmojis[mood - 1]}
-                {isSelected && (
+                {/* Selected indicator (sigil pulse) */}
+                {isSelected && !isConfirmed && (
                   <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyber-sigil animate-sigil-pulse" />
+                )}
+                {/* Confirmed indicator (green checkmark) */}
+                {isConfirmed && (
+                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-green-500/90 flex items-center justify-center shadow-sm">
+                    <Check className="h-2 w-2 text-white" />
+                  </span>
                 )}
                 {/* Ghost dot for suggestions */}
                 {isSuggested && (
