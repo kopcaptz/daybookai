@@ -63,6 +63,13 @@
     --sidebar-accent-foreground: 220 25% 15%;
     --sidebar-border: 220 20% 85%;
     --sidebar-ring: 185 70% 45%;
+
+    /* Chart colors */
+    --chart-1: 185 70% 45%;
+    --chart-2: 270 60% 60%;
+    --chart-3: 160 55% 45%;
+    --chart-4: 30 60% 50%;
+    --chart-5: 340 65% 55%;
   }
 
   .dark {
@@ -120,6 +127,13 @@
     --sidebar-accent-foreground: 32 15% 88%;
     --sidebar-border: 28 14% 16%;
     --sidebar-ring: 36 80% 50%;
+
+    /* Chart colors (warm palette) */
+    --chart-1: 36 85% 55%;
+    --chart-2: 28 55% 55%;
+    --chart-3: 150 40% 42%;
+    --chart-4: 0 50% 48%;
+    --chart-5: 270 50% 55%;
   }
 
   /* 🌑 Cyber Dark — Cold Cyan/Violet Theme (alternative) */
