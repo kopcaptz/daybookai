@@ -8,6 +8,7 @@ import { format, setHours, setMinutes } from 'date-fns';
 import { ru, enUS } from 'date-fns/locale';
 import { Bell, CalendarIcon, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { trackUsageEvent } from '@/lib/usageTracker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
@@ -104,6 +105,9 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
       
       // Step 3: Reconcile notifications
       await reconcileReminderNotifications(language);
+      
+      // Track usage
+      trackUsageEvent('remindersCreated');
       
       toast.success(language === 'ru' ? 'Напоминание создано' : 'Reminder created');
       

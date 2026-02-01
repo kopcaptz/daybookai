@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { detectTags, TagSuggestion } from '@/lib/autoTagService';
 import { loadAISettings } from '@/lib/aiConfig';
+import { trackUsageEvent } from '@/lib/usageTracker';
 
 export interface AutoTagsResult {
   // Suggested tags from analysis
@@ -80,6 +81,11 @@ export function useAutoTags({
       // Filter out dismissed tags
       const filtered = detected.filter(s => !dismissedTags.has(s.tag));
       
+      // Track if we have new suggestions
+      if (filtered.length > 0) {
+        trackUsageEvent('autoTagsSuggested', filtered.length);
+      }
+      
       setSuggestedTags(filtered);
     }, debounceMs);
     
@@ -94,6 +100,7 @@ export function useAutoTags({
   const acceptTag = useCallback((tag: string) => {
     if (!currentTags.includes(tag)) {
       onTagsChange([...currentTags, tag]);
+      trackUsageEvent('autoTagsAccepted');
     }
     setSuggestedTags(prev => prev.filter(s => s.tag !== tag));
     setUserInteracted(true);
@@ -114,6 +121,7 @@ export function useAutoTags({
     
     if (newTags.length > 0) {
       onTagsChange([...currentTags, ...newTags]);
+      trackUsageEvent('autoTagsAccepted', newTags.length);
     }
     setSuggestedTags([]);
     setUserInteracted(true);

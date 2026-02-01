@@ -13,6 +13,7 @@ import {
   SCAN_MODELS 
 } from "@/lib/receiptService";
 import { logScanAttempt } from "@/lib/scanDiagnostics";
+import { trackUsageEvent } from "@/lib/usageTracker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -205,6 +206,9 @@ function ReceiptScanContent() {
         requestId,
         errorCode: null,
       });
+      
+      // Track successful receipt scan
+      trackUsageEvent('aiReceiptsScanned');
 
       logStep("NAVIGATE_REVIEW");
       

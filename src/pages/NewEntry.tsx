@@ -7,6 +7,7 @@ import { ArrowLeft, Lock, LockOpen, Save, Trash2, Loader2 } from 'lucide-react';
 import { QuillSigilIcon, SealIcon } from '@/components/icons/SigilIcon';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { trackUsageEvent, trackTextLength } from '@/lib/usageTracker';
 import { 
   createEntry, 
   updateEntry, 
@@ -327,6 +328,14 @@ function EntryEditorContent() {
       
       await removeDraft(draftId);
       log('SAVE_DONE', { entryId: entryId! });
+      
+      // Track usage analytics
+      if (isEditing) {
+        trackUsageEvent('entriesEdited');
+      } else {
+        trackUsageEvent('entriesCreated');
+      }
+      trackTextLength(text.length);
 
       toast.success(t('entry.saved'));
 
