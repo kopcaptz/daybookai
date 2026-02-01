@@ -1,404 +1,201 @@
 
-# ТЗ: Интерактивные графики Recharts для админ-аналитики
+# План исправления: Авто-определение настроения не работает
 
-## Цель
+## Обнаруженные проблемы
 
-Заменить простые div-бары на странице `/admin/analytics` интерактивными графиками Recharts для лучшей визуализации телеметрии.
+### Проблема 1: Подсказка не показывается если результат = текущему значению
+В `usePredictiveMood.ts` строка 111:
+```typescript
+if (result.mood !== currentMood) {
+  setSuggestedMood(result.mood);
+  // ...
+}
+```
+**Последствие**: Если анализ текста даёт `mood = 3` (нейтральное), а слайдер по умолчанию тоже на `3`, подсказка НЕ появляется. Пользователь думает, что система не работает.
+
+### Проблема 2: Слишком высокий порог confidence
+`SUGGESTION_THRESHOLD = 0.3` — если текст не содержит явных эмоциональных маркеров, confidence будет низким и подсказка не появится.
+
+Пример: "Сегодня вторник" → `confidence = 0.1` → нет подсказки.
+
+### Проблема 3: User Override блокирует все подсказки
+Когда пользователь кликает на любое настроение, вызывается `predictiveMood.setUserOverride()`, что устанавливает флаг и **отключает все дальнейшие подсказки** для этой записи, даже если пользователь продолжает печатать.
+
+### Проблема 4: Нет визуальной обратной связи при "совпадении"
+Если система определила настроение и оно совпало с текущим — пользователь не видит никакого подтверждения что система работает.
 
 ---
 
-## Текущее состояние
+## Решение
 
-### Что есть сейчас
-```tsx
-// Простые div-бары в AdminAnalyticsPage.tsx (строки 309-326)
-{analytics.dailyData.slice(0, 7).map(day => (
-  <div key={day.date} className="flex items-center gap-4 text-sm">
-    <span className="w-20 text-muted-foreground">
-      {new Date(day.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
-    </span>
-    <div className="flex-1 flex items-center gap-2">
-      <div 
-        className="h-4 bg-violet-500/50 rounded"
-        style={{ width: `${Math.min(day.entries * 10, 100)}%` }}
-      />
-      <span className="text-xs">{day.entries} записей</span>
-    </div>
-  </div>
-))}
-```
+### 1. Показывать подтверждение при совпадении
+Добавить новое состояние `confirmedMatch` — когда анализ подтверждает текущее настроение:
 
-### Доступные данные
 ```typescript
-// Из Edge Function admin-analytics-summary
-interface AnalyticsSummary {
-  totalSessions: number;
-  uniqueVersions: string[];
-  aggregatedMetrics: {
-    entriesCreated: number;
-    entriesEdited: number;
-    aiChatMessages: number;
-    aiBiographiesGenerated: number;
-    autoMoodSuggestions: number;
-    autoMoodAccepted: number;
-    autoTagsSuggested: number;
-    autoTagsAccepted: number;
-    feedbackSubmitted: number;
-    avgSessionMinutes: number;
-  };
-  dailyData: Array<{
-    date: string;      // "2026-02-01"
-    sessions: number;  
-    entries: number;
-    aiMessages: number;
-  }>;
+// В usePredictiveMood.ts
+const [confirmedMood, setConfirmedMood] = useState<number | null>(null);
+
+if (result.mood === currentMood) {
+  // Mood matches - show confirmation instead of suggestion
+  setConfirmedMood(result.mood);
+  setSuggestedMood(null);
+} else {
+  // Different mood - show suggestion
+  setSuggestedMood(result.mood);
+  setConfirmedMood(null);
 }
 ```
 
+### 2. Добавить визуальное подтверждение в MoodSelector
+Показывать галочку или подсветку когда настроение "подтверждено" анализом:
+
+```tsx
+// В MoodSelector.tsx
+{isConfirmed && (
+  <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-500 flex items-center justify-center">
+    <Check className="h-2 w-2 text-white" />
+  </span>
+)}
+```
+
+### 3. Не блокировать подсказки при первом клике
+Изменить логику: `userOverride` должен устанавливаться только если пользователь **явно отклонил** подсказку (кликнул на другое настроение, когда была активная подсказка).
+
+### 4. Понизить threshold до 0.2
+Чтобы система была более отзывчивой:
+```typescript
+const SUGGESTION_THRESHOLD = 0.2;
+```
+
+### 5. Добавить индикатор "анализ работает"
+Показывать маленькую иконку Brain с анимацией во время debounce, чтобы пользователь видел что система активна.
+
 ---
 
-## Новые графики
+## Файлы для изменения
 
-### 1. Line Chart — Активность по дням
+| Файл | Изменения |
+|------|-----------|
+| `src/hooks/usePredictiveMood.ts` | Добавить `confirmedMood`, изменить логику override, понизить threshold |
+| `src/components/MoodSelector.tsx` | Добавить визуальное подтверждение, показать индикатор активности |
+| `src/pages/NewEntry.tsx` | Передать новые props в MoodSelector |
 
-**Назначение**: Показать динамику сессий, записей и AI-сообщений за выбранный период.
+---
 
-```text
-┌────────────────────────────────────────────────┐
-│  Активность по дням                            │
-│                                                │
-│   ●─●                                          │
-│  /   \    ●─●                                  │
-│ ●     \  /   \                   ──── Сессии  │
-│        ●●     \    ●────●        ──── Записи  │
-│                \  /      \       ╌╌╌╌ AI чат  │
-│                 ●●        ●──●                 │
-│                                                │
-│  25 янв   26 янв   27 янв   28 янв   29 янв   │
-└────────────────────────────────────────────────┘
+## Детальные изменения
+
+### usePredictiveMood.ts
+
+```typescript
+// Добавить в интерфейс
+export interface PredictiveMoodResult {
+  suggestedMood: number | null;
+  confirmedMood: number | null;  // NEW: когда анализ подтвердил текущее
+  isAnalyzing: boolean;          // NEW: показать что идёт анализ
+  // ... остальные поля
+}
+
+// Понизить threshold
+const SUGGESTION_THRESHOLD = 0.2;
+
+// В эффекте анализа
+const [isAnalyzing, setIsAnalyzing] = useState(false);
+const [confirmedMood, setConfirmedMood] = useState<number | null>(null);
+
+debounceRef.current = setTimeout(() => {
+  setIsAnalyzing(true);
+  const result = analyzeSentimentLocal(text);
+  setIsAnalyzing(false);
+  
+  if (result.confidence >= SUGGESTION_THRESHOLD) {
+    if (result.mood === currentMood) {
+      // Подтверждаем текущее настроение
+      setConfirmedMood(result.mood);
+      setSuggestedMood(null);
+      trackUsageEvent('autoMoodSuggestions'); // Считаем как suggestion
+    } else {
+      // Предлагаем другое настроение
+      setSuggestedMood(result.mood);
+      setConfirmedMood(null);
+      trackUsageEvent('autoMoodSuggestions');
+    }
+  }
+}, debounceMs);
+
+// Изменить логику userOverride
+// Сбрасывать только если пользователь явно выбрал ДРУГОЕ настроение
+// когда была активная подсказка
+const setUserOverride = useCallback(() => {
+  // Только если была подсказка и пользователь выбрал другое
+  if (suggestedMood !== null) {
+    setUserOverrideState(true);
+  }
+  setSuggestedMood(null);
+  setConfirmedMood(null);
+}, [suggestedMood]);
 ```
 
-**Компоненты Recharts:**
-- `LineChart` с 3 линиями (sessions, entries, aiMessages)
-- `ResponsiveContainer` для адаптивности
-- Кастомный `Tooltip` с датой и значениями
-- `Legend` для переключения видимости серий
+### MoodSelector.tsx
 
-### 2. Bar Chart — AI-функции
+```typescript
+interface MoodSelectorProps {
+  value: number;
+  onChange: (value: number) => void;
+  suggestedMood?: number | null;
+  confirmedMood?: number | null;  // NEW
+  isAnalyzing?: boolean;          // NEW
+  suggestionSource?: 'text' | 'discussion' | 'entry' | null;
+  onSuggestionAccept?: () => void;
+}
 
-**Назначение**: Сравнить использование разных AI-функций.
+// В JSX
+{isSelected && confirmedMood === mood && (
+  <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-500/80 flex items-center justify-center">
+    <Check className="h-2 w-2 text-white" />
+  </span>
+)}
 
-```text
-┌────────────────────────────────────────────────┐
-│  Использование AI                              │
-│                                                │
-│  ████████████████████  123  Чат-сообщения     │
-│  ██████████           45   Биографии          │
-│  ████████████████     89   Авто-теги          │
-│  ████████████         52   Авто-настроение    │
-│                                                │
-└────────────────────────────────────────────────┘
+// Индикатор анализа в заголовке
+{isAnalyzing && (
+  <Brain className="h-3 w-3 text-cyber-sigil animate-pulse" />
+)}
 ```
 
-**Компоненты Recharts:**
-- `BarChart` с горизонтальной ориентацией (`layout="vertical"`)
-- Кастомные цвета для каждой категории
-- Tooltip с абсолютными значениями
+### NewEntry.tsx
 
-### 3. Area Chart — Конверсия AI-подсказок
-
-**Назначение**: Показать тренд принятия автоматических подсказок (mood, tags).
-
-```text
-┌────────────────────────────────────────────────┐
-│  Конверсия подсказок                    78%    │
-│                                                │
-│   ███████████████████████████████████         │
-│   ████████████████████████                    │
-│   █████████████████████████████               │
-│                                                │
-│  ─────  Предложено    ─────  Принято          │
-└────────────────────────────────────────────────┘
+```typescript
+<MoodSelector 
+  value={mood} 
+  onChange={handleMoodChange}
+  suggestedMood={predictiveMood.suggestedMood}
+  confirmedMood={predictiveMood.confirmedMood}
+  isAnalyzing={predictiveMood.isAnalyzing}
+  suggestionSource={predictiveMood.source}
+  onSuggestionAccept={() => {
+    if (predictiveMood.suggestedMood) {
+      setMood(predictiveMood.suggestedMood);
+      trackUsageEvent('autoMoodAccepted');
+    }
+  }}
+/>
 ```
 
-**Примечание**: Для этого графика нужно расширить dailyData в Edge Function, чтобы включить ежедневные данные по конверсии. Пока используем агрегированные данные в виде прогресс-баров (уже реализованы).
+---
+
+## Тестирование
+
+После изменений проверить:
+
+1. **Нейтральный текст**: "Сегодня вторник" → должна появиться галочка на позиции 3
+2. **Позитивный текст**: "Отличный день! 🎉" → должна появиться подсказка на 5
+3. **Смена текста**: После принятия подсказки, продолжить печатать → подсказки должны продолжать появляться
+4. **Индикатор анализа**: При печати видна пульсирующая иконка Brain
 
 ---
 
 ## Технические детали
 
-### Файлы для изменения
-
-| Файл | Изменение |
-|------|-----------|
-| `src/pages/AdminAnalyticsPage.tsx` | Заменить div-бары на Recharts компоненты |
-| `supabase/functions/admin-analytics-summary/index.ts` | (опционально) Добавить больше полей в dailyData |
-
-### Импорты для AdminAnalyticsPage.tsx
-```typescript
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts';
-```
-
-### Подготовка данных для графиков
-```typescript
-// Преобразование dailyData для LineChart
-const chartData = useMemo(() => {
-  if (!analytics?.dailyData) return [];
-  return analytics.dailyData
-    .slice()
-    .reverse() // Хронологический порядок
-    .map(day => ({
-      date: new Date(day.date).toLocaleDateString('ru-RU', { 
-        day: 'numeric', 
-        month: 'short' 
-      }),
-      sessions: day.sessions,
-      entries: day.entries,
-      aiMessages: day.aiMessages,
-    }));
-}, [analytics]);
-
-// Данные для BarChart (AI-функции)
-const aiUsageData = useMemo(() => {
-  if (!analytics) return [];
-  const m = analytics.aggregatedMetrics;
-  return [
-    { name: 'Чат', value: m.aiChatMessages, fill: 'hsl(var(--primary))' },
-    { name: 'Биографии', value: m.aiBiographiesGenerated, fill: 'hsl(var(--chart-2))' },
-    { name: 'Авто-теги', value: m.autoTagsAccepted, fill: 'hsl(var(--chart-3))' },
-    { name: 'Авто-mood', value: m.autoMoodAccepted, fill: 'hsl(var(--chart-4))' },
-  ];
-}, [analytics]);
-```
-
-### Компонент LineChart
-```tsx
-<Card className="bg-card/60">
-  <CardHeader>
-    <CardTitle className="text-base flex items-center gap-2">
-      <TrendingUp className="h-4 w-4 text-violet-400" />
-      Активность по дням
-    </CardTitle>
-  </CardHeader>
-  <CardContent>
-    <div className="h-64">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-          <CartesianGrid 
-            strokeDasharray="3 3" 
-            stroke="hsl(var(--border))" 
-            opacity={0.3} 
-          />
-          <XAxis 
-            dataKey="date" 
-            tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-            axisLine={{ stroke: 'hsl(var(--border))' }}
-            tickLine={false}
-          />
-          <YAxis 
-            tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: 'hsl(var(--card))',
-              border: '1px solid hsl(var(--border))',
-              borderRadius: '8px',
-              fontSize: '12px',
-            }}
-          />
-          <Legend />
-          <Line 
-            type="monotone" 
-            dataKey="sessions" 
-            stroke="hsl(var(--primary))" 
-            strokeWidth={2}
-            dot={{ r: 3 }}
-            name="Сессии"
-          />
-          <Line 
-            type="monotone" 
-            dataKey="entries" 
-            stroke="hsl(var(--chart-2))" 
-            strokeWidth={2}
-            dot={{ r: 3 }}
-            name="Записи"
-          />
-          <Line 
-            type="monotone" 
-            dataKey="aiMessages" 
-            stroke="hsl(var(--chart-3))" 
-            strokeWidth={2}
-            strokeDasharray="5 5"
-            dot={{ r: 3 }}
-            name="AI чат"
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  </CardContent>
-</Card>
-```
-
-### Компонент BarChart (горизонтальный)
-```tsx
-<Card className="bg-card/60">
-  <CardHeader>
-    <CardTitle className="text-base flex items-center gap-2">
-      <Sparkles className="h-4 w-4 text-violet-400" />
-      Использование AI
-    </CardTitle>
-  </CardHeader>
-  <CardContent>
-    <div className="h-48">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart 
-          data={aiUsageData} 
-          layout="vertical" 
-          margin={{ top: 5, right: 30, left: 60, bottom: 5 }}
-        >
-          <CartesianGrid 
-            strokeDasharray="3 3" 
-            stroke="hsl(var(--border))" 
-            opacity={0.3} 
-            horizontal={false}
-          />
-          <XAxis 
-            type="number"
-            tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis 
-            type="category" 
-            dataKey="name"
-            tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }}
-            axisLine={false}
-            tickLine={false}
-            width={60}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: 'hsl(var(--card))',
-              border: '1px solid hsl(var(--border))',
-              borderRadius: '8px',
-            }}
-            formatter={(value) => [value, 'Использований']}
-          />
-          <Bar 
-            dataKey="value" 
-            radius={[0, 4, 4, 0]}
-            fill="hsl(var(--primary))"
-          />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  </CardContent>
-</Card>
-```
-
----
-
-## Структура обновлённой страницы
-
-```text
-┌────────────────────────────────────────────────┐
-│  ← Аналитика                    [7д] [30д] 🔄  │
-├────────────────────────────────────────────────┤
-│                                                │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐          │
-│  │ Сессий  │ │ Записей │ │ AI чат  │  ← Карточки
-│  │   8     │ │   45    │ │  123    │          │
-│  └─────────┘ └─────────┘ └─────────┘          │
-│                                                │
-│  ┌────────────────────────────────────────┐   │
-│  │  📈 Активность по дням                 │   │
-│  │  [LineChart: сессии/записи/AI]         │   │
-│  └────────────────────────────────────────┘   │
-│                                                │
-│  ┌────────────────────────────────────────┐   │
-│  │  ✨ Использование AI                   │   │
-│  │  [BarChart: чат/биографии/теги/mood]   │   │
-│  └────────────────────────────────────────┘   │
-│                                                │
-│  ┌────────────────────────────────────────┐   │
-│  │  📊 Конверсия AI-функций               │   │  ← Уже есть
-│  │  Авто-настроение:  67% ████████░░      │   │
-│  │  Авто-теги:        69% █████████░      │   │
-│  └────────────────────────────────────────┘   │
-│                                                │
-│  ┌────────────────────────────────────────┐   │
-│  │  Версии: v1.1.0  v1.0.9               │   │  ← Уже есть
-│  └────────────────────────────────────────┘   │
-│                                                │
-└────────────────────────────────────────────────┘
-```
-
----
-
-## Цветовая схема
-
-Используем CSS-переменные из Tailwind для консистентности:
-
-| Серия | Переменная | Назначение |
-|-------|------------|------------|
-| Primary | `hsl(var(--primary))` | Сессии, основной цвет |
-| Chart 2 | `hsl(var(--chart-2))` | Записи |
-| Chart 3 | `hsl(var(--chart-3))` | AI сообщения |
-| Chart 4 | `hsl(var(--chart-4))` | Биографии |
-| Chart 5 | `hsl(var(--chart-5))` | Теги |
-
----
-
-## Адаптивность
-
-- На мобильных (< 640px): графики занимают 100% ширины
-- Высота LineChart: 256px (h-64)
-- Высота BarChart: 192px (h-48)
-- `ResponsiveContainer` автоматически подстраивает размер
-
----
-
-## Дополнительные улучшения (опционально)
-
-### 1. Добавить remindersCreated и discussionSessionsStarted
-Расширить Edge Function для агрегации этих метрик.
-
-### 2. Добавить aiReceiptsScanned
-Включить в данные для BarChart.
-
-### 3. Тултипы на русском языке
-```typescript
-const tooltipFormatter = (value: number, name: string) => {
-  const labels: Record<string, string> = {
-    sessions: 'Сессий',
-    entries: 'Записей',
-    aiMessages: 'AI сообщений',
-  };
-  return [value, labels[name] || name];
-};
-```
-
----
-
-## Оценка времени
-
-| Задача | Время |
-|--------|-------|
-| Импорты и подготовка данных | 10 мин |
-| LineChart компонент | 15 мин |
-| BarChart компонент | 15 мин |
-| Стилизация и тестирование | 10 мин |
-| **Итого** | ~50 мин |
+- Изменения затрагивают 3 файла
+- Никаких изменений в Edge Functions или базе данных
+- Обратная совместимость сохранена (новые props опциональны)
+- Время на реализацию: ~30 минут
