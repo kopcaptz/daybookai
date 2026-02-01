@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { BookOpen, Smile, Bell, Flame, Sparkles, Loader2 } from 'lucide-react';
+import { BookOpen, Smile, Bell, Flame, Sparkles, Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { getWeeklyStats, type WeeklyStats } from '@/lib/db';
@@ -27,6 +27,18 @@ function getTrendSymbol(trend: WeeklyStats['moodTrend']): string {
   }
 }
 
+function formatRelativeTime(timestamp: number, language: 'ru' | 'en'): string {
+  const diff = Date.now() - timestamp;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  
+  if (minutes < 1) return language === 'ru' ? 'только что' : 'just now';
+  if (minutes < 60) return language === 'ru' ? `${minutes}м назад` : `${minutes}m ago`;
+  if (hours < 24) return language === 'ru' ? `${hours}ч назад` : `${hours}h ago`;
+  return language === 'ru' ? `${days}д назад` : `${days}d ago`;
+}
+
 function scrollToReminders() {
   const el = document.getElementById('reminders-section');
   if (el) {
@@ -44,6 +56,7 @@ export function WeeklyInsightsWidget() {
   
   // AI Insight state
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [showInsightSheet, setShowInsightSheet] = useState(false);
   const [insight, setInsight] = useState<WeeklyInsight | null>(null);
   
@@ -70,6 +83,9 @@ export function WeeklyInsightsWidget() {
     insightLabel: language === 'ru' ? '💡 Инсайт' : '💡 Insight',
     suggestionLabel: language === 'ru' ? '🎯 Рекомендация' : '🎯 Suggestion',
     generating: language === 'ru' ? 'Генерация...' : 'Generating...',
+    refreshButton: language === 'ru' ? 'Обновить' : 'Refresh',
+    refreshing: language === 'ru' ? 'Обновление...' : 'Refreshing...',
+    refreshed: language === 'ru' ? 'Обновлено' : 'Refreshed',
   };
   
   // Show AI button only if AI is enabled and we have at least 3 entries
@@ -112,6 +128,34 @@ export function WeeklyInsightsWidget() {
       }
     } finally {
       setIsGenerating(false);
+    }
+  };
+  
+  const handleRefreshInsight = async () => {
+    if (!hasValidToken) {
+      openPinDialog();
+      return;
+    }
+    
+    setIsRefreshing(true);
+    try {
+      const result = await getOrGenerateWeeklyInsight(language, true); // force=true
+      
+      if (result.success === true) {
+        setInsight(result.insight);
+        toast.success(labels.refreshed);
+      } else {
+        const errorCode = result.error;
+        if (errorCode === 'token_invalid') {
+          openPinDialog();
+        } else if (errorCode === 'rate_limit_exceeded') {
+          toast.error(language === 'ru' ? 'Слишком много запросов. Подождите немного.' : 'Too many requests. Please wait.');
+        } else {
+          toast.error(language === 'ru' ? 'Ошибка обновления' : 'Refresh failed');
+        }
+      }
+    } finally {
+      setIsRefreshing(false);
     }
   };
   
@@ -315,9 +359,30 @@ export function WeeklyInsightsWidget() {
               {/* Meta info */}
               <p className="text-[10px] text-muted-foreground text-center">
                 {language === 'ru' 
-                  ? `На основе ${insight.sourceEntryCount} записей` 
-                  : `Based on ${insight.sourceEntryCount} entries`}
+                  ? `Сгенерировано: ${formatRelativeTime(insight.generatedAt, language)} • ${insight.sourceEntryCount} записей` 
+                  : `Generated: ${formatRelativeTime(insight.generatedAt, language)} • ${insight.sourceEntryCount} entries`}
               </p>
+              
+              {/* Refresh button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshInsight}
+                disabled={isRefreshing}
+                className="w-full mt-3 text-xs gap-1.5"
+              >
+                {isRefreshing ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    {labels.refreshing}
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-3 w-3" />
+                    {labels.refreshButton}
+                  </>
+                )}
+              </Button>
             </div>
           )}
         </SheetContent>

@@ -42,8 +42,8 @@ async function getWeeklyEntries(): Promise<DiaryEntry[]> {
     .between(startDate, endDate, true, true)
     .toArray();
 
-  // Filter: only AI-allowed (non-private) entries
-  return entries.filter(e => e.aiAllowed);
+  // Filter: only AI-allowed AND non-private entries (double check for safety)
+  return entries.filter(e => !e.isPrivate && e.aiAllowed !== false);
 }
 
 /**
@@ -159,14 +159,18 @@ export async function generateWeeklyInsight(
 /**
  * Get or generate weekly insight
  * First checks cache, then generates if needed
+ * @param forceRegenerate - Skip cache and generate fresh insight
  */
 export async function getOrGenerateWeeklyInsight(
-  language: 'ru' | 'en'
+  language: 'ru' | 'en',
+  forceRegenerate: boolean = false
 ): Promise<{ success: true; insight: WeeklyInsight; fromCache: boolean } | { success: false; error: string }> {
-  // Try cache first
-  const cached = await getCachedWeeklyInsight();
-  if (cached) {
-    return { success: true, insight: cached, fromCache: true };
+  // Try cache first (unless force regenerate)
+  if (!forceRegenerate) {
+    const cached = await getCachedWeeklyInsight();
+    if (cached) {
+      return { success: true, insight: cached, fromCache: true };
+    }
   }
 
   // Generate new
