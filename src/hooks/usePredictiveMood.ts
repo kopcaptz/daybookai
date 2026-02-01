@@ -12,8 +12,12 @@ import { loadAISettings } from '@/lib/aiConfig';
 import { trackUsageEvent } from '@/lib/usageTracker';
 
 export interface PredictiveMoodResult {
-  // Current suggested mood from analysis
+  // Current suggested mood from analysis (different from current)
   suggestedMood: number | null;
+  // Confirmed mood (matches current selection)
+  confirmedMood: number | null;
+  // Whether analysis is in progress
+  isAnalyzing: boolean;
   // Source of the suggestion
   source: 'text' | 'discussion' | 'entry' | null;
   // Confidence level
@@ -37,7 +41,7 @@ interface UsePredictiveMoodOptions {
 
 const DEFAULT_DEBOUNCE_MS = 500;
 const MIN_TEXT_LENGTH = 10; // Don't analyze very short text
-const SUGGESTION_THRESHOLD = 0.3; // Minimum confidence to show suggestion
+const SUGGESTION_THRESHOLD = 0.15; // Lowered for better responsiveness
 
 export function usePredictiveMood({
   text,
@@ -46,6 +50,8 @@ export function usePredictiveMood({
   debounceMs = DEFAULT_DEBOUNCE_MS,
 }: UsePredictiveMoodOptions): PredictiveMoodResult {
   const [suggestedMood, setSuggestedMood] = useState<number | null>(null);
+  const [confirmedMood, setConfirmedMood] = useState<number | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [source, setSource] = useState<'text' | 'discussion' | 'entry' | null>(null);
   const [confidence, setConfidence] = useState(0);
   const [userOverride, setUserOverrideState] = useState(false);
@@ -53,6 +59,7 @@ export function usePredictiveMood({
   
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTextRef = useRef('');
+  const lastAnalyzedMoodRef = useRef<number | null>(null);
 
   // Check if auto-mood is enabled in settings
   const aiSettings = loadAISettings();
@@ -90,38 +97,49 @@ export function usePredictiveMood({
     // Skip if text is too short
     if (text.trim().length < MIN_TEXT_LENGTH) {
       // If we have inherited context, use it
-      if (inheritedContext && suggestedMood === null) {
+      if (inheritedContext && suggestedMood === null && confirmedMood === null) {
         setSuggestedMood(inheritedContext.mood);
         setSource(inheritedContext.source === 'discussion' ? 'discussion' : 'entry');
       }
+      setIsAnalyzing(false);
       return;
     }
     
     // Skip if text hasn't meaningfully changed
     if (text === lastTextRef.current) return;
     
+    // Show analyzing indicator
+    setIsAnalyzing(true);
+    
     debounceRef.current = setTimeout(() => {
       lastTextRef.current = text;
       
       const result = analyzeSentimentLocal(text);
+      lastAnalyzedMoodRef.current = result.mood;
       
-      // Only suggest if confidence is above threshold
+      setIsAnalyzing(false);
+      
+      // Only process if confidence is above threshold
       if (result.confidence >= SUGGESTION_THRESHOLD) {
-        // Don't suggest if it matches current mood
-        if (result.mood !== currentMood) {
-          setSuggestedMood(result.mood);
+        if (result.mood === currentMood) {
+          // Mood matches current selection - show confirmation
+          setConfirmedMood(result.mood);
+          setSuggestedMood(null);
           setSource('text');
           setConfidence(result.confidence);
-          // Track suggestion event
           trackUsageEvent('autoMoodSuggestions');
         } else {
-          // Mood matches, clear suggestion
-          setSuggestedMood(null);
-          setSource(null);
+          // Different mood - show suggestion
+          setSuggestedMood(result.mood);
+          setConfirmedMood(null);
+          setSource('text');
+          setConfidence(result.confidence);
+          trackUsageEvent('autoMoodSuggestions');
         }
       } else {
-        // Low confidence, clear suggestion
+        // Low confidence - clear both states
         setSuggestedMood(null);
+        setConfirmedMood(null);
         setSource(null);
       }
     }, debounceMs);
@@ -133,25 +151,48 @@ export function usePredictiveMood({
     };
   }, [text, currentMood, autoMoodEnabled, userOverride, debounceMs, inheritedContext]);
 
-  // Set user override (when user manually changes mood)
+  // Re-evaluate when currentMood changes (user clicked a different mood)
+  useEffect(() => {
+    if (!autoMoodEnabled || userOverride) return;
+    
+    // If we have an analyzed mood, update states based on new selection
+    if (lastAnalyzedMoodRef.current !== null) {
+      if (lastAnalyzedMoodRef.current === currentMood) {
+        setConfirmedMood(currentMood);
+        setSuggestedMood(null);
+      } else {
+        setSuggestedMood(lastAnalyzedMoodRef.current);
+        setConfirmedMood(null);
+      }
+    }
+  }, [currentMood, autoMoodEnabled, userOverride]);
+
+  // Set user override - only if rejecting an active suggestion
   const setUserOverride = useCallback(() => {
-    setUserOverrideState(true);
+    // Only set override if user clicked away from an active suggestion
+    if (suggestedMood !== null) {
+      setUserOverrideState(true);
+    }
+    // Clear suggestion but keep confirmed if matching
     setSuggestedMood(null);
-    setSource(null);
-  }, []);
+  }, [suggestedMood]);
 
   // Reset override (for new entries)
   const resetOverride = useCallback(() => {
     setUserOverrideState(false);
     setSuggestedMood(null);
-    setSource(null);
+    setConfirmedMood(null);
+    setIsAnalyzing(false);
     lastTextRef.current = '';
+    lastAnalyzedMoodRef.current = null;
   }, []);
 
   // If not enabled, return neutral state
   if (!autoMoodEnabled) {
     return {
       suggestedMood: null,
+      confirmedMood: null,
+      isAnalyzing: false,
       source: null,
       confidence: 0,
       userOverride: false,
@@ -163,6 +204,8 @@ export function usePredictiveMood({
 
   return {
     suggestedMood,
+    confirmedMood,
+    isAnalyzing,
     source,
     confidence,
     userOverride,
