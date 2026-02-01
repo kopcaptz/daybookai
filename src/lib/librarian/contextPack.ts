@@ -117,6 +117,7 @@ async function buildFromScope(
 
 /**
  * Build context pack from global search (find mode)
+ * IMPORTANT: Always returns entries - falls back to recent if no keyword matches
  */
 async function buildFromSearch(
   query: string
@@ -124,27 +125,54 @@ async function buildFromSearch(
   const allEntries = await db.entries.toArray();
   const scores = new Map<number, number>();
   
-  // Filter and score entries
-  const entries = allEntries
-    .filter(entry => !entry.isPrivate && entry.aiAllowed !== false)
-    .map(entry => {
-      const score = calculateRelevanceScore(entry.text + ' ' + entry.tags.join(' '), query);
-      scores.set(entry.id!, score);
-      return { entry, score };
-    })
-    .filter(({ score }) => score > 0)
-    .sort((a, b) => {
-      if (a.score !== b.score) return b.score - a.score;
-      return b.entry.createdAt - a.entry.createdAt;
-    })
-    .slice(0, CONTEXT_LIMITS.maxEvidence * 2) // Get more for selection
-    .map(({ entry }) => entry);
+  // Filter out private entries
+  const eligibleEntries = allEntries.filter(
+    entry => !entry.isPrivate && entry.aiAllowed !== false
+  );
   
-  return { entries, scores };
+  // Check if query has meaningful search terms (words > 2 chars)
+  const searchTerms = query.trim().split(/\s+/).filter(word => word.length > 2);
+  const hasSearchTerms = searchTerms.length > 0;
+  
+  if (hasSearchTerms) {
+    // Score and filter entries by keyword relevance
+    const matchedEntries = eligibleEntries
+      .map(entry => {
+        const score = calculateRelevanceScore(entry.text + ' ' + entry.tags.join(' '), query);
+        scores.set(entry.id!, score);
+        return { entry, score };
+      })
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => {
+        if (a.score !== b.score) return b.score - a.score;
+        return b.entry.createdAt - a.entry.createdAt;
+      })
+      .slice(0, CONTEXT_LIMITS.maxEvidence * 2)
+      .map(({ entry }) => entry);
+    
+    // If we found keyword matches, return them
+    if (matchedEntries.length > 0) {
+      return { entries: matchedEntries, scores };
+    }
+  }
+  
+  // FALLBACK: Return most recent entries when no keyword matches
+  // This ensures agent always has context for general queries like "найди последнюю запись"
+  const recentEntries = eligibleEntries
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, CONTEXT_LIMITS.maxEvidence);
+  
+  // Assign minimal score for fallback entries
+  for (const entry of recentEntries) {
+    scores.set(entry.id!, 0.1);
+  }
+  
+  return { entries: recentEntries, scores };
 }
 
 /**
  * Load relevant biographies for context
+ * Now supports findMode by loading biographies for found entries + fallback to recent
  */
 async function loadRelevantBiographies(
   entryIds: number[],
@@ -154,8 +182,8 @@ async function loadRelevantBiographies(
   const biographies: StoredBiography[] = [];
   const addedDates = new Set<string>();
   
-  // 1. Get dates from selected entries (scope mode)
-  if (!findMode && entryIds.length > 0) {
+  // 1. Get biographies for provided entry dates (works for both modes now)
+  if (entryIds.length > 0) {
     const entries = await Promise.all(entryIds.map(id => db.entries.get(id)));
     const dates = [...new Set(entries.filter(Boolean).map(e => e!.date))];
     
@@ -168,7 +196,7 @@ async function loadRelevantBiographies(
     }
   }
   
-  // 2. Search by keywords (findMode or additional matches)
+  // 2. Search by keywords (additional matches)
   if (query.trim()) {
     const allBios = await db.biographies.toArray();
     const matches = allBios.filter(bio => {
@@ -193,6 +221,22 @@ async function loadRelevantBiographies(
     });
     
     for (const bio of matches) {
+      if (!addedDates.has(bio.date)) {
+        biographies.push(bio);
+        addedDates.add(bio.date);
+      }
+    }
+  }
+  
+  // 3. FALLBACK: If findMode and still empty, load most recent biographies
+  if (findMode && biographies.length === 0) {
+    const allBios = await db.biographies.toArray();
+    const completeBios = allBios
+      .filter(bio => bio.status === 'complete' && bio.biography !== null)
+      .sort((a, b) => b.date.localeCompare(a.date)) // Sort by date descending
+      .slice(0, CONTEXT_LIMITS.maxBiographies);
+    
+    for (const bio of completeBios) {
       if (!addedDates.has(bio.date)) {
         biographies.push(bio);
         addedDates.add(bio.date);
@@ -268,9 +312,11 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
     totalChars += contextEntry.length;
   }
   
-  // Load and add biographies
+  // Load and add biographies - pass found entry IDs in findMode too
   const biographies = await loadRelevantBiographies(
-    findMode ? [] : sessionScope.entryIds,
+    findMode 
+      ? selectedEntries.map(e => e.id!).slice(0, 8)  // Use found entries in findMode
+      : sessionScope.entryIds,
     userQuery,
     findMode
   );

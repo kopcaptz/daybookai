@@ -100,6 +100,14 @@ function DiscussionChatContent() {
       });
       setCurrentEvidence(contextPack);
       
+      // Show warning if no context was found
+      if (contextPack.evidence.length === 0) {
+        toast.info(
+          language === 'ru' 
+            ? 'Записи не найдены. Попробуйте другой запрос или добавьте записи через "Контекст".'
+            : 'No entries found. Try a different query or add entries via "Context".'
+        );
+      }
       // Call AI
       const response = await sendDiscussionMessage({
         sessionId,
