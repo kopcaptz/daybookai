@@ -19,6 +19,10 @@ export interface DiaryEntry {
   createdAt: number; // timestamp
   updatedAt: number; // timestamp
   attachmentCounts?: AttachmentCounts; // Aggregated counts for calendar (optional for backward compat)
+  // AI Analysis fields (v11)
+  moodSource?: 'user' | 'ai';      // Who set the mood
+  semanticTags?: string[];          // AI-generated hidden tags for search
+  aiAnalyzedAt?: number;            // Timestamp of last AI analysis
 }
 
 // Типы для вложений
@@ -428,6 +432,32 @@ class DaybookDatabase extends Dexie {
       reminders: '++id, entryId, status, dueAt, createdAt',
       discussionSessions: '++id, updatedAt, lastMessageAt, pinned',
       discussionMessages: '++id, sessionId, [sessionId+createdAt]',
+    });
+
+    // Version 11: Add AI analysis fields to entries (moodSource, semanticTags, aiAnalyzedAt)
+    this.version(11).stores({
+      entries: '++id, date, mood, *tags, *semanticTags, isPrivate, aiAllowed, createdAt, updatedAt, aiAnalyzedAt',
+      attachments: '++id, entryId, kind, createdAt',
+      drafts: 'id, updatedAt',
+      biographies: 'date, status, generatedAt',
+      attachmentInsights: 'attachmentId, createdAt',
+      receipts: '++id, entryId, date, storeName, createdAt, updatedAt',
+      receiptItems: '++id, receiptId, category',
+      scanLogs: '++id, timestamp',
+      reminders: '++id, entryId, status, dueAt, createdAt',
+      discussionSessions: '++id, updatedAt, lastMessageAt, pinned',
+      discussionMessages: '++id, sessionId, [sessionId+createdAt]',
+    }).upgrade(tx => {
+      // Migrate existing entries: mark as user-set mood, empty semantic tags
+      return tx.table('entries').toCollection().modify(entry => {
+        if (entry.moodSource === undefined) {
+          entry.moodSource = 'user';  // All existing entries are user-set
+        }
+        if (entry.semanticTags === undefined) {
+          entry.semanticTags = [];
+        }
+        // aiAnalyzedAt remains undefined for old entries
+      });
     });
   }
 }

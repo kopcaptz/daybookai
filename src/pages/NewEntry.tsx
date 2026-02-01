@@ -26,6 +26,7 @@ import {
   requestBiographyGeneration,
   getBiography,
 } from '@/lib/biographyService';
+import { analyzeEntryInBackground } from '@/lib/entryAnalysisService';
 import { loadAISettings } from '@/lib/aiConfig';
 import { usePredictiveMood } from '@/hooks/usePredictiveMood';
 import { useAutoTags } from '@/hooks/useAutoTags';
@@ -76,6 +77,7 @@ function EntryEditorContent() {
 
   const [text, setText] = useState('');
   const [mood, setMood] = useState(3);
+  const [userChangedMood, setUserChangedMood] = useState(false); // Track if user explicitly set mood
   const [tags, setTags] = useState<string[]>([]);
   const [isPrivate, setIsPrivate] = useState(false);
   const [attachments, setAttachments] = useState<AttachmentPreview[]>([]);
@@ -118,6 +120,7 @@ function EntryEditorContent() {
   // Handle mood change with user override tracking
   const handleMoodChange = (newMood: number) => {
     setMood(newMood);
+    setUserChangedMood(true); // User explicitly chose a mood
     // Only set override if rejecting an active suggestion
     if (predictiveMood.suggestedMood !== null && newMood !== predictiveMood.suggestedMood) {
       predictiveMood.setUserOverride();
@@ -344,6 +347,20 @@ function EntryEditorContent() {
 
       // Check for stale biography if saving to a past date
       const aiSettings = loadAISettings();
+
+      // Trigger background AI analysis for non-private entries
+      if (!isPrivate && savedEntry.aiAllowed !== false) {
+        // User explicitly set mood if they changed it OR if mood is not default (3)
+        const userSetMood = userChangedMood || mood !== 3;
+        analyzeEntryInBackground(
+          entryId!,
+          text,
+          tags,
+          userSetMood,
+          language
+        ).catch(err => console.warn('[EntryAnalysis] Background error:', err));
+      }
+      
       if (aiSettings.enabled && saveDate < today && !wasUpdatePrompted(saveDate)) {
         const isStale = await isBiographyStale(saveDate);
         if (isStale) {

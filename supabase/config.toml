@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.ai-chat]
 verify_jwt = false
 
+[functions.ai-entry-analyze]
+verify_jwt = false
+
 [functions.ai-pin-verify]
 verify_jwt = false
 
