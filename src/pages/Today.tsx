@@ -21,8 +21,6 @@ import { GrimoireIcon } from '@/components/icons/SigilIcon';
 import { BreathingSigil } from '@/components/icons/BreathingSigil';
 import { useOracleWhisper } from '@/hooks/useOracleWhisper';
 import { useHeroTransition } from '@/hooks/useHeroTransition';
-import { EtherealPinModal } from '@/components/ethereal/EtherealPinModal';
-import { SecretMoon } from '@/components/SecretMoon';
 import { cn } from '@/lib/utils';
 
 function TodayContent() {
@@ -55,9 +53,6 @@ function TodayContent() {
   // Hero transition for sigil click
   const { startTransition } = useHeroTransition();
   const sigilRef = useRef<HTMLButtonElement>(null);
-  
-  // Ethereal Layer secret entry
-  const [showEtherealPin, setShowEtherealPin] = useState(false);
   
   // Check if we should enter select mode from URL
   useEffect(() => {
@@ -147,13 +142,8 @@ function TodayContent() {
     <div className="min-h-screen pb-24 cyber-noise rune-grid">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
         {/* Brand header */}
-        <div className="flex items-center justify-between">
-          {/* Secret Moon - left corner */}
-          <div className="shrink-0 w-10 flex justify-start">
-            <SecretMoon onUnlock={() => setShowEtherealPin(true)} />
-          </div>
-          
-          <div className="flex-1 text-center min-w-0 relative select-none">
+        <div className="flex items-center justify-center">
+          <div className="text-center min-w-0 relative select-none">
             <h1 className="text-xl font-serif font-medium text-foreground tracking-wide truncate">
               {t('app.name')}
             </h1>
@@ -161,22 +151,22 @@ function TodayContent() {
               {t('app.subtitle')}
             </p>
           </div>
-          
-          <div className="shrink-0 w-10 flex justify-end">
-            {/* Select button - only show when there are entries */}
-            {entries.length > 0 && !selectionMode ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectionMode(true)}
-                className="text-xs gap-1.5"
-              >
-                <CheckSquare className="h-4 w-4" />
-                {t('today.select')}
-              </Button>
-            ) : null}
-          </div>
         </div>
+        
+        {/* Select button - positioned absolute right */}
+        {entries.length > 0 && !selectionMode && (
+          <div className="absolute top-6 right-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectionMode(true)}
+              className="text-xs gap-1.5"
+            >
+              <CheckSquare className="h-4 w-4" />
+              {t('today.select')}
+            </Button>
+          </div>
+        )}
 
         {/* Date, entry count, and quick reminder button */}
         <div className="mt-3 flex items-center justify-between">
@@ -333,12 +323,6 @@ function TodayContent() {
       <QuickReminderSheet
         open={quickReminderOpen}
         onOpenChange={setQuickReminderOpen}
-      />
-      
-      {/* Ethereal PIN Modal */}
-      <EtherealPinModal
-        open={showEtherealPin}
-        onOpenChange={setShowEtherealPin}
       />
     </div>
   );

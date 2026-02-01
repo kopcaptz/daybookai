@@ -1,11 +1,10 @@
 import { useState, useRef } from 'react';
-import { X, Paperclip, Send, Sparkles, Loader2 } from 'lucide-react';
+import { X, Paperclip, Send, Sparkles, Loader2, ChevronDown } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,16 +16,28 @@ import { getExtendedDeviceInfo } from '@/lib/deviceInfo';
 import { getScanStats } from '@/lib/scanDiagnostics';
 import { loadAISettings } from '@/lib/aiConfig';
 import { trackUsageEvent } from '@/lib/usageTracker';
+import { useSecretLongPressSwipe } from '@/hooks/useSecretLongPressSwipe';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
-export function FeedbackModal() {
+interface FeedbackModalProps {
+  onSecretUnlock?: () => void;
+}
+
+export function FeedbackModal({ onSecretUnlock }: FeedbackModalProps) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { handlers, progress, phase } = useSecretLongPressSwipe({
+    onSecretUnlock: () => onSecretUnlock?.(),
+    onNormalClick: () => setOpen(true),
+    holdDuration: 3000,
+    swipeDistance: 100,
+  });
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -148,30 +159,72 @@ export function FeedbackModal() {
     }
   };
 
+  // SVG progress ring calculation
+  const circumference = 2 * Math.PI * 14;
+  const strokeDashoffset = circumference - (progress / 100) * circumference;
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <button
-          className={cn(
-            "fixed top-4 left-4 z-50",
-            "p-2 rounded-lg",
-            "bg-card/80 backdrop-blur-sm",
-            "border border-border/50",
-            "text-cyber-sigil",
-            "transition-all duration-300",
-            "hover:border-cyber-sigil/50",
-            "hover:shadow-[0_0_15px_hsl(var(--sigil)/0.3)]",
-            "focus:outline-none focus:ring-2 focus:ring-cyber-sigil/50",
-            "group"
+      {/* Button with secret gesture - no DialogTrigger, manual control */}
+      <button
+        {...handlers}
+        className={cn(
+          "fixed top-4 left-4 z-50",
+          "p-2 rounded-lg",
+          "bg-card/80 backdrop-blur-sm",
+          "border border-border/50",
+          "text-cyber-sigil",
+          "transition-all duration-300",
+          "hover:border-cyber-sigil/50",
+          "hover:shadow-[0_0_15px_hsl(var(--sigil)/0.3)]",
+          "focus:outline-none focus:ring-2 focus:ring-cyber-sigil/50",
+          "group touch-none select-none",
+          phase !== 'idle' && "scale-110"
+        )}
+        aria-label="Связь с Мастером"
+      >
+        <div className="relative">
+          <GrimoireIcon className="h-6 w-6" />
+          <Sparkles className="absolute -top-1 -right-1 h-3 w-3 text-cyber-glow opacity-0 group-hover:opacity-100 transition-opacity" />
+          
+          {/* Progress ring during hold */}
+          {phase !== 'idle' && (
+            <svg 
+              className="absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] -rotate-90 pointer-events-none"
+              viewBox="0 0 32 32"
+            >
+              <circle
+                cx="16"
+                cy="16"
+                r="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="text-primary/20"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                r="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeDasharray={circumference}
+                strokeDashoffset={strokeDashoffset}
+                strokeLinecap="round"
+                className="text-primary transition-all duration-100"
+              />
+            </svg>
           )}
-          aria-label="Связь с Мастером"
-        >
-          <div className="relative">
-            <GrimoireIcon className="h-6 w-6" />
-            <Sparkles className="absolute -top-1 -right-1 h-3 w-3 text-cyber-glow opacity-0 group-hover:opacity-100 transition-opacity" />
+        </div>
+        
+        {/* Swipe hint after hold complete */}
+        {phase === 'swiping' && (
+          <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-primary animate-bounce">
+            <ChevronDown className="h-4 w-4" />
           </div>
-        </button>
-      </DialogTrigger>
+        )}
+      </button>
 
       <DialogContent 
         className={cn(

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -13,6 +13,7 @@ import { GlobalAIPinDialog } from "@/components/GlobalAIPinDialog";
 import { HeroTransitionProvider } from "@/components/HeroTransition";
 import { FloatingChatButton } from "@/components/FloatingChatButton";
 import { FeedbackModal } from "@/components/FeedbackModal";
+import { EtherealPinModal } from "@/components/ethereal/EtherealPinModal";
 
 import { I18nProvider } from "@/lib/i18n";
 import { initNotificationListeners, setNavigationCallback } from "@/lib/notifications";
@@ -80,6 +81,7 @@ function PageLoader() {
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [showEtherealPin, setShowEtherealPin] = useState(false);
   
   // Initialize notification listeners and navigation callback on mount
   useEffect(() => {
@@ -182,8 +184,14 @@ function AppContent() {
           {!hideNav && <BottomNav />}
           {!hideFloatingChat && <FloatingChatButton />}
           
-          {!hideFeedback && <FeedbackModal />}
+          {!hideFeedback && <FeedbackModal onSecretUnlock={() => setShowEtherealPin(true)} />}
           <InstallPrompt />
+          
+          {/* Ethereal PIN Modal - global */}
+          <EtherealPinModal 
+            open={showEtherealPin} 
+            onOpenChange={setShowEtherealPin} 
+          />
         </div>
       </div>
     </HeroTransitionProvider>
