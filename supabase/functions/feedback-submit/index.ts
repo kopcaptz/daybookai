@@ -27,13 +27,16 @@ serve(async (req) => {
     const message = formData.get("message") as string;
     const image = formData.get("image") as File | null;
     const deviceInfoStr = formData.get("device_info") as string;
+    const appVersion = formData.get("app_version") as string | null;
+    const diagnosticsStr = formData.get("diagnostics") as string | null;
 
     console.log({ 
       requestId, 
       action: "feedback_received", 
       hasImage: !!image,
       imageSize: image?.size,
-      imageName: image?.name 
+      imageName: image?.name,
+      appVersion,
     });
 
     if (!message || typeof message !== "string" || !message.trim()) {
@@ -48,6 +51,16 @@ serve(async (req) => {
     if (deviceInfoStr) {
       try {
         deviceInfo = JSON.parse(deviceInfoStr);
+      } catch {
+        // Ignore parsing errors
+      }
+    }
+
+    // Parse diagnostics
+    let diagnostics = {};
+    if (diagnosticsStr) {
+      try {
+        diagnostics = JSON.parse(diagnosticsStr);
       } catch {
         // Ignore parsing errors
       }
@@ -97,6 +110,8 @@ serve(async (req) => {
       message: message.trim(),
       image_url: imageUrl,
       device_info: deviceInfo,
+      app_version: appVersion || null,
+      diagnostics: diagnostics,
       status: "new",
     });
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Server, LogOut, ChevronRight, Sparkles, Bell } from 'lucide-react';
+import { Mail, Server, LogOut, ChevronRight, Sparkles, Bell, Bug, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +37,7 @@ export default function AdminDashboardPage() {
   const { isAuthenticated, tokenData, logout } = useAdminAccess();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [newFeedbackCount, setNewFeedbackCount] = useState(0);
+  const [newCrashCount, setNewCrashCount] = useState(0);
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(true);
 
   // Redirect if not authenticated
@@ -46,13 +47,14 @@ export default function AdminDashboardPage() {
     }
   }, [isAuthenticated, navigate]);
 
-  // Fetch new feedback count
+  // Fetch new feedback and crash counts
   useEffect(() => {
     if (!tokenData?.token) return;
 
-    const fetchNewCount = async () => {
+    const fetchCounts = async () => {
       try {
-        const response = await fetch(
+        // Fetch feedback count
+        const feedbackResponse = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-feedback-list?status=new&limit=100`,
           {
             headers: {
@@ -61,18 +63,33 @@ export default function AdminDashboardPage() {
             },
           }
         );
-        const data = await response.json();
-        if (data.success) {
-          setNewFeedbackCount(data.total || 0);
+        const feedbackData = await feedbackResponse.json();
+        if (feedbackData.success) {
+          setNewFeedbackCount(feedbackData.total || 0);
+        }
+
+        // Fetch crash count
+        const crashResponse = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-crashes-list?status=new`,
+          {
+            headers: {
+              'x-admin-token': tokenData.token,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+        const crashData = await crashResponse.json();
+        if (crashData.success) {
+          setNewCrashCount(crashData.crashes?.length || 0);
         }
       } catch (error) {
-        console.error('Failed to fetch new feedback count:', error);
+        console.error('Failed to fetch counts:', error);
       } finally {
         setIsLoadingFeedback(false);
       }
     };
 
-    fetchNewCount();
+    fetchCounts();
   }, [tokenData]);
 
   const handleLogoutClick = () => {
@@ -92,6 +109,20 @@ export default function AdminDashboardPage() {
       path: '/admin/feedback',
       badge: newFeedbackCount > 0 ? newFeedbackCount : undefined,
       badgeVariant: 'destructive',
+    },
+    {
+      title: 'Crash Reports',
+      description: 'Ошибки приложения',
+      icon: Bug,
+      path: '/admin/crashes',
+      badge: newCrashCount > 0 ? newCrashCount : undefined,
+      badgeVariant: 'destructive',
+    },
+    {
+      title: 'Аналитика',
+      description: 'Статистика использования',
+      icon: BarChart3,
+      path: '/admin/analytics',
     },
     {
       title: 'Система',
