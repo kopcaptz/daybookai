@@ -7,6 +7,7 @@ import { SessionCard } from '@/components/discussions/SessionCard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
+import { trackUsageEvent } from '@/lib/usageTracker';
 import { GrimoireIcon, SealGlyph } from '@/components/icons/SigilIcon';
 import {
   AlertDialog,
@@ -46,6 +47,7 @@ function DiscussionsListContent() {
         scope: { entryIds: [], docIds: [] },
         modeDefault: 'discuss',
       });
+      trackUsageEvent('discussionSessionsStarted');
       navigate(`/discussions/${id}`);
     } finally {
       setCreating(false);

@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { useI18n } from '@/lib/i18n';
 import { BiographyPrompt } from '@/hooks/useBiographyPrompts';
+import { trackUsageEvent } from '@/lib/usageTracker';
 
 interface BiographyPromptDialogProps {
   prompt: BiographyPrompt | null;
@@ -19,6 +20,11 @@ interface BiographyPromptDialogProps {
   onGenerate: () => void;
   onDismiss: () => void;
 }
+
+const handleGenerateWithTracking = (onGenerate: () => void) => {
+  trackUsageEvent('aiBiographiesGenerated');
+  onGenerate();
+};
 
 export function BiographyPromptDialog({
   prompt,
@@ -67,7 +73,7 @@ export function BiographyPromptDialog({
         
         <DialogFooter className="flex-col gap-2 sm:flex-col">
           <Button
-            onClick={onGenerate}
+            onClick={() => handleGenerateWithTracking(onGenerate)}
             disabled={isGenerating}
             className="w-full gap-2"
           >

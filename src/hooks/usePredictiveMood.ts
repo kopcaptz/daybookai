@@ -9,6 +9,7 @@ import {
   InheritedMoodContext 
 } from '@/lib/sentimentService';
 import { loadAISettings } from '@/lib/aiConfig';
+import { trackUsageEvent } from '@/lib/usageTracker';
 
 export interface PredictiveMoodResult {
   // Current suggested mood from analysis
@@ -111,6 +112,8 @@ export function usePredictiveMood({
           setSuggestedMood(result.mood);
           setSource('text');
           setConfidence(result.confidence);
+          // Track suggestion event
+          trackUsageEvent('autoMoodSuggestions');
         } else {
           // Mood matches, clear suggestion
           setSuggestedMood(null);

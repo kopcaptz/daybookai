@@ -12,6 +12,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useI18n } from '@/lib/i18n';
+import { trackUsageEvent } from '@/lib/usageTracker';
 import { SigilIcon, GrimoireIcon, SealGlyph } from '@/components/icons/SigilIcon';
 import { ChatImageCapture } from '@/components/chat/ChatImageCapture';
 import { ChatImageConsent } from '@/components/chat/ChatImageConsent';
@@ -245,6 +246,7 @@ function ChatContent() {
             return newMessages;
           });
           setIsLoading(false);
+          trackUsageEvent('aiChatMessages');
         },
         onError: (error) => {
           toast.error(error.message);
@@ -348,6 +350,7 @@ function ChatContent() {
             return newMessages;
           });
           setIsLoading(false);
+          trackUsageEvent('aiChatMessages');
         },
         onError: (error) => {
           toast.error(error.message);
