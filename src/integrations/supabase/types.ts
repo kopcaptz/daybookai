@@ -65,6 +65,309 @@ export type Database = {
         }
         Relationships: []
       }
+      ethereal_calendar_events: {
+        Row: {
+          all_day: boolean | null
+          created_at: string | null
+          creator_id: string
+          description: string | null
+          end_at: string | null
+          id: string
+          room_id: string
+          start_at: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          all_day?: boolean | null
+          created_at?: string | null
+          creator_id: string
+          description?: string | null
+          end_at?: string | null
+          id?: string
+          room_id: string
+          start_at: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          all_day?: boolean | null
+          created_at?: string | null
+          creator_id?: string
+          description?: string | null
+          end_at?: string | null
+          id?: string
+          room_id?: string
+          start_at?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ethereal_calendar_events_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_room_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ethereal_calendar_events_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ethereal_chronicles: {
+        Row: {
+          author_id: string
+          content: string
+          created_at: string | null
+          id: string
+          room_id: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          author_id: string
+          content: string
+          created_at?: string | null
+          id?: string
+          room_id: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          author_id?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          room_id?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ethereal_chronicles_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_room_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ethereal_chronicles_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ethereal_messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          room_id: string
+          sender_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          room_id: string
+          sender_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          room_id?: string
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ethereal_messages_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ethereal_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_room_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ethereal_room_members: {
+        Row: {
+          device_id: string
+          display_name: string
+          id: string
+          joined_at: string | null
+          last_seen_at: string | null
+          room_id: string
+        }
+        Insert: {
+          device_id: string
+          display_name: string
+          id?: string
+          joined_at?: string | null
+          last_seen_at?: string | null
+          room_id: string
+        }
+        Update: {
+          device_id?: string
+          display_name?: string
+          id?: string
+          joined_at?: string | null
+          last_seen_at?: string | null
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ethereal_room_members_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ethereal_rooms: {
+        Row: {
+          created_at: string | null
+          id: string
+          member_limit: number | null
+          name: string | null
+          owner_member_id: string | null
+          pin_hash: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          member_limit?: number | null
+          name?: string | null
+          owner_member_id?: string | null
+          pin_hash: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          member_limit?: number | null
+          name?: string | null
+          owner_member_id?: string | null
+          pin_hash?: string
+        }
+        Relationships: []
+      }
+      ethereal_sessions: {
+        Row: {
+          channel_key: string
+          created_at: string | null
+          expires_at: string
+          id: string
+          member_id: string
+          room_id: string
+        }
+        Insert: {
+          channel_key: string
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          member_id: string
+          room_id: string
+        }
+        Update: {
+          channel_key?: string
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          member_id?: string
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ethereal_sessions_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_room_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ethereal_sessions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ethereal_tasks: {
+        Row: {
+          assignee_id: string | null
+          created_at: string | null
+          creator_id: string
+          description: string | null
+          due_at: string | null
+          id: string
+          room_id: string
+          status: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          assignee_id?: string | null
+          created_at?: string | null
+          creator_id: string
+          description?: string | null
+          due_at?: string | null
+          id?: string
+          room_id: string
+          status?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          assignee_id?: string | null
+          created_at?: string | null
+          creator_id?: string
+          description?: string | null
+          due_at?: string | null
+          id?: string
+          room_id?: string
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ethereal_tasks_assignee_id_fkey"
+            columns: ["assignee_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_room_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ethereal_tasks_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_room_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ethereal_tasks_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feedback: {
         Row: {
           admin_notes: string | null
@@ -169,7 +472,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      ethereal_join_room: {
+        Args: {
+          p_channel_key: string
+          p_device_id: string
+          p_display_name: string
+          p_room_id: string
+          p_ttl_seconds?: number
+        }
+        Returns: {
+          current_count: number
+          is_new: boolean
+          is_owner: boolean
+          member_id: string
+          session_id: string
+        }[]
+      }
     }
     Enums: {
       feedback_status: "new" | "read" | "resolved" | "archived"

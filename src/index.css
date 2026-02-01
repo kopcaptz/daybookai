@@ -817,3 +817,86 @@
 .hero-backdrop.active {
   opacity: 1;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Ethereal Layer — Pastel Theme (isolated scope)
+═══════════════════════════════════════════════════════════════ */
+.ethereal {
+  --background: 340 30% 97%;
+  --foreground: 340 15% 20%;
+
+  --card: 340 25% 99%;
+  --card-foreground: 340 15% 20%;
+
+  --primary: 340 60% 70%;
+  --primary-foreground: 340 10% 10%;
+
+  --secondary: 200 40% 90%;
+  --secondary-foreground: 200 30% 30%;
+
+  --accent: 280 50% 80%;
+  --accent-foreground: 280 30% 20%;
+
+  --muted: 340 15% 92%;
+  --muted-foreground: 340 10% 50%;
+
+  --border: 340 20% 88%;
+  --input: 340 20% 92%;
+  --ring: 340 60% 70%;
+
+  --radius: 1.25rem;
+
+  /* Ethereal mood colors */
+  --mood-1: 350 60% 65%;
+  --mood-2: 30 60% 70%;
+  --mood-3: 180 50% 60%;
+  --mood-4: 140 50% 55%;
+  --mood-5: 280 50% 70%;
+
+  /* Ethereal glow */
+  --glow-primary: 340 70% 75%;
+  --glow-secondary: 280 60% 70%;
+  --sigil: 340 60% 70%;
+  --rune: 280 40% 75%;
+
+  --ethereal-shadow: 0 4px 20px hsl(340 30% 80% / 0.3);
+
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.ethereal .panel-glass {
+  border-radius: 1.25rem;
+  box-shadow: var(--ethereal-shadow);
+  background: hsl(var(--card) / 0.9);
+  border-color: hsl(var(--border));
+}
+
+/* Dark mode overrides for ethereal */
+.dark .ethereal {
+  --background: 340 20% 12%;
+  --foreground: 340 15% 92%;
+
+  --card: 340 18% 16%;
+  --card-foreground: 340 15% 92%;
+
+  --primary: 340 55% 65%;
+  --primary-foreground: 340 20% 8%;
+
+  --secondary: 200 30% 22%;
+  --secondary-foreground: 200 25% 85%;
+
+  --muted: 340 15% 20%;
+  --muted-foreground: 340 10% 65%;
+
+  --border: 340 15% 28%;
+  --input: 340 15% 22%;
+
+  --ethereal-shadow: 0 4px 20px hsl(340 30% 10% / 0.4);
+}
+
+/* Disable cyber noise/grid in ethereal */
+.ethereal .cyber-noise::before,
+.ethereal .rune-grid::after {
+  display: none;
+}
