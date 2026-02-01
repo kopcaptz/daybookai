@@ -312,6 +312,18 @@ export function saveBioSettings(settings: Partial<BiographySettings>): void {
   localStorage.setItem(BIO_SETTINGS_KEY, JSON.stringify({ ...current, ...settings }));
 }
 
+// Weekly Insight type
+export interface WeeklyInsight {
+  weekStart: string;       // YYYY-MM-DD (Monday) - primary key
+  generatedAt: number;     // timestamp
+  summary: string;
+  dominantThemes: string[];
+  moodPattern: string;
+  insight: string;
+  suggestion: string;
+  sourceEntryCount: number;
+}
+
 // База данных Dexie
 class DaybookDatabase extends Dexie {
   entries!: EntityTable<DiaryEntry, 'id'>;
@@ -326,6 +338,7 @@ class DaybookDatabase extends Dexie {
   discussionSessions!: EntityTable<DiscussionSession, 'id'>;
   discussionMessages!: EntityTable<DiscussionMessage, 'id'>;
   analysisQueue!: EntityTable<AnalysisQueueItem, 'id'>;
+  weeklyInsights!: EntityTable<WeeklyInsight, 'weekStart'>;
 
   constructor() {
     super('DaybookDB');
@@ -517,6 +530,23 @@ class DaybookDatabase extends Dexie {
           entry.titleSource = undefined;
         }
       });
+    });
+
+    // Version 14: Add Weekly Insights table for AI weekly summaries
+    this.version(14).stores({
+      entries: '++id, date, mood, *tags, *semanticTags, isPrivate, aiAllowed, createdAt, updatedAt, aiAnalyzedAt',
+      attachments: '++id, entryId, kind, createdAt',
+      drafts: 'id, updatedAt',
+      biographies: 'date, status, generatedAt',
+      attachmentInsights: 'attachmentId, createdAt',
+      receipts: '++id, entryId, date, storeName, createdAt, updatedAt',
+      receiptItems: '++id, receiptId, category',
+      scanLogs: '++id, timestamp',
+      reminders: '++id, entryId, status, dueAt, createdAt',
+      discussionSessions: '++id, updatedAt, lastMessageAt, pinned',
+      discussionMessages: '++id, sessionId, [sessionId+createdAt]',
+      analysisQueue: '++id, entryId, status, createdAt',
+      weeklyInsights: 'weekStart, generatedAt',
     });
   }
 }
