@@ -1,326 +1,359 @@
 
-# Post-Save AI Analysis Pipeline
+# Очередь Анализа для Offline-режима
 
-## Обзор
+## Проблема
 
-Реализация системы автоматического AI-анализа записей после сохранения. Агент будет определять настроение и генерировать семантические теги для улучшения поиска и контекста в Discussions.
+Сейчас если при сохранении записи пропал интернет или Edge Function недоступна:
+1. `analyzeEntryInBackground()` падает с ошибкой
+2. Ошибка логируется через `console.warn`
+3. Запись остаётся **навсегда без анализа** (нет `semanticTags`, возможно неправильный `mood`)
 
----
-
-## Архитектура
-
-```text
-┌──────────────────────────────────────────────────────────────────┐
-│                        NewEntry.tsx                              │
-│                                                                  │
-│   [Сохранить] ─→ createEntry() ─→ IndexedDB                      │
-│                        │                                         │
-│                        ▼                                         │
-│               analyzeEntryInBackground(entryId)                  │
-│                        │                                         │
-│                        ▼                                         │
-│   ┌────────────────────────────────────────────────────────────┐ │
-│   │  Edge Function: ai-entry-analyze                           │ │
-│   │  ─────────────────────────────────────────────────────────│ │
-│   │  Input: { text, tags, language }                          │ │
-│   │  Output: { mood, confidence, semanticTags[] }             │ │
-│   │  Model: gemini-2.5-flash-lite (~$0.0001/запрос)           │ │
-│   └────────────────────────────────────────────────────────────┘ │
-│                        │                                         │
-│                        ▼                                         │
-│               updateEntry(id, { aiMood, semanticTags })          │
-│                        │                                         │
-│                        ▼                                         │
-│                    IndexedDB                                     │
-└──────────────────────────────────────────────────────────────────┘
-
-             ┌───────────────────────────────────────┐
-             │         Discussions Agent             │
-             │                                       │
-             │   buildContextPack()                  │
-             │         │                             │
-             │         ▼                             │
-             │   Поиск по: text + tags + semanticTags│
-             │         │                             │
-             │         ▼                             │
-             │   Более точные результаты             │
-             └───────────────────────────────────────┘
+```typescript
+// Текущий код — ошибка просто игнорируется
+analyzeEntryInBackground(...).catch(err => console.warn('[EntryAnalysis] Background error:', err));
 ```
 
 ---
 
-## Логика определения настроения
+## Решение: Analysis Queue в IndexedDB
 
-| Условие | Действие |
-|---------|----------|
-| Пользователь выбрал mood ≠ 3 (по умолчанию) | Сохранить как есть, AI не переопределяет |
-| Пользователь оставил mood = 3 (дефолт) | AI определяет mood и применяет автоматически |
-| isPrivate = true | Пропустить AI анализ полностью |
-| aiAllowed = false | Пропустить AI анализ полностью |
-
----
-
-## Изменения в базе данных
-
-### Расширение DiaryEntry (db.ts)
+### Новая таблица `analysisQueue`
 
 ```typescript
-export interface DiaryEntry {
-  // Существующие поля...
+interface AnalysisQueueItem {
   id?: number;
-  date: string;
-  text: string;
-  mood: number;           // 1-5 (user-set or AI-set)
-  tags: string[];         // visible user tags
-  isPrivate: boolean;
-  aiAllowed: boolean;
+  entryId: number;
+  userSetMood: boolean;
+  language: 'ru' | 'en';
   createdAt: number;
-  updatedAt: number;
-  attachmentCounts?: AttachmentCounts;
-  
-  // НОВЫЕ ПОЛЯ:
-  moodSource?: 'user' | 'ai';      // Кто установил mood
-  semanticTags?: string[];          // AI-generated hidden tags
-  aiAnalyzedAt?: number;            // Timestamp последнего анализа
+  lastAttempt?: number;
+  attempts: number;
+  status: 'pending' | 'processing' | 'failed';
+  errorMessage?: string;
 }
 ```
 
-### Миграция Dexie (Version 11)
+### Логика работы
 
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                      NewEntry.tsx                               │
+│   [Сохранить] ──→ analyzeEntryInBackground()                    │
+│                           │                                     │
+│                    ┌──────┴──────┐                              │
+│                    │   Успех?    │                              │
+│                    └──────┬──────┘                              │
+│                     Да ↙     ↘ Нет                              │
+│                   ✓ Done    ↓                                   │
+│                         addToQueue(entryId)                     │
+│                              │                                  │
+│                              ▼                                  │
+│   ┌─────────────────────────────────────────────────────────┐   │
+│   │              analysisQueue (IndexedDB)                  │   │
+│   │   entryId=42, attempts=0, status='pending'              │   │
+│   └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│               processAnalysisQueue() — Background Worker        │
+│                                                                 │
+│   Триггеры:                                                     │
+│   • App startup (main.tsx)                                      │
+│   • navigator.onLine event                                      │
+│   • Каждые 5 минут (setInterval)                                │
+│                                                                 │
+│   Логика:                                                       │
+│   1. Получить pending items (ORDER BY createdAt, LIMIT 5)       │
+│   2. Для каждого:                                               │
+│      - Проверить entry существует и не private                  │
+│      - Вызвать Edge Function                                    │
+│      - Успех → удалить из очереди                               │
+│      - Ошибка → attempts++, если attempts >= 3 → status=failed  │
+│   3. Между запросами: delay 500ms (rate limiting)               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Изменения в файлах
+
+### 1. src/lib/db.ts — Добавить таблицу
+
+**Новый интерфейс:**
 ```typescript
-this.version(11).stores({
-  entries: '++id, date, mood, *tags, *semanticTags, isPrivate, aiAllowed, createdAt, updatedAt',
-  // остальные таблицы без изменений...
-}).upgrade(tx => {
-  return tx.table('entries').toCollection().modify(entry => {
-    entry.moodSource = 'user';  // Все старые записи — user-set
-    entry.semanticTags = [];
-    entry.aiAnalyzedAt = undefined;
-  });
+export interface AnalysisQueueItem {
+  id?: number;
+  entryId: number;
+  userSetMood: boolean;
+  language: 'ru' | 'en';
+  createdAt: number;
+  lastAttempt?: number;
+  attempts: number;
+  status: 'pending' | 'processing' | 'failed';
+  errorMessage?: string;
+}
+```
+
+**Dexie Version 12:**
+```typescript
+this.version(12).stores({
+  // ... all existing tables ...
+  analysisQueue: '++id, entryId, status, createdAt',
 });
 ```
 
----
+### 2. src/lib/entryAnalysisService.ts — Добавить queue logic
 
-## Edge Function: ai-entry-analyze
-
-### Endpoint
-`POST /functions/v1/ai-entry-analyze`
-
-### Input
-```typescript
-interface AnalyzeEntryRequest {
-  text: string;           // Текст записи
-  tags: string[];         // Пользовательские теги
-  language: 'ru' | 'en';  // Язык для ответа
-}
-```
-
-### Output
-```typescript
-interface AnalyzeEntryResponse {
-  mood: number;           // 1-5
-  confidence: number;     // 0-1
-  semanticTags: string[]; // 3-8 скрытых тегов для поиска
-  requestId: string;
-}
-```
-
-### Промпт для AI
-
-```text
-Analyze the following diary entry and return:
-1. mood (1-5): emotional tone of the entry
-   1 = very negative/sad/angry
-   2 = somewhat negative/tired/frustrated  
-   3 = neutral/calm/routine
-   4 = positive/happy/satisfied
-   5 = very positive/excited/grateful
-
-2. semanticTags (3-8 tags): hidden search keywords that capture:
-   - Main topics (work, family, health, hobby, travel, etc.)
-   - Activities (meeting, exercise, cooking, reading, etc.)
-   - Emotions (stress, joy, anxiety, peace, etc.)
-   - Time patterns (morning routine, weekend, holiday, etc.)
-
-Rules:
-- Tags in lowercase, single words or short phrases
-- Focus on searchable concepts, not style
-- Include both explicit and implicit themes
-
-Entry text:
-"""
-{text}
-"""
-
-User tags: [{tags}]
-
-Return ONLY valid JSON:
-{
-  "mood": <number 1-5>,
-  "confidence": <number 0-1>,
-  "semanticTags": ["tag1", "tag2", ...]
-}
-```
-
----
-
-## Клиентский сервис
-
-### entryAnalysisService.ts
+**Новые функции:**
 
 ```typescript
-interface AnalysisResult {
-  mood: number;
-  confidence: number;
-  semanticTags: string[];
+/**
+ * Add entry to analysis queue (for retry later)
+ */
+export async function addToAnalysisQueue(
+  entryId: number,
+  userSetMood: boolean,
+  language: 'ru' | 'en'
+): Promise<void> {
+  // Check if already queued
+  const existing = await db.analysisQueue.where('entryId').equals(entryId).first();
+  if (existing) return;
+  
+  await db.analysisQueue.add({
+    entryId,
+    userSetMood,
+    language,
+    createdAt: Date.now(),
+    attempts: 0,
+    status: 'pending',
+  });
+  
+  console.log(`[AnalysisQueue] Entry ${entryId} added to queue`);
 }
 
 /**
- * Анализирует запись через AI после сохранения
- * Вызывается в фоне, не блокирует UI
+ * Process pending items in queue
+ * Called on app startup, online event, and periodically
  */
+export async function processAnalysisQueue(): Promise<void> {
+  // Skip if offline
+  if (!navigator.onLine) {
+    console.log('[AnalysisQueue] Offline, skipping');
+    return;
+  }
+  
+  // Skip if AI not configured
+  const aiSettings = loadAISettings();
+  if (!aiSettings.enabled || !isAITokenValid()) {
+    console.log('[AnalysisQueue] AI not ready, skipping');
+    return;
+  }
+  
+  // Get pending items (oldest first, max 5)
+  const pending = await db.analysisQueue
+    .where('status')
+    .equals('pending')
+    .sortBy('createdAt');
+  
+  const batch = pending.slice(0, 5);
+  if (batch.length === 0) return;
+  
+  console.log(`[AnalysisQueue] Processing ${batch.length} items`);
+  
+  for (const item of batch) {
+    try {
+      // Mark as processing
+      await db.analysisQueue.update(item.id!, { 
+        status: 'processing',
+        lastAttempt: Date.now(),
+      });
+      
+      // Get entry
+      const entry = await db.entries.get(item.entryId);
+      if (!entry || entry.isPrivate || entry.aiAllowed === false) {
+        // Entry deleted or now private — remove from queue
+        await db.analysisQueue.delete(item.id!);
+        continue;
+      }
+      
+      // Already analyzed? Remove from queue
+      if (entry.aiAnalyzedAt) {
+        await db.analysisQueue.delete(item.id!);
+        continue;
+      }
+      
+      // Call AI
+      const result = await callAnalyzeEdgeFunction(entry.text, entry.tags, item.language);
+      
+      // Update entry
+      const updates: Partial<DiaryEntry> = {
+        semanticTags: result.semanticTags,
+        aiAnalyzedAt: Date.now(),
+      };
+      
+      if (!item.userSetMood) {
+        updates.mood = result.mood;
+        updates.moodSource = 'ai';
+      }
+      
+      await updateEntry(item.entryId, updates);
+      
+      // Success — remove from queue
+      await db.analysisQueue.delete(item.id!);
+      console.log(`[AnalysisQueue] Entry ${item.entryId} analyzed successfully`);
+      
+    } catch (error) {
+      const attempts = item.attempts + 1;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      if (attempts >= 3) {
+        // Max retries — mark as failed
+        await db.analysisQueue.update(item.id!, {
+          status: 'failed',
+          attempts,
+          errorMessage,
+        });
+        console.warn(`[AnalysisQueue] Entry ${item.entryId} failed after ${attempts} attempts`);
+      } else {
+        // Will retry later
+        await db.analysisQueue.update(item.id!, {
+          status: 'pending',
+          attempts,
+          errorMessage,
+        });
+        console.log(`[AnalysisQueue] Entry ${item.entryId} retry ${attempts}/3`);
+      }
+    }
+    
+    // Rate limiting delay between requests
+    await new Promise(r => setTimeout(r, 500));
+  }
+}
+
+/**
+ * Get queue stats (for debugging/settings)
+ */
+export async function getQueueStats(): Promise<{
+  pending: number;
+  failed: number;
+}> {
+  const [pending, failed] = await Promise.all([
+    db.analysisQueue.where('status').equals('pending').count(),
+    db.analysisQueue.where('status').equals('failed').count(),
+  ]);
+  return { pending, failed };
+}
+
+/**
+ * Retry all failed items (reset to pending)
+ */
+export async function retryFailedAnalysis(): Promise<number> {
+  const failed = await db.analysisQueue.where('status').equals('failed').toArray();
+  
+  for (const item of failed) {
+    await db.analysisQueue.update(item.id!, {
+      status: 'pending',
+      attempts: 0,
+      errorMessage: undefined,
+    });
+  }
+  
+  return failed.length;
+}
+```
+
+**Изменить analyzeEntryInBackground:**
+
+```typescript
 export async function analyzeEntryInBackground(
   entryId: number,
   text: string,
   tags: string[],
-  userSetMood: boolean,  // true если пользователь явно выбрал mood
+  userSetMood: boolean,
   language: 'ru' | 'en'
 ): Promise<void> {
-  // Проверки...
+  // ... existing checks ...
   
   try {
     const result = await callAnalyzeEdgeFunction(text, tags, language);
-    
-    const updates: Partial<DiaryEntry> = {
-      semanticTags: result.semanticTags,
-      aiAnalyzedAt: Date.now(),
-    };
-    
-    // Применяем AI mood только если user не выбирал сам
-    if (!userSetMood) {
-      updates.mood = result.mood;
-      updates.moodSource = 'ai';
-    }
-    
-    await updateEntry(entryId, updates);
+    // ... update entry ...
     
   } catch (error) {
-    console.warn('[EntryAnalysis] Failed:', error);
-    // Тихо проглатываем ошибку — анализ опционален
+    console.warn('[EntryAnalysis] Failed:', error instanceof Error ? error.message : error);
+    
+    // NEW: Add to queue for retry
+    await addToAnalysisQueue(entryId, userSetMood, language);
   }
 }
 ```
 
----
-
-## Интеграция в NewEntry.tsx
-
-### Отслеживание user override
+### 3. src/main.tsx — Запуск процессора очереди
 
 ```typescript
-// Добавить состояние
-const [userChangedMood, setUserChangedMood] = useState(false);
+import { processAnalysisQueue } from '@/lib/entryAnalysisService';
 
-// Изменить handleMoodChange
-const handleMoodChange = (newMood: number) => {
-  setMood(newMood);
-  setUserChangedMood(true);  // Пользователь явно выбрал
-  // ...existing code
-};
+// Process queue on app startup
+setTimeout(() => processAnalysisQueue(), 3000);
+
+// Process queue when coming back online
+window.addEventListener('online', () => {
+  console.log('[App] Back online, processing analysis queue');
+  processAnalysisQueue();
+});
+
+// Periodic processing (every 5 minutes)
+setInterval(() => processAnalysisQueue(), 5 * 60 * 1000);
 ```
 
-### Вызов анализа после сохранения
+### 4. src/pages/SettingsPage.tsx — Опционально: показать статус очереди
 
-```typescript
-// В handleSave, после успешного сохранения:
-if (saveSuccess && !isPrivate && savedEntry.aiAllowed) {
-  // Запускаем анализ в фоне (не ждём)
-  analyzeEntryInBackground(
-    entryId,
-    text,
-    tags,
-    userChangedMood || mood !== 3,  // User override если менял или не дефолт
-    language
-  ).catch(console.warn);
-}
-```
+В секции AI Settings:
 
----
+```tsx
+const [queueStats, setQueueStats] = useState({ pending: 0, failed: 0 });
 
-## Улучшение поиска в Discussions
+useEffect(() => {
+  getQueueStats().then(setQueueStats);
+}, []);
 
-### contextPack.ts — расширенный поиск
-
-```typescript
-function calculateRelevanceScore(
-  entry: DiaryEntry, 
-  query: string
-): number {
-  const lowerQuery = query.toLowerCase();
-  const keywords = lowerQuery.split(/\s+/).filter(k => k.length > 2);
-  
-  let score = 0;
-  
-  // 1. Поиск по тексту (существующий)
-  for (const keyword of keywords) {
-    if (entry.text.toLowerCase().includes(keyword)) {
-      score += 1;
-    }
-  }
-  
-  // 2. Поиск по visible tags (существующий)
-  for (const tag of entry.tags) {
-    if (keywords.some(k => tag.toLowerCase().includes(k))) {
-      score += 1.5;  // Теги важнее
-    }
-  }
-  
-  // 3. НОВОЕ: Поиск по semantic tags
-  if (entry.semanticTags) {
-    for (const stag of entry.semanticTags) {
-      if (keywords.some(k => stag.toLowerCase().includes(k))) {
-        score += 2;  // Семантические теги ещё важнее
-      }
-    }
-  }
-  
-  return score;
-}
+// В UI, если есть pending/failed:
+{(queueStats.pending > 0 || queueStats.failed > 0) && (
+  <div className="text-xs text-muted-foreground">
+    {queueStats.pending > 0 && `${queueStats.pending} в очереди анализа`}
+    {queueStats.failed > 0 && (
+      <>
+        {queueStats.pending > 0 && ' • '}
+        <button onClick={handleRetryFailed} className="underline">
+          {queueStats.failed} не удалось — повторить
+        </button>
+      </>
+    )}
+  </div>
+)}
 ```
 
 ---
 
-## Файлы для создания/изменения
-
-| Файл | Действие | Описание |
-|------|----------|----------|
-| `src/lib/db.ts` | Изменить | Добавить поля в DiaryEntry, миграция v11 |
-| `src/lib/entryAnalysisService.ts` | Создать | Сервис фонового AI анализа |
-| `supabase/functions/ai-entry-analyze/index.ts` | Создать | Edge Function для анализа |
-| `supabase/config.toml` | Изменить | Добавить новую функцию |
-| `src/pages/NewEntry.tsx` | Изменить | Интегрировать вызов анализа |
-| `src/lib/librarian/contextPack.ts` | Изменить | Поиск по semanticTags |
-
----
-
-## Обработка ошибок
+## Обработка Edge Cases
 
 | Сценарий | Поведение |
 |----------|-----------|
-| AI недоступен | Запись сохраняется без анализа |
-| Rate limit (429) | Тихое логирование, retry не нужен |
-| Невалидный ответ | Игнорируем, оставляем как есть |
-| isPrivate entry | Пропускаем анализ полностью |
+| Запись удалена пока в очереди | При обработке проверяем existence, удаляем из очереди |
+| Запись стала private | При обработке проверяем isPrivate, удаляем из очереди |
+| Уже проанализирована (вручную) | Проверяем aiAnalyzedAt, удаляем из очереди |
+| AI token истёк | Skip queue processing, подождёт до re-auth |
+| 3+ неудачных попытки | status='failed', можно retry через Settings |
 
 ---
 
-## Безопасность и приватность
+## Файлы для изменения
 
-1. **Приватные записи**: Полностью исключены из анализа
-2. **Логирование**: Только metadata (entryId, model, latency), никогда текст
-3. **semanticTags**: Хранятся локально в IndexedDB, не синхронизируются
-4. **AI Token**: Требуется для вызова Edge Function
+| Файл | Действие | Описание |
+|------|----------|----------|
+| `src/lib/db.ts` | Изменить | Добавить AnalysisQueueItem, версия 12 |
+| `src/lib/entryAnalysisService.ts` | Изменить | Добавить queue functions |
+| `src/main.tsx` | Изменить | Запустить processAnalysisQueue |
+| `src/pages/SettingsPage.tsx` | Изменить | Показать статус очереди (опционально) |
 
 ---
 
@@ -328,7 +361,7 @@ function calculateRelevanceScore(
 
 | Метрика | Значение |
 |---------|----------|
-| Стоимость | ~$0.0001/запись |
-| Latency | ~500-800ms (фоновая) |
-| Время разработки | ~2 часа |
-| Модель | gemini-2.5-flash-lite |
+| Надёжность | Записи всегда будут проанализированы |
+| Latency | Нулевая — сохранение не блокируется |
+| Storage | ~100 bytes на item в очереди |
+| Время реализации | ~45 минут |
