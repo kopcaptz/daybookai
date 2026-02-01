@@ -234,6 +234,30 @@ export interface DiscussionMessage {
       body: string;
       format: 'markdown' | 'text';
     };
+    analysisArtifact?: {
+      type: 'analysis';
+      summary: string;
+      patterns?: string[];
+      risks?: string[];
+      conclusions?: string[];
+    };
+    computeArtifact?: {
+      type: 'compute';
+      inputs: { label: string; value: string }[];
+      steps: string[];
+      result: string;
+      assumptions?: string[];
+    };
+    planArtifact?: {
+      type: 'plan';
+      title: string;
+      items: {
+        text: string;
+        priority?: 'high' | 'medium' | 'low';
+        dueHint?: string;
+      }[];
+    };
+    questions?: string[];
   };
 }
 

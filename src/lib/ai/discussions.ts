@@ -14,15 +14,46 @@ export interface DiscussionAIRequest {
   language: 'ru' | 'en';
 }
 
+export interface AnalysisArtifact {
+  type: 'analysis';
+  summary: string;
+  patterns?: string[];
+  risks?: string[];
+  conclusions?: string[];
+}
+
+export interface ComputeArtifact {
+  type: 'compute';
+  inputs: { label: string; value: string }[];
+  steps: string[];
+  result: string;
+  assumptions?: string[];
+}
+
+export interface PlanArtifact {
+  type: 'plan';
+  title: string;
+  items: {
+    text: string;
+    priority?: 'high' | 'medium' | 'low';
+    dueHint?: string;
+  }[];
+}
+
+export interface DraftArtifact {
+  type: string;
+  title: string;
+  body: string;
+  format: 'markdown' | 'text';
+}
+
 export interface DiscussionAIResponse {
   answer: string;
   usedEvidenceIds: string[];
-  draftArtifact?: {
-    type: string;
-    title: string;
-    body: string;
-    format: 'markdown' | 'text';
-  };
+  draftArtifact?: DraftArtifact;
+  analysisArtifact?: AnalysisArtifact;
+  computeArtifact?: ComputeArtifact;
+  planArtifact?: PlanArtifact;
   questions?: string[];
 }
 
@@ -37,24 +68,90 @@ function getAITokenHeader(): Record<string, string> {
 
 const MODE_INSTRUCTIONS: Record<DiscussionMode, { ru: string; en: string }> = {
   discuss: {
-    ru: 'Режим ОБСУЖДЕНИЕ: исследуй идеи, задавай уточняющие вопросы, помогай осмыслить записи.',
-    en: 'Mode DISCUSS: explore ideas, ask clarifying questions, help understand the entries.',
+    ru: 'Режим ОБСУЖДЕНИЕ: исследуй идеи, задавай уточняющие вопросы, помогай осмыслить записи. В конце предложи 2-3 follow-up вопроса в поле "questions".',
+    en: 'Mode DISCUSS: explore ideas, ask clarifying questions, help understand the entries. At the end, suggest 2-3 follow-up questions in the "questions" field.',
   },
   analyze: {
-    ru: 'Режим АНАЛИЗ: структурируй информацию, выяви закономерности, причины, риски, сделай выводы.',
-    en: 'Mode ANALYZE: structure information, identify patterns, causes, risks, make conclusions.',
+    ru: `Режим АНАЛИЗ: структурируй информацию, выяви закономерности, причины, риски, сделай выводы.
+ОБЯЗАТЕЛЬНО верни analysisArtifact:
+{
+  "analysisArtifact": {
+    "type": "analysis",
+    "summary": "Общий вывод в 1-2 предложения",
+    "patterns": ["Закономерность 1", "Закономерность 2"],
+    "risks": ["Риск 1"],
+    "conclusions": ["Вывод/рекомендация 1", "Вывод 2"]
+  }
+}`,
+    en: `Mode ANALYZE: structure information, identify patterns, causes, risks, make conclusions.
+MUST return analysisArtifact:
+{
+  "analysisArtifact": {
+    "type": "analysis",
+    "summary": "Overall conclusion in 1-2 sentences",
+    "patterns": ["Pattern 1", "Pattern 2"],
+    "risks": ["Risk 1"],
+    "conclusions": ["Conclusion/recommendation 1", "Conclusion 2"]
+  }
+}`,
   },
   draft: {
     ru: 'Режим ЧЕРНОВИК: создай чистый текст (письмо/сообщение/пост). Верни в draftArtifact с type, title, body.',
     en: 'Mode DRAFT: produce a clean text draft (email/message/post). Return in draftArtifact with type, title, body.',
   },
   compute: {
-    ru: 'Режим РАСЧЁТ: покажи шаги вычислений и допущения. Запроси недостающие числа если нужно.',
-    en: 'Mode COMPUTE: show calculation steps and assumptions. Ask for missing numbers if needed.',
+    ru: `Режим РАСЧЁТ: покажи шаги вычислений и допущения. Запроси недостающие числа если нужно.
+ОБЯЗАТЕЛЬНО верни computeArtifact:
+{
+  "computeArtifact": {
+    "type": "compute",
+    "inputs": [{"label": "Цена", "value": "1500 ₽"}, {"label": "Количество", "value": "3"}],
+    "steps": ["1500 × 3 = 4500"],
+    "result": "4500 ₽",
+    "assumptions": ["Допущение если есть"]
+  }
+}`,
+    en: `Mode COMPUTE: show calculation steps and assumptions. Ask for missing numbers if needed.
+MUST return computeArtifact:
+{
+  "computeArtifact": {
+    "type": "compute",
+    "inputs": [{"label": "Price", "value": "$15"}, {"label": "Quantity", "value": "3"}],
+    "steps": ["15 × 3 = 45"],
+    "result": "$45",
+    "assumptions": ["Assumption if any"]
+  }
+}`,
   },
   plan: {
-    ru: 'Режим ПЛАН: создай пошаговый план с чеклистом действий.',
-    en: 'Mode PLAN: create a step-by-step plan with action checklist.',
+    ru: `Режим ПЛАН: создай пошаговый план с чеклистом действий.
+ОБЯЗАТЕЛЬНО верни planArtifact:
+{
+  "planArtifact": {
+    "type": "plan",
+    "title": "Название плана",
+    "items": [
+      {"text": "Задача 1", "priority": "high", "dueHint": "сегодня"},
+      {"text": "Задача 2", "priority": "medium", "dueHint": "завтра"},
+      {"text": "Задача 3", "priority": "low"}
+    ]
+  }
+}
+priority: "high" | "medium" | "low". dueHint: временная подсказка.`,
+    en: `Mode PLAN: create a step-by-step plan with action checklist.
+MUST return planArtifact:
+{
+  "planArtifact": {
+    "type": "plan",
+    "title": "Plan title",
+    "items": [
+      {"text": "Task 1", "priority": "high", "dueHint": "today"},
+      {"text": "Task 2", "priority": "medium", "dueHint": "tomorrow"},
+      {"text": "Task 3", "priority": "low"}
+    ]
+  }
+}
+priority: "high" | "medium" | "low". dueHint: time hint.`,
   },
 };
 
@@ -91,13 +188,14 @@ ${contextText || 'Контекст не предоставлен.'}
   "answer": "Твой ответ с цитатами [E1], [B1] источников",
   "usedEvidenceIds": ["E1", "B1"],
   "draftArtifact": null,
-  "questions": []
+  "analysisArtifact": null,
+  "computeArtifact": null,
+  "planArtifact": null,
+  "questions": ["Вопрос для продолжения 1?", "Вопрос 2?"]
 }
 
-Если режим ЧЕРНОВИК, включи draftArtifact:
-{
-  "draftArtifact": { "type": "email|message|post", "title": "Тема", "body": "Текст черновика", "format": "markdown" }
-}`;
+Включай артефакт соответствующий режиму (draftArtifact для ЧЕРНОВИК, analysisArtifact для АНАЛИЗ, computeArtifact для РАСЧЁТ, planArtifact для ПЛАН).
+Всегда предлагай 2-3 follow-up вопроса в "questions".`;
   }
   
   return `You are Cyber-Grimoire assistant for the Discussions feature.
@@ -125,13 +223,14 @@ RESPONSE FORMAT (JSON):
   "answer": "Your response text with [E1], [B1] citations",
   "usedEvidenceIds": ["E1", "B1"],
   "draftArtifact": null,
-  "questions": []
+  "analysisArtifact": null,
+  "computeArtifact": null,
+  "planArtifact": null,
+  "questions": ["Follow-up question 1?", "Question 2?"]
 }
 
-If mode is DRAFT, include draftArtifact:
-{
-  "draftArtifact": { "type": "email|message|post", "title": "Subject", "body": "Draft text", "format": "markdown" }
-}`;
+Include the artifact matching the mode (draftArtifact for DRAFT, analysisArtifact for ANALYZE, computeArtifact for COMPUTE, planArtifact for PLAN).
+Always suggest 2-3 follow-up questions in "questions".`;
 }
 
 function buildHistoryMessages(history: DiscussionMessage[]): Array<{ role: 'user' | 'assistant'; content: string }> {
@@ -156,6 +255,9 @@ function parseAIResponse(responseText: string, allEvidence: EvidenceRef[]): Disc
         answer: parsed.answer || responseText,
         usedEvidenceIds: parsed.usedEvidenceIds || allEvidence.map(e => e.id),
         draftArtifact: parsed.draftArtifact || undefined,
+        analysisArtifact: parsed.analysisArtifact || undefined,
+        computeArtifact: parsed.computeArtifact || undefined,
+        planArtifact: parsed.planArtifact || undefined,
         questions: parsed.questions || [],
       };
     }
@@ -168,6 +270,9 @@ function parseAIResponse(responseText: string, allEvidence: EvidenceRef[]): Disc
     answer: responseText,
     usedEvidenceIds: allEvidence.map(e => e.id),
     draftArtifact: undefined,
+    analysisArtifact: undefined,
+    computeArtifact: undefined,
+    planArtifact: undefined,
     questions: [],
   };
 }
