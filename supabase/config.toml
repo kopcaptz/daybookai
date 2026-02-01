@@ -21,6 +21,9 @@ verify_jwt = false
 [functions.ai-whisper]
 verify_jwt = false
 
+[functions.ai-weekly-insights]
+verify_jwt = false
+
 [functions.feedback-submit]
 verify_jwt = false
 
