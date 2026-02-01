@@ -64,12 +64,17 @@ export function MoodSelector({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{t('mood.title')}</span>
-          {/* Brain indicator: pulsing when analyzing, static when suggestion active */}
+          {/* Brain indicator and suggestion text */}
           {showBrainIndicator && (
-            <span className="flex items-center gap-1 text-xs text-cyber-sigil/70">
+            <span className="flex items-center gap-1 text-xs text-cyber-sigil font-medium">
               <Brain className={cn("h-3 w-3", isAnalyzing && "animate-pulse")} />
-              {!isAnalyzing && suggestionSource && (
-                <span className="hidden sm:inline">{getSourceLabel()}</span>
+              {!isAnalyzing && suggestedMood && (
+                <span className="animate-pulse">
+                  → {moodEmojis[suggestedMood - 1]}?
+                </span>
+              )}
+              {!isAnalyzing && !suggestedMood && suggestionSource && (
+                <span className="hidden sm:inline text-cyber-sigil/70">{getSourceLabel()}</span>
               )}
             </span>
           )}
@@ -88,7 +93,7 @@ export function MoodSelector({
         </span>
       </div>
       
-      <div className="relative py-2">
+      <div className="relative py-2 pb-6">
         {/* Background track */}
         <div className="h-1.5 w-full rounded-full bg-muted" />
         
@@ -120,7 +125,7 @@ export function MoodSelector({
                   isSelected
                     ? 'bg-cyber-glow/10 border-cyber-glow/40 shadow-[0_0_12px_hsl(var(--glow-primary)/0.3)] scale-110'
                     : isSuggested
-                    ? 'bg-cyber-sigil/5 border-cyber-sigil/30 hover:border-cyber-sigil/50 hover:bg-cyber-sigil/10'
+                    ? 'bg-cyber-sigil/10 border-cyber-sigil/50 shadow-[0_0_12px_hsl(var(--cyber-sigil)/0.3)] scale-105'
                     : 'bg-card border-border/50 hover:border-cyber-glow/30 hover:bg-cyber-glow/5'
                 )}
               >
@@ -135,9 +140,18 @@ export function MoodSelector({
                     <Check className="h-2 w-2 text-white" />
                   </span>
                 )}
-                {/* Ghost dot for suggestions */}
+                {/* Suggestion indicators - more visible */}
                 {isSuggested && (
-                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-cyber-sigil/50 animate-pulse" />
+                  <>
+                    {/* Pulsing dashed border */}
+                    <span className="absolute inset-0 rounded-md border-2 border-dashed border-cyber-sigil animate-pulse" />
+                    {/* Bouncing arrow below */}
+                    <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-cyber-sigil text-sm font-bold animate-bounce">
+                      ↑
+                    </span>
+                    {/* Larger glow dot at top-right */}
+                    <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-cyber-sigil shadow-[0_0_8px_hsl(var(--cyber-sigil))] animate-pulse" />
+                  </>
                 )}
               </button>
             );
