@@ -175,20 +175,51 @@ export async function getVideoDuration(videoBlob: Blob): Promise<number> {
 }
 
 /**
- * Get audio duration
+ * Get audio duration with workaround for browsers returning Infinity for webm
  */
 export async function getAudioDuration(audioBlob: Blob): Promise<number> {
   return new Promise((resolve, reject) => {
     const audio = document.createElement('audio');
     const url = URL.createObjectURL(audioBlob);
+    let resolved = false;
+    
+    const cleanup = () => {
+      if (!resolved) {
+        resolved = true;
+        URL.revokeObjectURL(url);
+      }
+    };
+    
+    audio.preload = 'metadata';
     
     audio.onloadedmetadata = () => {
-      URL.revokeObjectURL(url);
-      resolve(audio.duration);
+      // If duration is valid, resolve immediately
+      if (isFinite(audio.duration) && audio.duration > 0) {
+        cleanup();
+        resolve(audio.duration);
+        return;
+      }
+      
+      // Workaround: seek to end to force duration calculation for webm
+      audio.currentTime = Number.MAX_SAFE_INTEGER;
+    };
+    
+    // After seek, duration should become finite
+    audio.ontimeupdate = () => {
+      if (resolved) return;
+      audio.ontimeupdate = null;
+      cleanup();
+      
+      if (isFinite(audio.duration) && audio.duration > 0) {
+        resolve(audio.duration);
+      } else {
+        // Fallback: return -1 so caller uses recordingTime
+        resolve(-1);
+      }
     };
     
     audio.onerror = () => {
-      URL.revokeObjectURL(url);
+      cleanup();
       reject(new Error('Failed to load audio'));
     };
     
@@ -228,8 +259,12 @@ export async function validateVideo(blob: Blob): Promise<{
 
 /**
  * Validate audio against limits
+ * @param fallbackDuration - Use this duration if browser returns Infinity (e.g., recordingTime from AudioCapture)
  */
-export async function validateAudio(blob: Blob): Promise<{
+export async function validateAudio(
+  blob: Blob,
+  fallbackDuration?: number
+): Promise<{
   valid: boolean;
   errors: string[];
   duration?: number;
@@ -242,7 +277,12 @@ export async function validateAudio(blob: Blob): Promise<{
   }
   
   try {
-    const duration = await getAudioDuration(blob);
+    let duration = await getAudioDuration(blob);
+    
+    // If browser returned Infinity/-1, use fallback (actual recording time)
+    if (!isFinite(duration) || duration <= 0) {
+      duration = fallbackDuration ?? 0;
+    }
     
     if (duration > maxDuration) {
       errors.push(`Аудио слишком длинное (${formatDuration(duration)}). Максимум: ${formatDuration(maxDuration)}`);
@@ -269,6 +309,11 @@ export function formatFileSize(bytes: number): string {
  * Format duration for display
  */
 export function formatDuration(seconds: number): string {
+  // Guard against Infinity/NaN
+  if (!isFinite(seconds) || seconds < 0) {
+    return '—';
+  }
+  
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   

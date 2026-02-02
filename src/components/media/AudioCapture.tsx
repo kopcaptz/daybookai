@@ -129,7 +129,8 @@ export function AudioCapture({ onCapture, disabled }: AudioCaptureProps) {
 
     setIsProcessing(true);
     try {
-      const validation = await validateAudio(previewBlob);
+      // Pass recordingTime as fallback for browsers returning Infinity duration
+      const validation = await validateAudio(previewBlob, recordingTime);
 
       if (!validation.valid) {
         validation.errors.forEach((err) => toast.error(err));
