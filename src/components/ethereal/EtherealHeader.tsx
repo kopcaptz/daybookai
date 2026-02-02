@@ -4,18 +4,17 @@ import { LogOut, Users, Anchor, Circle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { EtherealMembersSheet } from './EtherealMembersSheet';
 import { useState } from 'react';
-import { useEtherealRealtime } from '@/hooks/useEtherealRealtime';
 
 interface EtherealHeaderProps {
   title: string;
   subtitle?: string;
+  isConnected?: boolean;
 }
 
-export function EtherealHeader({ title, subtitle }: EtherealHeaderProps) {
+export function EtherealHeader({ title, subtitle, isConnected }: EtherealHeaderProps) {
   const [showMembers, setShowMembers] = useState(false);
   const navigate = useNavigate();
   const session = getEtherealSession();
-  const { isConnected } = useEtherealRealtime();
 
   const handleLeave = () => {
     clearEtherealSession();
