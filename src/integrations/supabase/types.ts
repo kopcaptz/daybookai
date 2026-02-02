@@ -167,6 +167,7 @@ export type Database = {
       ethereal_game_rounds: {
         Row: {
           ai_reflection: string | null
+          card_type: string | null
           category: string
           created_at: string | null
           id: string
@@ -182,6 +183,7 @@ export type Database = {
         }
         Insert: {
           ai_reflection?: string | null
+          card_type?: string | null
           category: string
           created_at?: string | null
           id?: string
@@ -197,6 +199,7 @@ export type Database = {
         }
         Update: {
           ai_reflection?: string | null
+          card_type?: string | null
           category?: string
           created_at?: string | null
           id?: string
@@ -222,7 +225,10 @@ export type Database = {
       }
       ethereal_game_sessions: {
         Row: {
-          adult_mode: boolean
+          adult_level: number
+          boundaries: Json | null
+          consent_picker: boolean
+          consent_responder: boolean
           created_at: string | null
           current_round: number
           game_type: string
@@ -234,7 +240,10 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          adult_mode?: boolean
+          adult_level?: number
+          boundaries?: Json | null
+          consent_picker?: boolean
+          consent_responder?: boolean
           created_at?: string | null
           current_round?: number
           game_type?: string
@@ -246,7 +255,10 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          adult_mode?: boolean
+          adult_level?: number
+          boundaries?: Json | null
+          consent_picker?: boolean
+          consent_responder?: boolean
           created_at?: string | null
           current_round?: number
           game_type?: string

@@ -3,6 +3,15 @@ import { getEtherealApiHeaders } from './etherealTokenService';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const BASE_URL = `${SUPABASE_URL}/functions/v1/ethereal_games`;
 
+export interface Boundaries {
+  noHumiliation?: boolean;
+  noPain?: boolean;
+  noThirdParties?: boolean;
+  noPastPartners?: boolean;
+  romanceOnly?: boolean;
+  v?: number;
+}
+
 export interface GameSession {
   id: string;
   room_id: string;
@@ -11,7 +20,10 @@ export interface GameSession {
   current_round: number;
   picker_id: string | null;
   responder_id: string | null;
-  adult_mode: boolean;
+  adult_level: number;
+  consent_picker: boolean;
+  consent_responder: boolean;
+  boundaries: Boundaries;
   created_at: string;
   updated_at: string;
   picker?: { id: string; display_name: string };
@@ -25,6 +37,7 @@ export interface GameRound {
   category: string;
   situation_text: string;
   options: { id: string; text: string }[];
+  card_type: 'abc' | 'open';
   picker_answer: string | null;
   responder_answer: string | null;
   responder_custom: string | null;
@@ -37,6 +50,7 @@ export interface GameRound {
 export interface Situation {
   id: string;
   text: string;
+  cardType: 'abc' | 'open';
   options: { id: string; text: string }[];
   valuesQuestion?: string;
 }
@@ -44,13 +58,13 @@ export interface Situation {
 export interface Category {
   id: string;
   label: string;
-  adult: boolean;
+  minLevel: number;
 }
 
 async function apiCall<T>(
   path: string,
   options: RequestInit = {}
-): Promise<{ success: boolean; data?: T; error?: string }> {
+): Promise<{ success: boolean; data?: T; error?: string; needsConsent?: boolean }> {
   try {
     const response = await fetch(`${BASE_URL}${path}`, {
       ...options,
@@ -63,7 +77,11 @@ async function apiCall<T>(
     const data = await response.json();
     
     if (!response.ok || !data.success) {
-      return { success: false, error: data.error || 'request_failed' };
+      return { 
+        success: false, 
+        error: data.error || 'request_failed',
+        needsConsent: data.needsConsent 
+      };
     }
 
     return { success: true, data };
@@ -74,10 +92,10 @@ async function apiCall<T>(
 }
 
 // Create a new game session
-export async function createGameSession(adultMode: boolean = false) {
+export async function createGameSession(adultLevel: number = 0) {
   return apiCall<{ session: GameSession }>('/create', {
     method: 'POST',
-    body: JSON.stringify({ adultMode }),
+    body: JSON.stringify({ adultLevel }),
   });
 }
 
@@ -89,6 +107,32 @@ export async function listGameSessions() {
 // Join a session
 export async function joinGameSession(sessionId: string) {
   return apiCall<{}>(`/join/${sessionId}`, { method: 'POST' });
+}
+
+// Set consent and boundaries
+export async function setConsent(sessionId: string, boundaries: Boundaries = {}) {
+  return apiCall<{ needsConsent: boolean; session: GameSession }>(
+    `/session/${sessionId}/consent`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ boundaries }),
+    }
+  );
+}
+
+// Downshift adult level
+export async function setLevel(sessionId: string, level: number) {
+  return apiCall<{}>(`/session/${sessionId}/level`, {
+    method: 'POST',
+    body: JSON.stringify({ level }),
+  });
+}
+
+// Skip current situation (regenerate)
+export async function skipSituation(sessionId: string) {
+  return apiCall<{ situation: Situation }>(`/session/${sessionId}/skip`, {
+    method: 'POST',
+  });
 }
 
 // Start the game
@@ -160,17 +204,30 @@ export async function endGame(sessionId: string) {
   return apiCall<{}>(`/end/${sessionId}`, { method: 'POST' });
 }
 
-// Categories
+// Categories - now level-based
 export const GAME_CATEGORIES: Category[] = [
-  { id: 'budget', label: 'Финансы', adult: false },
-  { id: 'boundaries', label: 'Личные границы', adult: false },
-  { id: 'lifestyle', label: 'Быт', adult: false },
-  { id: 'social', label: 'Друзья и семья', adult: false },
-  { id: 'travel', label: 'Путешествия', adult: false },
-  { id: 'intimacy', label: 'Близость', adult: true },
-  { id: 'fantasies', label: 'Желания', adult: true },
+  { id: 'budget', label: 'Финансы', minLevel: 0 },
+  { id: 'boundaries', label: 'Личные границы', minLevel: 0 },
+  { id: 'lifestyle', label: 'Быт', minLevel: 0 },
+  { id: 'social', label: 'Друзья и семья', minLevel: 0 },
+  { id: 'travel', label: 'Путешествия', minLevel: 0 },
+  { id: 'romance', label: 'Романтика', minLevel: 1 },
+  { id: 'intimacy', label: 'Близость', minLevel: 2 },
+  { id: 'fantasies', label: 'Желания', minLevel: 3 },
 ];
 
-export function getAvailableCategories(adultMode: boolean): Category[] {
-  return GAME_CATEGORIES.filter((c) => adultMode || !c.adult);
+export function getAvailableCategories(adultLevel: number): Category[] {
+  return GAME_CATEGORIES.filter((c) => c.minLevel <= adultLevel);
+}
+
+// Level labels
+export const LEVEL_LABELS = [
+  { level: 0, name: 'Лёгкий', icon: null, description: 'Быт, ценности, планы' },
+  { level: 1, name: 'Романтический', icon: '🔥', description: 'Поцелуи, нежность' },
+  { level: 2, name: 'Чувственный', icon: '🔥🔥', description: 'Желания, прелюдия' },
+  { level: 3, name: 'Откровенный', icon: '🔥🔥🔥', description: 'Предпочтения, границы' },
+];
+
+export function getLevelLabel(level: number) {
+  return LEVEL_LABELS[level] || LEVEL_LABELS[0];
 }

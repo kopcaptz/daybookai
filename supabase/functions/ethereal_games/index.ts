@@ -16,14 +16,81 @@ const AI_GATEWAY_URL = 'https://ai-gateway.lovable.dev/v1/chat/completions';
 
 // Categories with metadata
 const CATEGORIES = {
-  budget: { label: 'Финансы', adult: false },
-  boundaries: { label: 'Личные границы', adult: false },
-  lifestyle: { label: 'Быт', adult: false },
-  social: { label: 'Друзья и семья', adult: false },
-  travel: { label: 'Путешествия', adult: false },
-  intimacy: { label: 'Близость', adult: true },
-  fantasies: { label: 'Желания', adult: true },
+  budget: { label: 'Финансы', minLevel: 0 },
+  boundaries: { label: 'Личные границы', minLevel: 0 },
+  lifestyle: { label: 'Быт', minLevel: 0 },
+  social: { label: 'Друзья и семья', minLevel: 0 },
+  travel: { label: 'Путешествия', minLevel: 0 },
+  romance: { label: 'Романтика', minLevel: 1 },
+  intimacy: { label: 'Близость', minLevel: 2 },
+  fantasies: { label: 'Желания', minLevel: 3 },
 };
+
+// Boundaries type
+interface Boundaries {
+  noHumiliation?: boolean;
+  noPain?: boolean;
+  noThirdParties?: boolean;
+  noPastPartners?: boolean;
+  romanceOnly?: boolean;
+  v?: number;
+}
+
+// Hard bans for adult content
+const HARD_BANS = `
+СТРОГИЕ ОГРАНИЧЕНИЯ (применять ВСЕГДА для уровней 1-3):
+- Только взрослые (18+)
+- Только consensual сценарии
+- ЗАПРЕЩЕНО: non-consent, coercion, minors/ageplay, incest, violence, 
+  humiliation/degradation, bodily fluids (scat/watersports), hate/raceplay
+- Тон: бережный, без оценки, без давления
+- НЕ просить сексуальные подробности — только "предпочтения" и "сценарии"
+`;
+
+// Get level-specific prompt instructions
+function getLevelPrompt(level: number, boundaries: Boundaries, isWarmup: boolean): string {
+  const boundaryInstructions = [];
+  if (boundaries.noHumiliation) boundaryInstructions.push('- Без грубости и унижения');
+  if (boundaries.noPain) boundaryInstructions.push('- Без боли');
+  if (boundaries.noThirdParties) boundaryInstructions.push('- Без третьих лиц');
+  if (boundaries.noPastPartners) boundaryInstructions.push('- Без обсуждения прошлого опыта');
+  if (boundaries.romanceOnly) boundaryInstructions.push('- Только романтика (уровень 1)');
+
+  const boundaryBlock = boundaryInstructions.length > 0
+    ? `\nОГРАНИЧЕНИЯ ПОЛЬЗОВАТЕЛЯ:\n${boundaryInstructions.join('\n')}\n`
+    : '';
+
+  const warmupNote = isWarmup
+    ? `\nЭто ПЕРВЫЙ раунд — генерируй МЯГКО, как разминку.
+Добавь в valuesQuestion вопрос о комфорте: "Перед этим: что точно ок/не ок сегодня?"\n`
+    : '';
+
+  switch (level) {
+    case 0:
+      return `Режим: Лёгкий / SFW
+Фокус: Быт, ценности, планы, лёгкий флирт.
+Ограничения: Никаких интимных тем.${boundaryBlock}${warmupNote}`;
+    case 1:
+      return `Режим: Романтический
+Фокус: Поцелуи, прикосновения, нежность, близость.
+Ограничения: Без физической интимности.
+${HARD_BANS}${boundaryBlock}${warmupNote}`;
+    case 2:
+      return `Режим: Чувственный
+Фокус: Тела, желания, прелюдия, сценарии.
+Ограничения: Без explicit описаний.
+${HARD_BANS}${boundaryBlock}${warmupNote}`;
+    case 3:
+      return `Режим: Откровенный
+Фокус: Предпочтения, фантазии, границы, kink-light.
+Ограничения: Фокус на коммуникации и предпочтениях, НЕ на действиях.
+${HARD_BANS}${boundaryBlock}${warmupNote}`;
+    default:
+      return `Режим: Лёгкий / SFW
+Фокус: Быт, ценности, планы.
+Ограничения: Никаких интимных тем.`;
+  }
+}
 
 // Verify ethereal token (same logic as ethereal_messages)
 async function verifyToken(token: string): Promise<{
@@ -47,7 +114,6 @@ async function verifyToken(token: string): Promise<{
     const [payloadB64, signatureB64] = token.split('.');
     if (!payloadB64 || !signatureB64) return { valid: false };
 
-    // Decode base64 signature (not hex!)
     const signatureBytes = Uint8Array.from(atob(signatureB64), c => c.charCodeAt(0));
     
     const isValid = await crypto.subtle.verify(
@@ -64,7 +130,6 @@ async function verifyToken(token: string): Promise<{
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Use sessionId (not sid) - matching ethereal_join token format
     const { data: sessionData } = await supabase
       .from('ethereal_sessions')
       .select('*, member:ethereal_room_members(*)')
@@ -82,21 +147,34 @@ async function verifyToken(token: string): Promise<{
   }
 }
 
-// Generate situations using AI
+// Generate situations using AI with level-based prompts
 async function generateSituations(
   category: string,
-  adultMode: boolean
+  adultLevel: number,
+  boundaries: Boundaries,
+  roundNumber: number = 1
 ): Promise<any[]> {
   const categoryInfo = CATEGORIES[category as keyof typeof CATEGORIES];
   if (!categoryInfo) throw new Error('Invalid category');
 
-  // Block adult categories if not in adult mode
-  if (categoryInfo.adult && !adultMode) {
-    throw new Error('Adult mode required for this category');
+  // Block categories if level too low
+  if (categoryInfo.minLevel > adultLevel) {
+    throw new Error('Level too low for this category');
   }
+
+  const isWarmup = roundNumber === 1 && adultLevel > 0;
+  const levelPrompt = getLevelPrompt(adultLevel, boundaries, isWarmup);
+
+  // Determine card type distribution based on level
+  const includeOpen = adultLevel >= 2 && Math.random() < 0.4;
+  const cardTypeInstruction = includeOpen
+    ? 'Сгенерируй 2 ситуации типа "abc" (с вариантами A/B/C) и 1 ситуацию типа "open" (без вариантов, партнёр отвечает текстом).'
+    : 'Сгенерируй 3 ситуации типа "abc" (с вариантами A/B/C).';
 
   const systemPrompt = `Ты — ведущий игры "Ситуации на борту" для пар.
 Твоя задача — генерировать реалистичные жизненные ситуации, которые помогают партнёрам лучше понять друг друга.
+
+${levelPrompt}
 
 ВАЖНО:
 - Ситуации должны быть конкретными и узнаваемыми
@@ -104,13 +182,14 @@ async function generateSituations(
 - Тон: тёплый, без осуждения
 - Уточняющий вопрос должен раскрывать ценности за выбором
 
-${adultMode && categoryInfo.adult ? 'Режим 18+: можно включать интимные и чувственные темы, но без вульгарности.' : 'Режим SFW: избегай интимных тем полностью.'}
+${cardTypeInstruction}
 
 Формат ответа — ТОЛЬКО валидный JSON:
 {
   "situations": [
     {
       "id": "sit_1",
+      "cardType": "abc",
       "text": "Описание конкретной ситуации (2-3 предложения)",
       "options": [
         { "id": "A", "text": "Вариант A (1-2 предложения)" },
@@ -120,9 +199,11 @@ ${adultMode && categoryInfo.adult ? 'Режим 18+: можно включать
       "valuesQuestion": "Уточняющий вопрос о ценностях за этим выбором?"
     }
   ]
-}`;
+}
 
-  const userPrompt = `Сгенерируй 3 разные ситуации для категории "${categoryInfo.label}".`;
+Для карточек типа "open" поле options должно быть пустым массивом [].`;
+
+  const userPrompt = `Сгенерируй ситуации для категории "${categoryInfo.label}".`;
 
   const response = await fetch(AI_GATEWAY_URL, {
     method: 'POST',
@@ -149,7 +230,6 @@ ${adultMode && categoryInfo.adult ? 'Режим 18+: можно включать
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content || '';
 
-  // Extract JSON from response
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('Invalid AI response format');
 
@@ -235,7 +315,10 @@ serve(async (req) => {
     // POST /create - Create new game session
     if (req.method === 'POST' && path === '/create') {
       const body = await req.json();
-      const adultMode = body.adultMode === true;
+      const adultLevel = Math.min(3, Math.max(0, Number(body.adultLevel) || 0));
+
+      // If level > 0, creator gives consent automatically
+      const consentPicker = adultLevel > 0;
 
       const { data: gameSession, error } = await supabase
         .from('ethereal_game_sessions')
@@ -244,7 +327,10 @@ serve(async (req) => {
           game_type: 'situations',
           status: 'lobby',
           picker_id: memberId,
-          adult_mode: adultMode,
+          adult_level: adultLevel,
+          consent_picker: consentPicker,
+          consent_responder: false,
+          boundaries: {},
         })
         .select()
         .single();
@@ -323,6 +409,219 @@ serve(async (req) => {
       );
     }
 
+    // POST /session/:id/consent - Set consent and boundaries
+    if (req.method === 'POST' && path.match(/^\/session\/[^/]+\/consent$/)) {
+      const sessionId = path.split('/')[2];
+      const body = await req.json();
+      const { boundaries = {} } = body;
+
+      const { data: gameSession, error: fetchError } = await supabase
+        .from('ethereal_game_sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .eq('room_id', roomId)
+        .single();
+
+      if (fetchError || !gameSession) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'session_not_found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const isPicker = gameSession.picker_id === memberId;
+      const isResponder = gameSession.responder_id === memberId;
+
+      if (!isPicker && !isResponder) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'not_participant' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Apply romanceOnly clamp
+      let effectiveLevel = gameSession.adult_level;
+      if (boundaries.romanceOnly && effectiveLevel > 1) {
+        effectiveLevel = 1;
+      }
+
+      // Merge boundaries
+      const mergedBoundaries = { 
+        ...gameSession.boundaries, 
+        ...boundaries,
+        v: 1 
+      };
+
+      const updateData: any = {
+        boundaries: mergedBoundaries,
+        adult_level: effectiveLevel,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (isPicker) {
+        updateData.consent_picker = true;
+      } else {
+        updateData.consent_responder = true;
+      }
+
+      const { error: updateError } = await supabase
+        .from('ethereal_game_sessions')
+        .update(updateData)
+        .eq('id', sessionId);
+
+      if (updateError) throw updateError;
+
+      // Check if both consented
+      const { data: updatedSession } = await supabase
+        .from('ethereal_game_sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .single();
+
+      const bothConsented = updatedSession?.consent_picker && updatedSession?.consent_responder;
+      const needsConsent = updatedSession?.adult_level > 0 && !bothConsented;
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          needsConsent,
+          session: updatedSession 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // POST /session/:id/level - Downshift level only
+    if (req.method === 'POST' && path.match(/^\/session\/[^/]+\/level$/)) {
+      const sessionId = path.split('/')[2];
+      const body = await req.json();
+      const newLevel = Math.min(3, Math.max(0, Number(body.level) || 0));
+
+      const { data: gameSession, error: fetchError } = await supabase
+        .from('ethereal_game_sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .eq('room_id', roomId)
+        .single();
+
+      if (fetchError || !gameSession) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'session_not_found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Only allow downshift (safety-first: anyone can lower)
+      if (newLevel >= gameSession.adult_level) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'can_only_downshift' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Reset consent if level > 0, auto-consent if level = 0
+      const updateData: any = {
+        adult_level: newLevel,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (newLevel === 0) {
+        updateData.consent_picker = true;
+        updateData.consent_responder = true;
+      } else {
+        updateData.consent_picker = false;
+        updateData.consent_responder = false;
+      }
+
+      const { error: updateError } = await supabase
+        .from('ethereal_game_sessions')
+        .update(updateData)
+        .eq('id', sessionId);
+
+      if (updateError) throw updateError;
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // POST /session/:id/skip - Regenerate current situation
+    if (req.method === 'POST' && path.match(/^\/session\/[^/]+\/skip$/)) {
+      const sessionId = path.split('/')[2];
+
+      const { data: gameSession, error: fetchError } = await supabase
+        .from('ethereal_game_sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .eq('room_id', roomId)
+        .single();
+
+      if (fetchError || !gameSession) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'session_not_found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Get current round
+      const { data: round } = await supabase
+        .from('ethereal_game_rounds')
+        .select('*')
+        .eq('session_id', sessionId)
+        .eq('round_number', gameSession.current_round)
+        .single();
+
+      if (!round) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'no_active_round' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Generate new situation for same category
+      const situations = await generateSituations(
+        round.category,
+        gameSession.adult_level,
+        gameSession.boundaries || {},
+        gameSession.current_round
+      );
+
+      if (situations.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'generation_failed' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const newSituation = situations[0];
+
+      // Update round with new situation, reset answers
+      const { error: updateError } = await supabase
+        .from('ethereal_game_rounds')
+        .update({
+          situation_text: newSituation.text,
+          options: newSituation.options || [],
+          card_type: newSituation.cardType || 'abc',
+          values_questions: newSituation.valuesQuestion
+            ? [{ q: newSituation.valuesQuestion, a: null }]
+            : [],
+          picker_answer: null,
+          responder_answer: null,
+          responder_custom: null,
+          picker_revealed: false,
+          ai_reflection: null,
+        })
+        .eq('id', round.id);
+
+      if (updateError) throw updateError;
+
+      return new Response(
+        JSON.stringify({ success: true, situation: newSituation }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // POST /start/:id - Start the game
     if (req.method === 'POST' && path.startsWith('/start/')) {
       const sessionId = path.replace('/start/', '');
@@ -355,6 +654,16 @@ serve(async (req) => {
         );
       }
 
+      // Check consent for adult levels
+      if (gameSession.adult_level > 0) {
+        if (!gameSession.consent_picker || !gameSession.consent_responder) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'consent_required', needsConsent: true }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
       const { error: updateError } = await supabase
         .from('ethereal_game_sessions')
         .update({
@@ -377,10 +686,9 @@ serve(async (req) => {
       const body = await req.json();
       const { category, sessionId } = body;
 
-      // Verify session and get adult mode
       const { data: gameSession } = await supabase
         .from('ethereal_game_sessions')
-        .select('adult_mode, picker_id')
+        .select('adult_level, boundaries, picker_id, current_round')
         .eq('id', sessionId)
         .eq('room_id', roomId)
         .single();
@@ -399,7 +707,12 @@ serve(async (req) => {
         );
       }
 
-      const situations = await generateSituations(category, gameSession.adult_mode);
+      const situations = await generateSituations(
+        category, 
+        gameSession.adult_level,
+        gameSession.boundaries || {},
+        gameSession.current_round || 1
+      );
 
       return new Response(
         JSON.stringify({ success: true, situations }),
@@ -427,7 +740,8 @@ serve(async (req) => {
         );
       }
 
-      // Create the round
+      const cardType = situation.cardType || 'abc';
+
       const { data: round, error: roundError } = await supabase
         .from('ethereal_game_rounds')
         .insert({
@@ -435,7 +749,8 @@ serve(async (req) => {
           round_number: gameSession.current_round,
           category,
           situation_text: situation.text,
-          options: situation.options,
+          options: situation.options || [],
+          card_type: cardType,
           picker_answer: pickerAnswer,
           values_questions: situation.valuesQuestion
             ? [{ q: situation.valuesQuestion, a: null }]
@@ -594,7 +909,6 @@ serve(async (req) => {
         );
       }
 
-      // Find the text for picker's choice
       const options = round.options as { id: string; text: string }[];
       const pickerOption = options.find((o) => o.id === round.picker_answer);
       const responderOption = options.find((o) => o.id === round.responder_answer);
@@ -606,7 +920,6 @@ serve(async (req) => {
         round.responder_custom
       );
 
-      // Save reflection
       await supabase
         .from('ethereal_game_rounds')
         .update({ ai_reflection: reflection })
@@ -636,7 +949,6 @@ serve(async (req) => {
         );
       }
 
-      // Swap picker and responder
       const { error: updateError } = await supabase
         .from('ethereal_game_sessions')
         .update({
@@ -673,14 +985,14 @@ serve(async (req) => {
       );
     }
 
-    // GET /categories - List available categories
+    // GET /categories - List available categories based on level
     if (req.method === 'GET' && path === '/categories') {
-      const body = await req.json().catch(() => ({}));
-      const adultMode = body.adultMode === true;
+      const levelParam = url.searchParams.get('level');
+      const level = levelParam ? parseInt(levelParam, 10) : 0;
 
       const categories = Object.entries(CATEGORIES)
-        .filter(([_, info]) => adultMode || !info.adult)
-        .map(([key, info]) => ({ id: key, label: info.label, adult: info.adult }));
+        .filter(([_, info]) => info.minLevel <= level)
+        .map(([key, info]) => ({ id: key, label: info.label, minLevel: info.minLevel }));
 
       return new Response(
         JSON.stringify({ success: true, categories }),
