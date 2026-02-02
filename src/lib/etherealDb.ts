@@ -19,13 +19,20 @@ export interface EtherealMessage {
 
 // Ethereal chronicle entry
 export interface EtherealChronicle {
-  id?: number;
-  serverId: string;
+  serverId: string; // PRIMARY KEY
   roomId: string;
   authorId: string;
   authorName: string;
+  updatedById?: string;
+  updatedByName?: string;
   title: string;
   content: string;
+  tags: string[];
+  pinned: boolean;
+  media: Array<{ path: string; mime: string; signedUrl?: string; w?: number; h?: number; kind: 'image' | 'audio' }>;
+  editingBy?: string;
+  editingByName?: string;
+  editingExpiresAt?: number;
   createdAtMs: number;
   updatedAtMs: number;
   syncStatus: 'pending' | 'synced';
@@ -92,7 +99,7 @@ export function stableMsgSort(a: EtherealMessage, b: EtherealMessage): number {
 
 class EtherealDatabase extends Dexie {
   messages!: EntityTable<EtherealMessage, 'serverId'>;
-  chronicles!: EntityTable<EtherealChronicle, 'id'>;
+  chronicles!: EntityTable<EtherealChronicle, 'serverId'>;
   tasks!: EntityTable<EtherealTask, 'id'>;
   events!: EntityTable<EtherealEvent, 'id'>;
   members!: EntityTable<EtherealMember, 'id'>;
@@ -184,6 +191,53 @@ class EtherealDatabase extends Dexie {
       members: 'id, roomId, joinedAtMs',
       settings: 'key',
     });
+
+    // v4 - chronicles with serverId as primary key (same pattern as messages)
+    this.version(4)
+      .stores({
+        messages: 'serverId, roomId, createdAtMs, [roomId+createdAtMs]',
+        chronicles: 'serverId, roomId, updatedAtMs, pinned, [roomId+updatedAtMs]',
+        tasks: '++id, serverId, roomId, status, dueAtMs',
+        events: '++id, serverId, roomId, startAtMs',
+        members: 'id, roomId, joinedAtMs',
+        settings: 'key',
+      })
+      .upgrade(async (tx) => {
+        const oldChronicles = await tx.table('chronicles').toArray();
+        
+        // Migrate old chronicles to new format
+        const byServerId = new Map<string, EtherealChronicle>();
+        
+        for (let i = 0; i < oldChronicles.length; i++) {
+          // deno-lint-ignore no-explicit-any
+          const c: any = oldChronicles[i];
+          const serverId = c.serverId || `legacy-${c.id ?? i}`;
+          
+          if (!byServerId.has(serverId)) {
+            byServerId.set(serverId, {
+              serverId,
+              roomId: c.roomId,
+              authorId: c.authorId,
+              authorName: c.authorName || 'Unknown',
+              title: c.title || '',
+              content: c.content || '',
+              tags: c.tags || [],
+              pinned: c.pinned || false,
+              media: c.media || [],
+              createdAtMs: c.createdAtMs || Date.now(),
+              updatedAtMs: c.updatedAtMs || Date.now(),
+              syncStatus: 'synced',
+            });
+          }
+        }
+        
+        await tx.table('chronicles').clear();
+        
+        const migrated = [...byServerId.values()];
+        if (migrated.length > 0) {
+          await tx.table('chronicles').bulkPut(migrated);
+        }
+      });
   }
 }
 

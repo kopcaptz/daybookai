@@ -119,33 +119,86 @@ export type Database = {
           },
         ]
       }
+      ethereal_chronicle_revisions: {
+        Row: {
+          chronicle_id: string
+          content_snapshot: string
+          created_at: string | null
+          editor_id: string
+          id: string
+          title_snapshot: string
+        }
+        Insert: {
+          chronicle_id: string
+          content_snapshot: string
+          created_at?: string | null
+          editor_id: string
+          id?: string
+          title_snapshot: string
+        }
+        Update: {
+          chronicle_id?: string
+          content_snapshot?: string
+          created_at?: string | null
+          editor_id?: string
+          id?: string
+          title_snapshot?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ethereal_chronicle_revisions_chronicle_id_fkey"
+            columns: ["chronicle_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_chronicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ethereal_chronicles: {
         Row: {
           author_id: string
           content: string
           created_at: string | null
+          editing_by: string | null
+          editing_expires_at: string | null
           id: string
+          media: Json
+          pinned: boolean
           room_id: string
+          tags: string[]
           title: string
           updated_at: string | null
+          updated_by: string | null
         }
         Insert: {
           author_id: string
           content: string
           created_at?: string | null
+          editing_by?: string | null
+          editing_expires_at?: string | null
           id?: string
+          media?: Json
+          pinned?: boolean
           room_id: string
+          tags?: string[]
           title: string
           updated_at?: string | null
+          updated_by?: string | null
         }
         Update: {
           author_id?: string
           content?: string
           created_at?: string | null
+          editing_by?: string | null
+          editing_expires_at?: string | null
           id?: string
+          media?: Json
+          pinned?: boolean
           room_id?: string
+          tags?: string[]
           title?: string
           updated_at?: string | null
+          updated_by?: string | null
         }
         Relationships: [
           {
