@@ -2,10 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { isEtherealSessionValid, getEtherealSession } from '@/lib/etherealTokenService';
 import { EtherealHeader } from '@/components/ethereal/EtherealHeader';
+import { EtherealMediaButton } from '@/components/ethereal/EtherealMediaButton';
 import { useEtherealRealtime } from '@/hooks/useEtherealRealtime';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -42,6 +43,10 @@ export default function EtherealChat() {
   const { messages, typingMembers, sendTyping, sendMessage, isConnected } = useEtherealRealtime();
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [pendingImage, setPendingImage] = useState<{
+    blob: Blob;
+    preview: string;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom on new messages
@@ -54,14 +59,29 @@ export default function EtherealChat() {
     sendTyping();
   };
 
+  const handleImageSelect = (blob: Blob) => {
+    const preview = URL.createObjectURL(blob);
+    setPendingImage({ blob, preview });
+  };
+
+  const clearPendingImage = () => {
+    if (pendingImage) {
+      URL.revokeObjectURL(pendingImage.preview);
+      setPendingImage(null);
+    }
+  };
+
   const handleSend = async () => {
-    if (!input.trim() || isSending) return;
+    if (!input.trim() && !pendingImage) return;
+    if (isSending) return;
 
     setIsSending(true);
     const content = input.trim();
     setInput('');
 
-    await sendMessage(content);
+    await sendMessage(content, pendingImage?.blob);
+    
+    clearPendingImage();
     setIsSending(false);
   };
 
@@ -101,7 +121,19 @@ export default function EtherealChat() {
                       : 'bg-muted rounded-bl-md'
                   )}
                 >
-                  <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                  {/* Image (if present) */}
+                  {msg.imageUrl && (
+                    <img
+                      src={msg.imageUrl}
+                      alt=""
+                      className="max-w-[200px] max-h-[200px] rounded-lg cursor-pointer mb-2"
+                      onClick={() => window.open(msg.imageUrl, '_blank')}
+                    />
+                  )}
+                  {/* Text (only if not empty) */}
+                  {msg.content && (
+                    <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                  )}
                 </div>
                 <span className="text-[10px] text-muted-foreground mt-1">
                   {format(new Date(msg.createdAtMs), 'HH:mm')}
@@ -125,18 +157,39 @@ export default function EtherealChat() {
 
       {/* Input */}
       <div className="sticky bottom-16 bg-background border-t border-border p-3">
+        {/* Pending image preview */}
+        {pendingImage && (
+          <div className="mb-2 relative inline-block">
+            <img
+              src={pendingImage.preview}
+              alt="Preview"
+              className="w-20 h-20 object-cover rounded-lg"
+            />
+            <button
+              onClick={clearPendingImage}
+              className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+        
         <div className="flex gap-2">
+          <EtherealMediaButton
+            onImageSelect={handleImageSelect}
+            disabled={!isConnected || isSending}
+          />
           <Input
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={isConnected ? 'Type a message...' : 'Connecting...'}
+            placeholder={isConnected ? 'Сообщение...' : 'Подключение...'}
             disabled={!isConnected || isSending}
             className="flex-1"
           />
           <Button
             onClick={handleSend}
-            disabled={!input.trim() || !isConnected || isSending}
+            disabled={(!input.trim() && !pendingImage) || !isConnected || isSending}
             size="icon"
           >
             {isSending ? (

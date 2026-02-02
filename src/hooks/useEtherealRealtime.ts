@@ -98,6 +98,8 @@ export function useEtherealRealtime() {
             content: payload.content,
             createdAtMs: payload.createdAtMs,
             syncStatus: 'synced',
+            imagePath: payload.imagePath,
+            imageUrl: payload.imageUrl,
           };
 
           // Upsert to Dexie
@@ -190,17 +192,33 @@ export function useEtherealRealtime() {
     });
   }, []);
 
-  // Send message with instant UI update
+  // Send message with instant UI update (supports optional image)
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, imageBlob?: Blob) => {
       const currentSession = getEtherealSession();
       if (!currentSession) return { success: false, error: 'no_session' };
 
+      // At least one of content or image required
+      if (!content.trim() && !imageBlob) {
+        return { success: false, error: 'empty_message' };
+      }
+
       try {
+        // Prepare FormData for multipart upload
+        const formData = new FormData();
+        formData.append('content', content.trim() || '');
+        if (imageBlob) {
+          formData.append('image', imageBlob, 'photo.jpg');
+        }
+
+        // Get headers without Content-Type (browser sets boundary automatically)
+        const headers = { ...getEtherealApiHeaders() };
+        delete (headers as any)['Content-Type'];
+
         const response = await fetch(`${SUPABASE_URL}/functions/v1/ethereal_messages`, {
           method: 'POST',
-          headers: getEtherealApiHeaders(),
-          body: JSON.stringify({ content }),
+          headers,
+          body: formData,
         });
 
         if (response.status === 401 || response.status === 403) {
@@ -211,7 +229,7 @@ export function useEtherealRealtime() {
 
         const data = await response.json();
         if (!data.success) return data;
-        console.log('[RT] POST ok', { id: data.id, ts: data.createdAtMs });
+        console.log('[RT] POST ok', { id: data.id, ts: data.createdAtMs, hasImage: !!data.imagePath });
 
         // Build the new message
         const newMsg: EtherealMessage = {
@@ -219,9 +237,11 @@ export function useEtherealRealtime() {
           roomId: currentSession.roomId,
           senderId: currentSession.memberId,
           senderName: currentSession.displayName,
-          content,
+          content: content.trim() || '',
           createdAtMs: data.createdAtMs,
           syncStatus: 'synced',
+          imagePath: data.imagePath || undefined,
+          imageUrl: data.imageUrl || undefined,
         };
 
         // 1) Instant UI update
@@ -233,7 +253,7 @@ export function useEtherealRealtime() {
         // 2) Persist to Dexie
         await etherealDb.messages.put(newMsg);
 
-        // 3) Broadcast to others
+        // 3) Broadcast to others (include imagePath for durability)
         channelRef.current?.send({
           type: 'broadcast',
           event: 'message',
@@ -243,6 +263,8 @@ export function useEtherealRealtime() {
             senderName: newMsg.senderName,
             content: newMsg.content,
             createdAtMs: newMsg.createdAtMs,
+            imagePath: newMsg.imagePath,
+            imageUrl: newMsg.imageUrl,
           },
         });
         console.log('[RT] broadcast:sent', { serverId: newMsg.serverId });

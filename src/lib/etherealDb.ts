@@ -9,6 +9,12 @@ export interface EtherealMessage {
   content: string;
   createdAtMs: number;
   syncStatus: 'synced' | 'failed';
+  // Image fields (Phase 1)
+  imagePath?: string;    // stable path: roomId/msgId.jpg
+  imageUrl?: string;     // transient signed URL (30 min TTL)
+  imageMime?: string;
+  imageW?: number;
+  imageH?: number;
 }
 
 // Ethereal chronicle entry
@@ -168,6 +174,16 @@ class EtherealDatabase extends Dexie {
           await tx.table('messages').bulkPut(deduplicated);
         }
       });
+
+    // v3 - add image fields (no schema change needed, just optional new columns)
+    this.version(3).stores({
+      messages: 'serverId, roomId, createdAtMs, [roomId+createdAtMs]',
+      chronicles: '++id, serverId, roomId, createdAtMs',
+      tasks: '++id, serverId, roomId, status, dueAtMs',
+      events: '++id, serverId, roomId, startAtMs',
+      members: 'id, roomId, joinedAtMs',
+      settings: 'key',
+    });
   }
 }
 

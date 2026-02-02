@@ -5,6 +5,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-ethereal-token",
 };
 
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/webp", "image/png"];
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
+
+function getExtensionFromMime(mime: string): string {
+  switch (mime) {
+    case "image/jpeg": return "jpg";
+    case "image/webp": return "webp";
+    case "image/png": return "png";
+    default: return "jpg";
+  }
+}
+
 interface TokenPayload {
   roomId: string;
   memberId: string;
@@ -103,14 +115,46 @@ Deno.serve(async (req) => {
     const { roomId, memberId } = validation.session;
 
     if (req.method === "POST") {
-      // Send message
-      const { content } = await req.json();
+      // Parse FormData or JSON
+      const contentType = req.headers.get("content-type") || "";
+      let content = "";
+      let imageFile: File | null = null;
 
-      if (!content || typeof content !== "string" || content.trim().length === 0) {
+      if (contentType.includes("multipart/form-data")) {
+        const formData = await req.formData();
+        content = (formData.get("content") ?? "").toString();
+        const imageEntry = formData.get("image");
+        if (imageEntry instanceof File) {
+          imageFile = imageEntry;
+        }
+      } else {
+        // Fallback to JSON for backward compatibility
+        const json = await req.json();
+        content = json.content || "";
+      }
+
+      // At least one of content or image required
+      if (!content.trim() && !imageFile) {
         return new Response(
-          JSON.stringify({ success: false, error: "empty_content" }),
+          JSON.stringify({ success: false, error: "empty_message" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+      }
+
+      // Validate image if present
+      if (imageFile) {
+        if (!ALLOWED_MIME_TYPES.includes(imageFile.type)) {
+          return new Response(
+            JSON.stringify({ success: false, error: "invalid_image_type" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        if (imageFile.size > MAX_IMAGE_SIZE) {
+          return new Response(
+            JSON.stringify({ success: false, error: "image_too_large" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
 
       // Get sender's display name
@@ -120,13 +164,13 @@ Deno.serve(async (req) => {
         .eq("id", memberId)
         .single();
 
-      // Insert message
+      // Insert message (content = '' if image-only, since column is NOT NULL)
       const { data: msg, error: insertError } = await supabase
         .from("ethereal_messages")
         .insert({
           room_id: roomId,
           sender_id: memberId,
-          content: content.trim(),
+          content: content.trim() || "",
         })
         .select("id, created_at")
         .single();
@@ -139,12 +183,56 @@ Deno.serve(async (req) => {
         );
       }
 
+      let imagePath: string | null = null;
+      let imageUrl: string | null = null;
+
+      // Upload image if present
+      if (imageFile) {
+        const ext = getExtensionFromMime(imageFile.type);
+        imagePath = `${roomId}/${msg.id}.${ext}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("ethereal-media")
+          .upload(imagePath, imageFile, {
+            contentType: imageFile.type,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          console.error("Upload error:", uploadError);
+          // Message created but image failed - clean up message
+          await supabase.from("ethereal_messages").delete().eq("id", msg.id);
+          return new Response(
+            JSON.stringify({ success: false, error: "upload_error" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Update message with image metadata
+        await supabase
+          .from("ethereal_messages")
+          .update({
+            image_path: imagePath,
+            image_mime: imageFile.type,
+          })
+          .eq("id", msg.id);
+
+        // Generate signed URL for immediate use
+        const { data: signedData } = await supabase.storage
+          .from("ethereal-media")
+          .createSignedUrl(imagePath, 1800); // 30 minutes
+
+        imageUrl = signedData?.signedUrl || null;
+      }
+
       return new Response(
         JSON.stringify({
           success: true,
           id: msg.id,
           createdAtMs: Date.parse(msg.created_at),
           senderName: member?.display_name || "Unknown",
+          imagePath,
+          imageUrl,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -156,7 +244,7 @@ Deno.serve(async (req) => {
       const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 100);
       const before = url.searchParams.get("before");
 
-      // B.7: Correct alias for foreign table
+      // B.7: Correct alias for foreign table + image fields
       let query = supabase
         .from("ethereal_messages")
         .select(`
@@ -164,6 +252,10 @@ Deno.serve(async (req) => {
           sender_id,
           content,
           created_at,
+          image_path,
+          image_mime,
+          image_w,
+          image_h,
           sender:ethereal_room_members!sender_id(display_name)
         `)
         .eq("room_id", roomId)
@@ -184,16 +276,35 @@ Deno.serve(async (req) => {
         );
       }
 
-      return new Response(
-        JSON.stringify({
-          success: true,
-          messages: data.map((m: any) => ({
+      // Generate signed URLs for messages with images (parallel)
+      const messagesWithUrls = await Promise.all(
+        data.map(async (m: any) => {
+          let imageUrl: string | null = null;
+          if (m.image_path) {
+            const { data: signedData } = await supabase.storage
+              .from("ethereal-media")
+              .createSignedUrl(m.image_path, 1800); // 30 minutes
+            imageUrl = signedData?.signedUrl || null;
+          }
+          return {
             serverId: m.id,
             senderId: m.sender_id,
             senderName: m.sender?.display_name || "Unknown",
             content: m.content,
             createdAtMs: Date.parse(m.created_at),
-          })),
+            imagePath: m.image_path || null,
+            imageUrl,
+            imageMime: m.image_mime || null,
+            imageW: m.image_w || null,
+            imageH: m.image_h || null,
+          };
+        })
+      );
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          messages: messagesWithUrls,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
