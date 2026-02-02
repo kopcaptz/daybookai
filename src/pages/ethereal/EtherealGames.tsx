@@ -1,24 +1,24 @@
 import { Navigate } from 'react-router-dom';
 import { isEtherealSessionValid } from '@/lib/etherealTokenService';
 import { EtherealHeader } from '@/components/ethereal/EtherealHeader';
-import { Anchor } from 'lucide-react';
+import { Gamepad2 } from 'lucide-react';
 
-export default function EtherealTasks() {
+export default function EtherealGames() {
   if (!isEtherealSessionValid()) {
     return <Navigate to="/e/home" replace />;
   }
 
   return (
-    <div className="flex flex-col min-h-screen yacht-gradient">
-      <EtherealHeader title="Мостик" subtitle="Задачи" />
+    <div className="flex flex-col min-h-screen">
+      <EtherealHeader title="Игровой зал" subtitle="Игры" />
       
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
         <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-          <Anchor className="w-8 h-8 text-muted-foreground" />
+          <Gamepad2 className="w-8 h-8 text-muted-foreground" />
         </div>
-        <h2 className="text-lg font-medium mb-2">Капитанский мостик</h2>
+        <h2 className="text-lg font-medium mb-2">Игровой зал</h2>
         <p className="text-muted-foreground text-sm max-w-sm">
-          Создавайте и распределяйте задачи для команды. Следите за прогрессом вместе.
+          Соревнуйтесь и играйте вместе. Настольные игры, викторины и многое другое.
         </p>
         <p className="text-muted-foreground/60 text-xs mt-4">
           Скоро откроется

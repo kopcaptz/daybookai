@@ -819,80 +819,92 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Ethereal Layer — Pastel Theme (isolated scope)
+   Ethereal Layer — Luxury Yacht Theme (isolated scope)
 ═══════════════════════════════════════════════════════════════ */
 .ethereal {
-  --background: 340 30% 97%;
-  --foreground: 340 15% 20%;
+  /* Смягчённый фон: тёплый нейтральный орех */
+  --background: 25 18% 8%;           /* #16120f */
+  --foreground: 35 15% 92%;          /* Кремовый текст */
 
-  --card: 340 25% 99%;
-  --card-foreground: 340 15% 20%;
+  /* Панели: матовый орех */
+  --card: 28 16% 14%;                /* #292018 */
+  --card-foreground: 35 15% 92%;
 
-  --primary: 340 60% 70%;
-  --primary-foreground: 340 10% 10%;
+  --popover: 28 16% 16%;
+  --popover-foreground: 35 15% 92%;
 
-  --secondary: 200 40% 90%;
-  --secondary-foreground: 200 30% 30%;
+  /* Латунь/золото — primary accent */
+  --primary: 43 75% 48%;             /* #c9a227 */
+  --primary-foreground: 25 18% 8%;
 
-  --accent: 280 50% 80%;
-  --accent-foreground: 280 30% 20%;
+  /* Тёмный орех — secondary */
+  --secondary: 28 14% 18%;
+  --secondary-foreground: 35 12% 82%;
 
-  --muted: 340 15% 92%;
-  --muted-foreground: 340 10% 50%;
+  --muted: 28 12% 16%;
+  --muted-foreground: 32 10% 65%;
 
-  --border: 340 20% 88%;
-  --input: 340 20% 92%;
-  --ring: 340 60% 70%;
+  /* Глубокий морской — accent */
+  --accent: 210 45% 28%;             /* #1e3a5f */
+  --accent-foreground: 35 15% 95%;
 
-  --radius: 1.25rem;
+  --destructive: 0 55% 48%;
+  --destructive-foreground: 35 15% 95%;
 
-  /* Ethereal mood colors */
-  --mood-1: 350 60% 65%;
-  --mood-2: 30 60% 70%;
-  --mood-3: 180 50% 60%;
-  --mood-4: 140 50% 55%;
-  --mood-5: 280 50% 70%;
+  --border: 28 12% 22%;
+  --input: 28 12% 20%;
+  --ring: 43 75% 48%;                /* Латунь ring */
 
-  /* Ethereal glow */
-  --glow-primary: 340 70% 75%;
-  --glow-secondary: 280 60% 70%;
-  --sigil: 340 60% 70%;
-  --rune: 280 40% 75%;
+  --radius: 0.75rem;
 
-  --ethereal-shadow: 0 4px 20px hsl(340 30% 80% / 0.3);
+  /* Yacht-specific glow */
+  --glow-primary: 43 80% 55%;        /* Тёплое латунное свечение */
+  --glow-secondary: 210 50% 45%;     /* Морской акцент */
+  --sigil: 43 75% 50%;
+  --rune: 210 45% 40%;
+
+  --ethereal-shadow: 0 4px 20px hsl(25 30% 5% / 0.5);
 
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
 }
 
 .ethereal .panel-glass {
-  border-radius: 1.25rem;
+  border-radius: 0.75rem;
   box-shadow: var(--ethereal-shadow);
   background: hsl(var(--card) / 0.9);
   border-color: hsl(var(--border));
 }
 
-/* Dark mode overrides for ethereal */
-.dark .ethereal {
-  --background: 340 20% 12%;
-  --foreground: 340 15% 92%;
+/* Gradient overlay utility for yacht background */
+.ethereal .yacht-gradient {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--background)) 0%,
+    hsl(210 35% 10%) 100%
+  );
+}
 
-  --card: 340 18% 16%;
-  --card-foreground: 340 15% 92%;
+/* Brass glow on hover for cabin cards */
+.ethereal .cabin-card {
+  @apply rounded-xl border border-border bg-card transition-all duration-200;
+}
 
-  --primary: 340 55% 65%;
-  --primary-foreground: 340 20% 8%;
+.ethereal .cabin-card:hover {
+  border-color: hsl(var(--primary) / 0.5);
+  box-shadow: 0 0 20px hsl(var(--glow-primary) / 0.15);
+}
 
-  --secondary: 200 30% 22%;
-  --secondary-foreground: 200 25% 85%;
+/* Cream paper style for incoming messages */
+.ethereal .msg-incoming {
+  background-color: #f5f0e8;
+  color: #1a1612;
+}
 
-  --muted: 340 15% 20%;
-  --muted-foreground: 340 10% 65%;
-
-  --border: 340 15% 28%;
-  --input: 340 15% 22%;
-
-  --ethereal-shadow: 0 4px 20px hsl(340 30% 10% / 0.4);
+/* Walnut card style for outgoing messages */
+.ethereal .msg-outgoing {
+  background-color: hsl(var(--card));
+  border-left: 2px solid hsl(var(--primary) / 0.6);
 }
 
 /* Disable cyber noise/grid in ethereal */

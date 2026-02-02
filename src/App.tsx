@@ -54,6 +54,7 @@ const EtherealChat = lazy(() => import("./pages/ethereal/EtherealChat"));
 const EtherealChronicles = lazy(() => import("./pages/ethereal/EtherealChronicles"));
 const EtherealTasks = lazy(() => import("./pages/ethereal/EtherealTasks"));
 const EtherealCalendar = lazy(() => import("./pages/ethereal/EtherealCalendar"));
+const EtherealGames = lazy(() => import("./pages/ethereal/EtherealGames"));
 
 const queryClient = new QueryClient();
 
@@ -175,6 +176,7 @@ function AppContent() {
                 <Route path="chronicles" element={<EtherealChronicles />} />
                 <Route path="tasks" element={<EtherealTasks />} />
                 <Route path="calendar" element={<EtherealCalendar />} />
+                <Route path="games" element={<EtherealGames />} />
               </Route>
               
               <Route path="*" element={<NotFound />} />
