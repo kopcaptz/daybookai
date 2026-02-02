@@ -116,27 +116,53 @@ class EtherealDatabase extends Dexie {
         settings: 'key',
       })
       .upgrade(async (tx) => {
-        // Read all old messages
         const oldMessages = await tx.table('messages').toArray();
 
-        // Deduplicate by serverId (keep the one with latest createdAtMs)
-        const byServerId = new Map<string, any>();
-        for (const msg of oldMessages) {
-          if (!msg.serverId) continue; // skip invalid entries
+        // Safe timestamp parsing
+        const safeParseMs = (v: any): number => {
+          const ms = new Date(v).getTime();
+          return Number.isFinite(ms) ? ms : 0;
+        };
 
-          const existing = byServerId.get(msg.serverId);
-          if (!existing || (msg.createdAtMs ?? 0) > (existing.createdAtMs ?? 0)) {
-            // Remove the old auto-increment id field
+        // Normalize timestamps from various formats
+        const getTimestamp = (m: any): number => {
+          if (typeof m.createdAtMs === 'number') return m.createdAtMs;
+          if (m.createdAt) return safeParseMs(m.createdAt);
+          if (m.created_at) return safeParseMs(m.created_at);
+          return 0;
+        };
+
+        const byServerId = new Map<string, any>();
+
+        for (let i = 0; i < oldMessages.length; i++) {
+          const msg: any = oldMessages[i];
+
+          // 1) Legacy serverId (deterministic) - preserve messages without serverId
+          const legacyIdPart = msg.id ?? i;
+          const serverId = msg.serverId || `legacy-${legacyIdPart}`;
+
+          // 2) Normalize time once
+          const msgTime = getTimestamp(msg);
+
+          const existing = byServerId.get(serverId);
+          const existingTime = existing ? (existing.createdAtMs ?? getTimestamp(existing)) : 0;
+
+          // Keep newest
+          if (!existing || msgTime > existingTime) {
             const { id, ...rest } = msg;
-            byServerId.set(msg.serverId, {
+
+            byServerId.set(serverId, {
               ...rest,
-              syncStatus: rest.syncStatus === 'pending' ? 'synced' : rest.syncStatus,
+              serverId,
+              createdAtMs: msgTime,
+              // 3) syncStatus default - never undefined
+              syncStatus: rest.syncStatus === 'failed' ? 'failed' : 'synced',
             });
           }
         }
 
-        // Clear and re-insert with new schema
         await tx.table('messages').clear();
+
         const deduplicated = [...byServerId.values()];
         if (deduplicated.length > 0) {
           await tx.table('messages').bulkPut(deduplicated);
