@@ -1,12 +1,13 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { MessageCircle, BookOpen, CheckSquare, Calendar } from 'lucide-react';
+import { Wine, BookOpen, Anchor, Map, Gamepad2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const tabs = [
-  { path: '/e/chat', icon: MessageCircle, label: 'Chat' },
-  { path: '/e/chronicles', icon: BookOpen, label: 'Chronicles' },
-  { path: '/e/tasks', icon: CheckSquare, label: 'Tasks' },
-  { path: '/e/calendar', icon: Calendar, label: 'Calendar' },
+  { path: '/e/chat', icon: Wine, label: 'Бар', sublabel: 'Чат' },
+  { path: '/e/chronicles', icon: BookOpen, label: 'Библиотека', sublabel: 'Хроники' },
+  { path: '/e/tasks', icon: Anchor, label: 'Мостик', sublabel: 'Задачи' },
+  { path: '/e/calendar', icon: Map, label: 'Карта', sublabel: 'Календарь' },
+  { path: '/e/games', icon: Gamepad2, label: 'Игры', sublabel: '' },
 ];
 
 export function EtherealBottomTabs() {
@@ -24,14 +25,18 @@ export function EtherealBottomTabs() {
               key={tab.path}
               to={tab.path}
               className={cn(
-                'flex flex-col items-center justify-center flex-1 h-full transition-colors',
+                'flex flex-col items-center justify-center flex-1 h-full transition-colors relative',
                 isActive
                   ? 'text-primary'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
+              {/* Active indicator - brass top border */}
+              {isActive && (
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary rounded-full" />
+              )}
               <Icon className="h-5 w-5" />
-              <span className="text-xs mt-1">{tab.label}</span>
+              <span className="text-[10px] mt-1 font-medium">{tab.label}</span>
             </NavLink>
           );
         })}

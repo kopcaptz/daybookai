@@ -62,7 +62,7 @@ export function EtherealGate() {
   }
 
   return (
-    <div className="ethereal min-h-screen flex flex-col bg-background">
+    <div className="ethereal min-h-screen flex flex-col yacht-gradient">
       <div className="flex-1 overflow-auto pb-20">
         <Outlet />
       </div>

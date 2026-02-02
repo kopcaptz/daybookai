@@ -93,14 +93,14 @@ export default function EtherealChat() {
   };
 
   return (
-    <div className="flex flex-col h-screen">
-      <EtherealHeader title="Chat" />
+    <div className="flex flex-col h-screen yacht-gradient">
+      <EtherealHeader title="Бар" subtitle="Чат" />
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 ? (
           <div className="text-center text-muted-foreground py-12">
-            <p>No messages yet. Say hello!</p>
+            <p>Ещё никто ничего не сказал. Начните разговор!</p>
           </div>
         ) : (
           messages.map((msg) => {
@@ -117,8 +117,8 @@ export default function EtherealChat() {
                   className={cn(
                     'px-4 py-2 rounded-2xl',
                     isOwn
-                      ? 'bg-primary text-primary-foreground rounded-br-md'
-                      : 'bg-muted rounded-bl-md'
+                      ? 'msg-outgoing rounded-br-md'
+                      : 'msg-incoming rounded-bl-md'
                   )}
                 >
                   {/* Image (if present) */}
@@ -147,8 +147,8 @@ export default function EtherealChat() {
         {typingMembers.length > 0 && (
           <div className="text-xs text-muted-foreground animate-pulse">
             {typingMembers.length === 1
-              ? 'Someone is typing...'
-              : `${typingMembers.length} people are typing...`}
+              ? 'Кто-то наливает...'
+              : `${typingMembers.length} человек наливают...`}
           </div>
         )}
 
@@ -156,7 +156,7 @@ export default function EtherealChat() {
       </div>
 
       {/* Input */}
-      <div className="sticky bottom-16 bg-background border-t border-border p-3">
+      <div className="sticky bottom-16 bg-card border-t border-border p-3">
         {/* Pending image preview */}
         {pendingImage && (
           <div className="mb-2 relative inline-block">
@@ -183,7 +183,7 @@ export default function EtherealChat() {
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={isConnected ? 'Сообщение...' : 'Подключение...'}
+            placeholder={isConnected ? 'Шепнуть в бар...' : 'В порту...'}
             disabled={!isConnected || isSending}
             className="flex-1"
           />
@@ -191,6 +191,7 @@ export default function EtherealChat() {
             onClick={handleSend}
             disabled={(!input.trim() && !pendingImage) || !isConnected || isSending}
             size="icon"
+            className="bg-primary hover:bg-primary/90"
           >
             {isSending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
