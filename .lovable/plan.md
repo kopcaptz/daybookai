@@ -1,172 +1,122 @@
 
-# План исправления Ethereal Layer Messaging v6 (финальный)
+# План: Финальный upgrade-блок v2
 
 ## Обзор
-
-Устранение 3 рисков + 3 улучшения для надёжной синхронизации сообщений. Включает аккуратную миграцию данных v1 → v2.
-
----
-
-## Этап 1: etherealDb.ts — serverId как primary key + миграция
-
-### Изменения в интерфейсе EtherealMessage
-
-```text
-- Убираем id?: number
-- serverId: string — теперь PRIMARY KEY (обязательный)
-- syncStatus: 'synced' | 'failed' (убрали 'pending')
-```
-
-### Добавляем stableMsgSort()
-
-```text
-function stableMsgSort(a, b):
-  if (a.createdAtMs !== b.createdAtMs)
-    return a.createdAtMs - b.createdAtMs
-  return a.serverId.localeCompare(b.serverId)
-```
-
-### Миграция v1 → v2 (для существующих пользователей)
-
-```text
-version(2).stores({
-  messages: 'serverId, roomId, createdAtMs, [roomId+createdAtMs]',
-  // остальные таблицы без изменений
-}).upgrade(tx):
-  1. Читаем все старые сообщения
-  2. Дедуплицируем по serverId (берём свежее по createdAtMs)  
-  3. Удаляем старое поле id из объектов
-  4. clear() + bulkPut() с новой схемой
-```
-
-### Обновляем mergeMessages()
-
-```text
-- Использовать bulkPut вместо bulkAdd (upsert по serverId)
-- Возвращать toArray().sort(stableMsgSort)
-```
-
-### Обновляем EntityTable typing
-
-```text
-messages!: EntityTable<EtherealMessage, 'serverId'>
-```
+Применить рекомендованный upgrade-блок с 3 улучшениями для надёжной миграции данных.
 
 ---
 
-## Этап 2: useEtherealRealtime.ts — 6 улучшений
+## Изменения в `src/lib/etherealDb.ts`
 
-### A) Guard от параллельных loadHistory()
+### Строки 118-144: Заменить upgrade-блок
 
-```text
-+ historyInFlightRef = useRef(false)
-+ Early return если уже выполняется
+**Было:**
+```typescript
+.upgrade(async (tx) => {
+  const oldMessages = await tx.table('messages').toArray();
+
+  const byServerId = new Map<string, any>();
+  for (const msg of oldMessages) {
+    if (!msg.serverId) continue; // skip invalid entries
+
+    const existing = byServerId.get(msg.serverId);
+    if (!existing || (msg.createdAtMs ?? 0) > (existing.createdAtMs ?? 0)) {
+      const { id, ...rest } = msg;
+      byServerId.set(msg.serverId, {
+        ...rest,
+        syncStatus: rest.syncStatus === 'pending' ? 'synced' : rest.syncStatus,
+      });
+    }
+  }
+
+  await tx.table('messages').clear();
+  const deduplicated = [...byServerId.values()];
+  if (deduplicated.length > 0) {
+    await tx.table('messages').bulkPut(deduplicated);
+  }
+});
 ```
 
-### B) Мгновенный UI update в sendMessage()
+**Станет:**
+```typescript
+.upgrade(async (tx) => {
+  const oldMessages = await tx.table('messages').toArray();
 
-```text
-1. POST → получаем data.id, data.createdAtMs
-2. Сразу setMessages([...prev, newMsg].sort(stableMsgSort))
-3. etherealDb.messages.put(newMsg)
-4. broadcast для других участников
-```
+  // Safe timestamp parsing
+  const safeParseMs = (v: any): number => {
+    const ms = new Date(v).getTime();
+    return Number.isFinite(ms) ? ms : 0;
+  };
 
-### C) Reconcile при SUBSCRIBED
+  // Normalize timestamps from various formats
+  const getTimestamp = (m: any): number => {
+    if (typeof m.createdAtMs === 'number') return m.createdAtMs;
+    if (m.createdAt) return safeParseMs(m.createdAt);
+    if (m.created_at) return safeParseMs(m.created_at);
+    return 0;
+  };
 
-```text
-subscribe():
-  if (SUBSCRIBED):
-    await loadHistory()  // reconcile при каждом переподключении
-    await channel.track(...)
-```
+  const byServerId = new Map<string, any>();
 
-### D) Умный periodic reconcile (рекомендация A)
+  for (let i = 0; i < oldMessages.length; i++) {
+    const msg: any = oldMessages[i];
 
-```text
-+ useEffect с setInterval(45 сек)
-+ Проверка document.visibilityState === 'visible'
-+ Проверка channelRef.current существует
-+ Экономит батарею на Android
-```
+    // 1) Legacy serverId (deterministic) - preserve messages without serverId
+    const legacyIdPart = msg.id ?? i;
+    const serverId = msg.serverId || `legacy-${legacyIdPart}`;
 
-### E) Слушаем member_kicked
+    // 2) Normalize time once
+    const msgTime = getTimestamp(msg);
 
-```text
-.on('broadcast', { event: 'member_kicked' }):
-  if (payload.targetMemberId === memberId):
-    clearEtherealSession()
-    removeChannel()
-    dispatchEvent('ethereal-kicked')
-```
+    const existing = byServerId.get(serverId);
+    const existingTime = existing ? (existing.createdAtMs ?? getTimestamp(existing)) : 0;
 
-### F) Экспорт broadcastKick() и refresh
+    // Keep newest
+    if (!existing || msgTime > existingTime) {
+      const { id, ...rest } = msg;
 
-```text
-broadcastKick(targetMemberId):
-  channel.send({ event: 'member_kicked', payload: { targetMemberId } })
+      byServerId.set(serverId, {
+        ...rest,
+        serverId,
+        createdAtMs: msgTime,
+        // 3) syncStatus default - never undefined
+        syncStatus: rest.syncStatus === 'failed' ? 'failed' : 'synced',
+      });
+    }
+  }
 
-return { messages, onlineMembers, typingMembers, sendTyping, sendMessage, 
-         broadcastKick, refresh: loadHistory, isConnected }
+  await tx.table('messages').clear();
+
+  const deduplicated = [...byServerId.values()];
+  if (deduplicated.length > 0) {
+    await tx.table('messages').bulkPut(deduplicated);
+  }
+});
 ```
 
 ---
 
-## Этап 3: EtherealMembersSheet.tsx — broadcast kick
-
-### Изменения
-
-```text
-+ props: onKickSuccess?: (targetMemberId: string) => void
-
-handleKick():
-  после успешного DELETE:
-    onKickSuccess?.(targetMemberId)
-    loadMembers()
-```
-
----
-
-## Этап 4: EtherealChat.tsx — обработка событий
-
-### Добавляем event listeners
-
-```text
-useEffect():
-  handleKicked:
-    toast.error('Вас удалили из комнаты')
-    navigate('/')
-    
-  handleExpired:
-    toast.error('Сессия истекла')  
-    navigate('/')
-  
-  addEventListener('ethereal-kicked', handleKicked)
-  addEventListener('ethereal-session-expired', handleExpired)
-```
-
----
-
-## Чеклист файлов
-
-| Файл | Изменения |
-|------|-----------|
-| `src/lib/etherealDb.ts` | serverId=PK, v2 миграция с upgrade, stableMsgSort, mergeMessages с bulkPut |
-| `src/hooks/useEtherealRealtime.ts` | historyInFlightRef, instant UI, reconcile on SUBSCRIBED, smart periodic reconcile, member_kicked, broadcastKick, refresh |
-| `src/components/ethereal/EtherealMembersSheet.tsx` | onKickSuccess callback prop |
-| `src/pages/ethereal/EtherealChat.tsx` | kicked/expired event handlers с toast + navigate |
-
----
-
-## Ожидаемый результат
+## Улучшения
 
 | Проблема | Решение |
 |----------|---------|
-| Дубли в IndexedDB | Upsert по serverId (primary key) |
-| UI-лаг после отправки | Instant state update до broadcast |
-| Пропущенные сообщения | Reconcile при SUBSCRIBED + каждые 45 сек |
-| Kick UX | Мгновенный через broadcast member_kicked |
-| Нестабильный порядок | Tie-breaker по serverId |
-| Параллельные loadHistory | Guard с historyInFlightRef |
-| Батарея Android | Visibility API для periodic reconcile |
-| Миграция данных | Аккуратный upgrade v1→v2 с дедупликацией |
+| Потеря сообщений без serverId | `legacy-${id}` — детерминированный, стабильный ID |
+| Некорректный дедуп по времени | `safeParseMs()` + `getTimestamp()` для createdAt/created_at |
+| undefined syncStatus | Дефолт `'synced'`, сохраняем только `'failed'` |
+| Потеря normalized времени | Записываем `createdAtMs: msgTime` в результат |
+
+---
+
+## Чеклист
+
+| Файл | Изменение |
+|------|-----------|
+| `src/lib/etherealDb.ts` | Финальный upgrade-блок с 3 фиксами |
+
+---
+
+## Подтверждения после внедрения
+
+1. ✅ `EtherealMessage.serverId` — уже обязательный (строка 5)
+2. ✅ `EntityTable<EtherealMessage, 'serverId'>` — уже есть (строка 88)  
+3. ✅ `mergeMessages()` — тип `Promise<EtherealMessage[]>` уже корректный (строка 160)
