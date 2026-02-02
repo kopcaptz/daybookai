@@ -1,106 +1,177 @@
 
 
-# Переименование приложения: "Кибер-Гримуар" → "Магический блокнот"
+# ТЗ №1: Исправление бага Infinity:NaN при валидации аудио
 
-## Обзор изменений
+## Проблема
 
-Переименование затрагивает 11 файлов в нескольких категориях: SEO/meta-теги, PWA-манифест, интерфейс и AI-промпты.
+При записи аудио через MediaRecorder в формате `.webm` (особенно на Chrome/Android) браузер иногда возвращает `Infinity` вместо реальной длительности аудио.
 
----
+**Причина:**
+- `audio.duration` возвращает `Infinity` для streaming-форматов, пока аудио не полностью загружено/декодировано
+- Валидация `if (duration > maxDuration)` → `Infinity > 600` = `true` → ошибка "Аудио слишком длинное"
+- Форматирование `formatDuration(Infinity)` → `Infinity:NaN`
 
-## 1. HTML и SEO (`index.html`)
+## Решение
 
-| Строка | Было | Станет |
-|--------|------|--------|
-| 23 | `apple-mobile-web-app-title="Кибер-Гримуар"` | `"Магический блокнот"` |
-| 27 | `description="Кибер-Гримуар — цифровой гримуар..."` | `"Магический блокнот — цифровой дневник..."` |
-| 29 | `og:title="Кибер-Гримуар — Цифровой гримуар"` | `"Магический блокнот — Цифровой дневник"` |
-| 30 | `og:description="Личные хроники с AI-печатью дня"` | `"Персональный дневник с AI-помощником"` |
-| 37 | `<title>Кибер-Гримуар — Цифровой гримуар</title>` | `"Магический блокнот — Цифровой дневник"` |
+Добавить проверку на `Infinity` и `NaN` в функцию `getAudioDuration()`, а также использовать fallback на фактическое время записи (которое уже точно отслеживается в `AudioCapture`).
 
 ---
 
-## 2. PWA Манифест (`vite.config.ts`)
+## Технические изменения
 
-| Поле | Было | Станет |
-|------|------|--------|
-| `name` | `"Daybook — Персональный дневник"` | `"Магический блокнот"` |
-| `short_name` | `"Daybook"` | `"Блокнот"` |
-| `description` | `"Уютный персональный дневник..."` | `"Уютный персональный дневник с AI-помощником"` |
+### 1. Файл: `src/lib/mediaUtils.ts`
 
----
-
-## 3. Локализация (`src/lib/i18n.tsx`)
+**Функция `getAudioDuration()`** — добавить workaround для Infinity:
 
 ```typescript
-// Было
-'app.name': { ru: 'Кибер-Гримуар', en: 'Cyber-Grimoire' }
-
-// Станет
-'app.name': { ru: 'Магический блокнот', en: 'Magic Notebook' }
+export async function getAudioDuration(audioBlob: Blob): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const audio = document.createElement('audio');
+    const url = URL.createObjectURL(audioBlob);
+    
+    // Workaround: некоторые браузеры возвращают Infinity для webm
+    // Нужно дождаться полной загрузки или использовать currentTime trick
+    audio.preload = 'metadata';
+    
+    const handleDuration = () => {
+      URL.revokeObjectURL(url);
+      
+      // Если duration корректен — возвращаем
+      if (isFinite(audio.duration) && audio.duration > 0) {
+        resolve(audio.duration);
+        return;
+      }
+      
+      // Workaround: seek to end для webm
+      audio.currentTime = Number.MAX_SAFE_INTEGER;
+    };
+    
+    audio.onloadedmetadata = handleDuration;
+    
+    // После seek — duration станет конечным
+    audio.ontimeupdate = () => {
+      URL.revokeObjectURL(url);
+      audio.ontimeupdate = null;
+      
+      if (isFinite(audio.duration) && audio.duration > 0) {
+        resolve(audio.duration);
+      } else {
+        // Fallback: вернуть -1, чтобы caller использовал recordingTime
+        resolve(-1);
+      }
+    };
+    
+    audio.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load audio'));
+    };
+    
+    audio.src = url;
+    audio.load();
+  });
+}
 ```
 
----
+### 2. Файл: `src/lib/mediaUtils.ts`
 
-## 4. Онбординг (`src/pages/OnboardingPage.tsx`)
-
-| Язык | Было | Станет |
-|------|------|--------|
-| RU | `"Кибер-Гримуар — дневник и мягкие подсказки..."` | `"Магический блокнот — дневник с мягкими AI-подсказками..."` |
-| EN | `"Cyber-Grimoire is a journal..."` | `"Magic Notebook is a journal..."` |
-
----
-
-## 5. Установка PWA (`src/components/InstallPrompt.tsx`)
+**Функция `validateAudio()`** — использовать fallback duration:
 
 ```typescript
-// Было
-"Добавьте Daybook на главный экран..."
-
-// Станет  
-"Добавьте Магический блокнот на главный экран..."
+export async function validateAudio(
+  blob: Blob, 
+  fallbackDuration?: number  // ← новый параметр
+): Promise<{
+  valid: boolean;
+  errors: string[];
+  duration?: number;
+}> {
+  const errors: string[] = [];
+  const { maxSize, maxDuration } = MEDIA_LIMITS.audio;
+  
+  if (blob.size > maxSize) {
+    errors.push(`Аудио слишком большое...`);
+  }
+  
+  try {
+    let duration = await getAudioDuration(blob);
+    
+    // Если браузер вернул Infinity/-1, используем fallback
+    if (!isFinite(duration) || duration <= 0) {
+      duration = fallbackDuration ?? 0;
+    }
+    
+    if (duration > maxDuration) {
+      errors.push(`Аудио слишком длинное (${formatDuration(duration)}). Максимум: ${formatDuration(maxDuration)}`);
+    }
+    
+    return { valid: errors.length === 0, errors, duration };
+  } catch {
+    errors.push('Не удалось прочитать аудио');
+    return { valid: false, errors };
+  }
+}
 ```
 
----
+### 3. Файл: `src/components/media/AudioCapture.tsx`
 
-## 6. AI-промпты (Edge Functions)
+**handleConfirm()** — передать `recordingTime` как fallback:
 
-| Файл | Изменение |
-|------|-----------|
-| `ai-entry-analyze/index.ts` | `"кибер-гримуара"` → `"магического блокнота"` |
-| `ai-whisper/index.ts` | `"Оракул приложения «Кибер-Гримуар»"` → `"Оракул «Магического блокнота»"` |
-| `ai-weekly-insights/index.ts` | `"кибер-гримуара"` → `"магического блокнота"` |
+```typescript
+const handleConfirm = async () => {
+  if (!previewBlob) return;
 
----
+  setIsProcessing(true);
+  try {
+    // Передаём recordingTime как fallback для Infinity-duration
+    const validation = await validateAudio(previewBlob, recordingTime);
 
-## 7. Клиентские AI-сервисы
+    if (!validation.valid) {
+      validation.errors.forEach((err) => toast.error(err));
+      return;
+    }
 
-| Файл | Изменение |
-|------|-----------|
-| `src/lib/aiService.ts` | `"Cyber-Grimoire"` → `"Magic Notebook"` |
-| `src/lib/imageAnalysisService.ts` | `"Кибер-Гримуар"` → `"Магический блокнот"` |
+    onCapture(previewBlob, previewBlob.type, validation.duration || recordingTime);
+    // ...
+  }
+};
+```
+
+### 4. Файл: `src/lib/mediaUtils.ts`
+
+**formatDuration()** — защита от NaN:
+
+```typescript
+export function formatDuration(seconds: number): string {
+  // Защита от Infinity/NaN
+  if (!isFinite(seconds) || seconds < 0) {
+    return '—';
+  }
+  
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  
+  if (mins === 0) return `${secs}с`;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+```
 
 ---
 
 ## План выполнения
 
-| Шаг | Файлы | Критичность |
-|-----|-------|-------------|
-| 1 | `index.html` — meta/title | Высокая |
-| 2 | `vite.config.ts` — PWA manifest | Высокая |
-| 3 | `src/lib/i18n.tsx` — app.name | Высокая |
-| 4 | `src/pages/OnboardingPage.tsx` | Средняя |
-| 5 | `src/components/InstallPrompt.tsx` | Средняя |
-| 6 | Edge Functions (3 файла) | Низкая |
-| 7 | Client AI services (2 файла) | Низкая |
+| Шаг | Файл | Изменение |
+|-----|------|-----------|
+| 1 | `src/lib/mediaUtils.ts` | Добавить workaround в `getAudioDuration()` |
+| 2 | `src/lib/mediaUtils.ts` | Добавить `fallbackDuration` в `validateAudio()` |
+| 3 | `src/lib/mediaUtils.ts` | Защита от NaN в `formatDuration()` |
+| 4 | `src/components/media/AudioCapture.tsx` | Передать `recordingTime` как fallback |
 
 ---
 
 ## Результат
 
-После изменений:
-- Вкладка браузера: **"Магический блокнот — Цифровой дневник"**
-- PWA на домашнем экране: **"Блокнот"**
-- Внутри приложения: **"Магический блокнот"**
-- AI-ассистент представляется как помощник **"Магического блокнота"**
+- ✅ Аудио 23 секунды будет корректно сохраняться
+- ✅ Отображение времени: `0:23` вместо `Infinity:NaN`
+- ✅ Валидация использует точное время записи как fallback
+- ✅ Лимит 10 минут работает корректно
 
