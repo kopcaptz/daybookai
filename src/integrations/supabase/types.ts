@@ -164,6 +164,123 @@ export type Database = {
           },
         ]
       }
+      ethereal_game_rounds: {
+        Row: {
+          ai_reflection: string | null
+          category: string
+          created_at: string | null
+          id: string
+          options: Json
+          picker_answer: string | null
+          picker_revealed: boolean
+          responder_answer: string | null
+          responder_custom: string | null
+          round_number: number
+          session_id: string
+          situation_text: string
+          values_questions: Json | null
+        }
+        Insert: {
+          ai_reflection?: string | null
+          category: string
+          created_at?: string | null
+          id?: string
+          options?: Json
+          picker_answer?: string | null
+          picker_revealed?: boolean
+          responder_answer?: string | null
+          responder_custom?: string | null
+          round_number: number
+          session_id: string
+          situation_text: string
+          values_questions?: Json | null
+        }
+        Update: {
+          ai_reflection?: string | null
+          category?: string
+          created_at?: string | null
+          id?: string
+          options?: Json
+          picker_answer?: string | null
+          picker_revealed?: boolean
+          responder_answer?: string | null
+          responder_custom?: string | null
+          round_number?: number
+          session_id?: string
+          situation_text?: string
+          values_questions?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ethereal_game_rounds_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_game_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ethereal_game_sessions: {
+        Row: {
+          adult_mode: boolean
+          created_at: string | null
+          current_round: number
+          game_type: string
+          id: string
+          picker_id: string | null
+          responder_id: string | null
+          room_id: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          adult_mode?: boolean
+          created_at?: string | null
+          current_round?: number
+          game_type?: string
+          id?: string
+          picker_id?: string | null
+          responder_id?: string | null
+          room_id: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          adult_mode?: boolean
+          created_at?: string | null
+          current_round?: number
+          game_type?: string
+          id?: string
+          picker_id?: string | null
+          responder_id?: string | null
+          room_id?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ethereal_game_sessions_picker_id_fkey"
+            columns: ["picker_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_room_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ethereal_game_sessions_responder_id_fkey"
+            columns: ["responder_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_room_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ethereal_game_sessions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ethereal_messages: {
         Row: {
           content: string
