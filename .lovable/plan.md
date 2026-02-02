@@ -1,108 +1,97 @@
 
 
-# Библиотека (Хроники) v1.0 — Исправленный план
+# Капитанский мостик (Задачи) v1.0
 
 ## Текущее состояние
 
-Таблица `ethereal_chronicles` уже существует с базовыми полями:
-- `id`, `room_id`, `author_id`, `title`, `content`, `created_at`, `updated_at`
-- RLS "Deny all direct access" ✅ уже включён
+**База данных `ethereal_tasks`:**
+- `id`, `room_id`, `creator_id`, `assignee_id`, `title`, `description`
+- `status` (default: 'todo'), `due_at`, `created_at`, `updated_at`
+- RLS "Deny all direct access" уже включён
 
-UI: заглушка "Скоро откроется" в `EtherealChronicles.tsx`
+**Dexie:** Схема v4, задачи с `++id` (auto-increment) — нужно обновить на `serverId` как primary key
+
+**UI:** Заглушка "Скоро откроется" в `EtherealTasks.tsx`
 
 ---
 
-## Фаза A: CRUD (правильный MVP)
+## Фаза A: Базовый CRUD
 
 ### A.1 Миграция БД
 
+Добавить недостающие поля:
+
 ```sql
--- Расширить ethereal_chronicles
-ALTER TABLE public.ethereal_chronicles
-  ADD COLUMN tags text[] NOT NULL DEFAULT '{}'::text[],
-  ADD COLUMN pinned boolean NOT NULL DEFAULT false,
-  ADD COLUMN updated_by uuid,
-  ADD COLUMN editing_by uuid,
-  ADD COLUMN editing_expires_at timestamptz,
-  ADD COLUMN media jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE public.ethereal_tasks
+  ADD COLUMN priority text NOT NULL DEFAULT 'normal'
+    CHECK (priority IN ('normal', 'urgent')),
+  ADD COLUMN completed_at timestamptz,
+  ADD COLUMN completed_by uuid;
 
--- Таблица ревизий
-CREATE TABLE public.ethereal_chronicle_revisions (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  chronicle_id uuid NOT NULL REFERENCES ethereal_chronicles(id) ON DELETE CASCADE,
-  editor_id uuid NOT NULL,
-  title_snapshot text NOT NULL,
-  content_snapshot text NOT NULL,
-  created_at timestamptz DEFAULT now()
-);
-
--- RLS для ревизий
-ALTER TABLE public.ethereal_chronicle_revisions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Deny all direct access" ON public.ethereal_chronicle_revisions
-  AS RESTRICTIVE FOR ALL TO public USING (false) WITH CHECK (false);
-
--- Индексы
-CREATE INDEX idx_chronicles_room_pinned ON ethereal_chronicles(room_id, pinned DESC, updated_at DESC);
-CREATE INDEX idx_chronicle_revisions_chronicle ON ethereal_chronicle_revisions(chronicle_id, created_at DESC);
+-- Индексы для частых запросов
+CREATE INDEX IF NOT EXISTS idx_tasks_room_updated 
+  ON ethereal_tasks(room_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_room_status_due 
+  ON ethereal_tasks(room_id, status, due_at);
 ```
 
-### A.2 Обновление Dexie (v4)
+### A.2 Обновление Dexie (v5)
 
 ```typescript
-// Primary key = serverId (как у messages)
-interface EtherealChronicle {
-  serverId: string;  // PRIMARY KEY
+interface EtherealTask {
+  serverId: string;       // PRIMARY KEY (как messages/chronicles)
   roomId: string;
-  authorId: string;
-  authorName: string;
-  updatedById?: string;
-  updatedByName?: string;
+  creatorId: string;
+  creatorName: string;
+  assigneeId?: string;
+  assigneeName?: string;
   title: string;
-  content: string;
-  tags: string[];
-  pinned: boolean;
-  media: Array<{path: string; mime: string; w?: number; h?: number; kind: 'image'|'audio'}>;
-  editingBy?: string;
-  editingExpiresAt?: number;
+  description?: string;
+  status: 'todo' | 'done';          // v1.0: только 2 статуса
+  priority: 'normal' | 'urgent';
+  dueAtMs?: number;
+  completedAtMs?: number;
+  completedByName?: string;
   createdAtMs: number;
   updatedAtMs: number;
   syncStatus: 'pending' | 'synced';
 }
 
-// Schema v4
-chronicles: 'serverId, roomId, updatedAtMs, pinned, [roomId+updatedAtMs]'
+// Schema v5
+tasks: 'serverId, roomId, status, dueAtMs, updatedAtMs, [roomId+status]'
 ```
 
-### A.3 Edge Function `ethereal_chronicles`
-
-Эндпоинты с тем же паттерном токена X-Ethereal-Token:
+### A.3 Edge Function `ethereal_tasks`
 
 | Метод | Путь | Действие |
 |-------|------|----------|
-| `GET` | `/?limit=50&before=timestamp` | Список хроник комнаты |
-| `GET` | `/:id` | Одна хроника |
-| `POST` | `/` | Создать запись |
-| `PUT` | `/:id` | Обновить (создаёт revision) |
-| `POST` | `/:id/pin` | Toggle pinned |
-| `POST` | `/:id/lock` | Взять в редактирование |
-| `POST` | `/:id/unlock` | Освободить (только owner) |
+| `GET` | `/` | Список задач комнаты |
+| `POST` | `/` | Создать задачу |
+| `PUT` | `/:id` | Обновить задачу |
+| `POST` | `/:id/toggle` | done <-> todo |
+| `DELETE` | `/:id` | Удалить задачу |
 
-Формат ответа:
+**Особенности:**
+- Тот же паттерн токена `X-Ethereal-Token`
+- GET: `?includeDone=false&limit=80`
+- JOIN с `ethereal_room_members` для `creatorName` / `assigneeName`
+- Toggle: ставит `completed_at` + `completed_by` при done
+
+**Формат ответа:**
+
 ```json
 {
   "serverId": "uuid",
   "roomId": "uuid",
-  "title": "...",
-  "content": "...",
-  "tags": ["tag1", "tag2"],
-  "pinned": false,
-  "media": [{"path": "...", "signedUrl": "...", "mime": "image/jpeg"}],
-  "authorName": "...",
-  "updatedByName": "...",
-  "createdAtMs": 1234567890,
-  "updatedAtMs": 1234567890,
-  "editingBy": null,
-  "editingExpiresAt": null
+  "title": "Купить продукты",
+  "description": null,
+  "status": "todo",
+  "priority": "normal",
+  "dueAtMs": 1770100000000,
+  "creatorName": "Макс",
+  "assigneeName": "Анна",
+  "createdAtMs": 1770000000000,
+  "updatedAtMs": 1770000000000
 }
 ```
 
@@ -110,116 +99,69 @@ chronicles: 'serverId, roomId, updatedAtMs, pinned, [roomId+updatedAtMs]'
 
 | Файл | Описание |
 |------|----------|
-| `ChroniclesList.tsx` | Список + поиск + секция "📌 Закреплённые" |
-| `ChronicleCard.tsx` | Карточка: заголовок, превью, теги, автор |
-| `ChronicleView.tsx` | Просмотр на "пергаменте" |
-| `ChronicleEditor.tsx` | Редактирование: title + textarea |
+| `TasksList.tsx` | Список с группами (urgent/active/done) |
+| `TaskCard.tsx` | Карточка: чекбокс + заголовок + мета |
+| `TaskEditor.tsx` | Sheet создания/редактирования |
+| `TaskDetail.tsx` | Полный просмотр + редактирование |
 
-Сортировка в списке:
-1. `pinned DESC`
-2. `updatedAt DESC`
+**Группировка в списке:**
+1. **Срочные** — `priority='urgent'` ИЛИ `due_at < now()+24h`
+2. **Активные** — `status='todo'`
+3. **Выполнено** — `status='done'` (свёрнуто по умолчанию)
 
----
-
-## Фаза B: Lock + Revisions
-
-### B.1 Lock контракт (ownership)
-
-Lock выдаётся если:
-- `editing_by IS NULL` или
-- `editing_expires_at < now()` (протух) или
-- `editing_by = текущий memberId` (продление)
-
-Unlock только если:
-- `editing_by = текущий memberId` или
-- `editing_expires_at < now()`
-
-Lock refresh:
-- Клиент каждые 30 сек → `POST /:id/lock`
-- Если сервер вернул `locked_by_other` → режим read-only
-- Timeout: 2 минуты без активности → auto-unlock
-
-UI:
-- Баннер "X редактирует, осталось ~NN сек"
-- Кнопка "Открыть только чтение"
-
-### B.2 Ревизии
-
-При `PUT /:id`:
-1. Сохранить snapshot текущего `title` + `content` в `revisions`
-2. Обновить запись
-3. Снять lock
-
-UI "История" (опционально, можно отложить):
-- Список версий с датой и автором
-- Кнопка "Откатить"
+**Сортировка внутри групп:** `updatedAt DESC`
 
 ---
 
-## Фаза C: Медиа
+## Фаза B: Realtime через Broadcast
 
-### C.1 Storage bucket
+### B.1 Паттерн (как в чате)
 
-```sql
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('ethereal-chronicles-media', 'ethereal-chronicles-media', false);
+После успешной операции (create/update/toggle/delete):
+1. Edge Function возвращает результат
+2. Клиент обновляет UI + Dexie
+3. Клиент делает `broadcast` через канал:
+   - `task_upsert` — создание/обновление
+   - `task_delete` — удаление
+
+### B.2 Hook `useEtherealTasks`
+
+```typescript
+// Подписка на broadcast
+channel.on('broadcast', { event: 'task_upsert' }, async ({ payload }) => {
+  // Dedup через seenTaskEventsRef
+  // Обновить Dexie + UI
+});
+
+channel.on('broadcast', { event: 'task_delete' }, ({ payload }) => {
+  // Удалить из Dexie + UI
+});
 ```
 
-Пути: `{roomId}/chronicle-{chronicleId}/img-{uuid}.jpg`
+### B.3 Интеграция с существующим каналом
 
-### C.2 Upload endpoint
-
-Отдельный эндпоинт `POST /:id/media`:
-- FormData с image/audio
-- Загрузка в bucket
-- Добавление в `media[]` хроники
-- Возврат `{path, signedUrl, mime}`
-
-### C.3 Хранение в контенте (stable path!)
-
-В `content` вставляем плейсхолдер:
-```
-[[img:roomId/chronicle-xxx/img-uuid.jpg]]
-```
-
-При GET сервер:
-1. Пробегает по `media[]`
-2. Генерирует `signedUrl` для каждого (30 мин TTL)
-3. Возвращает в ответе
-
-Клиент при render:
-- Заменяет `[[img:path]]` на `<img src={signedUrl}>`
-
-Так URLs всегда свежие, а контент стабильный.
+Использовать тот же канал `ethereal:${channelKey}` что и для сообщений — добавить события `task_*`.
 
 ---
 
-## Фаза D: AI-помощник
+## Фаза C: UX-детали
 
-### D.1 Edge Function `ethereal_chronicles_ai`
+### C.1 Quick Complete
 
-| Эндпоинт | Действие |
-|----------|----------|
-| `/polish` | Полировка стиля (без добавления фактов) |
-| `/tags` | Предложить теги + настроение |
-| `/summary` | Сводка за N дней (Captain's log) |
-| `/questions` | 3-5 вопросов по записи |
+Тап на чекбокс → мгновенный toggle с анимацией
 
-### D.2 Модель и Safe Mode
+### C.2 Swipe-to-Delete
 
-Модель: `google/gemini-2.5-flash`
+Свайп влево → красная зона "Удалить"
+После удаления — toast "Задача удалена" с кнопкой "Отмена" (10 сек undo)
 
-Системный промпт:
-```
-Ты — бережный архивариус команды яхты.
-Правила:
-1. Никаких догадок — если не написано, не придумывай
-2. Никаких личных данных извне
-3. Интимный/личный контент — бережно, без морализаторства
-4. Стиль: тёплый, лаконичный, уважительный
-```
+### C.3 Empty State
 
-AI получает только текст записи (без медиа).
+"Море спокойно. Дел на мостике нет." + иконка якоря
+
+### C.4 Urgent Badge
+
+Метка "На мостике!" для срочных задач
 
 ---
 
@@ -228,45 +170,55 @@ AI получает только текст записи (без медиа).
 ```text
 src/
 ├── pages/ethereal/
-│   └── EtherealChronicles.tsx    (рефакторинг)
+│   └── EtherealTasks.tsx           (рефакторинг)
 ├── components/ethereal/
-│   ├── ChroniclesList.tsx        (новый)
-│   ├── ChronicleCard.tsx         (новый)
-│   ├── ChronicleView.tsx         (новый)
-│   ├── ChronicleEditor.tsx       (новый)
-│   └── ChronicleAISheet.tsx      (Фаза D)
+│   ├── TasksList.tsx               (новый)
+│   ├── TaskCard.tsx                (новый)
+│   ├── TaskEditor.tsx              (новый)
+│   └── TaskDetail.tsx              (новый)
 ├── hooks/
-│   └── useEtherealChronicles.ts  (новый)
+│   ├── useEtherealRealtime.ts      (добавить task events)
+│   └── useEtherealTasks.ts         (новый)
 └── lib/
-    └── etherealDb.ts             (v4 upgrade)
+    └── etherealDb.ts               (v5 upgrade)
 
-supabase/
-├── functions/
-│   ├── ethereal_chronicles/      (новый)
-│   └── ethereal_chronicles_ai/   (Фаза D)
-└── config.toml                   (добавить функции)
+supabase/functions/
+└── ethereal_tasks/                 (новый)
+    └── index.ts
 ```
 
 ---
 
 ## План выполнения
 
-| Фаза | Что делаем | Приоритет |
-|------|-----------|-----------|
-| **A** | Миграция + Edge Function + UI (список/просмотр/редактирование) | 🔴 Высокий |
-| **B** | Lock editing + Ревизии | 🟡 Средний |
-| **C** | Bucket + Загрузка изображений | 🟡 Средний |
-| **D** | AI-помощник | 🟢 Низкий |
+| Шаг | Задачи |
+|-----|--------|
+| 1 | Миграция БД: добавить `priority`, `completed_at`, `completed_by` |
+| 2 | Обновить Dexie до v5 с `EtherealTask` на `serverId` primary key |
+| 3 | Создать Edge Function `ethereal_tasks` с CRUD + toggle |
+| 4 | Создать hook `useEtherealTasks` |
+| 5 | UI: `TasksList`, `TaskCard`, `TaskEditor` |
+| 6 | Интегрировать broadcast в `useEtherealRealtime` |
+| 7 | UI: swipe-to-delete, empty state, quick complete |
 
 ---
 
-## Ключевые правки учтены
+## Ключевые решения (из правок)
 
-| Правка | Реализация |
-|--------|------------|
-| ✅ `tags text[]` вместо jsonb | Используем `text[] NOT NULL DEFAULT '{}'::text[]` |
-| ✅ RLS уже есть | Проверил: "Deny all direct access" уже включён |
-| ✅ Stable path для медиа | Храним `[[img:path]]`, не signedUrl |
-| ✅ Lock ownership | Только owner может продлевать/снимать |
-| ✅ Dexie serverId | Primary key = serverId, убран `id?: number` |
+| Вопрос | Решение v1.0 |
+|--------|--------------|
+| Статусы | `todo` / `done` (без `in_progress`) |
+| Приоритеты | `normal` / `urgent` (2 уровня) |
+| Права | Любой может toggle/assign/delete |
+| Realtime | Broadcast (не postgres changes) |
+| Архивация | Хранить вечно, UI скрывает done |
+
+---
+
+## Безопасность
+
+1. **RLS "Deny all"** — уже включён для `ethereal_tasks`
+2. **Token validation** — тот же паттерн `X-Ethereal-Token`
+3. **Room scope** — задачи видны только участникам комнаты
+4. **Names через JOIN** — не хранить имена в задаче
 
