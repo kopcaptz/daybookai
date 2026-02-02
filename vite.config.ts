@@ -32,9 +32,9 @@ export default defineConfig(({ mode }) => ({
       ],
       manifest: {
         id: "/",
-        name: "Daybook — Персональный дневник",
-        short_name: "Daybook",
-        description: "Уютный персональный дневник с локальным хранением данных",
+        name: "Магический блокнот",
+        short_name: "Блокнот",
+        description: "Уютный персональный дневник с AI-помощником",
         theme_color: "#C2713D",
         background_color: "#FAF8F5",
         display: "standalone",
