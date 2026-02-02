@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -21,41 +21,42 @@ import { reconcileReminderNotifications } from "@/lib/reminderNotifications";
 import { isOnboarded } from "@/lib/onboarding";
 import { initUsageTracker, trackPageVisit } from "@/lib/usageTracker";
 import { trackNavigation } from "@/lib/crashReporter";
+import { lazyWithRetry, clearChunkReloadFlag } from "@/lib/lazyWithRetry";
 
-// Lazy load pages to reduce initial bundle size
-const Today = lazy(() => import("./pages/Today"));
-const CalendarPage = lazy(() => import("./pages/CalendarPage"));
-const SearchPage = lazy(() => import("./pages/SearchPage"));
-const ChatPage = lazy(() => import("./pages/ChatPage"));
-const SettingsPage = lazy(() => import("./pages/SettingsPage"));
-const NewEntry = lazy(() => import("./pages/NewEntry"));
-const DayView = lazy(() => import("./pages/DayView"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const ReceiptsPage = lazy(() => import("./pages/ReceiptsPage"));
-const ReceiptScanPage = lazy(() => import("./pages/ReceiptScanPage"));
-const ReceiptReviewPage = lazy(() => import("./pages/ReceiptReviewPage"));
-const ReceiptDetailPage = lazy(() => import("./pages/ReceiptDetailPage"));
-const ReceiptAnalyticsPage = lazy(() => import("./pages/ReceiptAnalyticsPage"));
-const ReminderDetailPage = lazy(() => import("./pages/ReminderDetailPage"));
-const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
-const DiscussionsListPage = lazy(() => import("./pages/DiscussionsListPage"));
-const DiscussionChatPage = lazy(() => import("./pages/DiscussionChatPage"));
-const AdminLoginPage = lazy(() => import("./pages/AdminLoginPage"));
-const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
-const AdminFeedbackPage = lazy(() => import("./pages/AdminFeedbackPage"));
-const AdminSystemPage = lazy(() => import("./pages/AdminSystemPage"));
-const AdminCrashesPage = lazy(() => import("./pages/AdminCrashesPage"));
-const AdminAnalyticsPage = lazy(() => import("./pages/AdminAnalyticsPage"));
+// Lazy load pages with retry logic for handling stale chunks after deployments
+const Today = lazyWithRetry(() => import("./pages/Today"));
+const CalendarPage = lazyWithRetry(() => import("./pages/CalendarPage"));
+const SearchPage = lazyWithRetry(() => import("./pages/SearchPage"));
+const ChatPage = lazyWithRetry(() => import("./pages/ChatPage"));
+const SettingsPage = lazyWithRetry(() => import("./pages/SettingsPage"));
+const NewEntry = lazyWithRetry(() => import("./pages/NewEntry"));
+const DayView = lazyWithRetry(() => import("./pages/DayView"));
+const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
+const ReceiptsPage = lazyWithRetry(() => import("./pages/ReceiptsPage"));
+const ReceiptScanPage = lazyWithRetry(() => import("./pages/ReceiptScanPage"));
+const ReceiptReviewPage = lazyWithRetry(() => import("./pages/ReceiptReviewPage"));
+const ReceiptDetailPage = lazyWithRetry(() => import("./pages/ReceiptDetailPage"));
+const ReceiptAnalyticsPage = lazyWithRetry(() => import("./pages/ReceiptAnalyticsPage"));
+const ReminderDetailPage = lazyWithRetry(() => import("./pages/ReminderDetailPage"));
+const OnboardingPage = lazyWithRetry(() => import("./pages/OnboardingPage"));
+const DiscussionsListPage = lazyWithRetry(() => import("./pages/DiscussionsListPage"));
+const DiscussionChatPage = lazyWithRetry(() => import("./pages/DiscussionChatPage"));
+const AdminLoginPage = lazyWithRetry(() => import("./pages/AdminLoginPage"));
+const AdminDashboardPage = lazyWithRetry(() => import("./pages/AdminDashboardPage"));
+const AdminFeedbackPage = lazyWithRetry(() => import("./pages/AdminFeedbackPage"));
+const AdminSystemPage = lazyWithRetry(() => import("./pages/AdminSystemPage"));
+const AdminCrashesPage = lazyWithRetry(() => import("./pages/AdminCrashesPage"));
+const AdminAnalyticsPage = lazyWithRetry(() => import("./pages/AdminAnalyticsPage"));
 
 // Ethereal Layer (hidden feature)
-const EtherealGate = lazy(() => import("./components/ethereal/EtherealGate").then(m => ({ default: m.EtherealGate })));
-const EtherealHome = lazy(() => import("./pages/ethereal/EtherealHome"));
-const EtherealChat = lazy(() => import("./pages/ethereal/EtherealChat"));
-const EtherealChronicles = lazy(() => import("./pages/ethereal/EtherealChronicles"));
-const EtherealTasks = lazy(() => import("./pages/ethereal/EtherealTasks"));
-const EtherealCalendar = lazy(() => import("./pages/ethereal/EtherealCalendar"));
-const EtherealGames = lazy(() => import("./pages/ethereal/EtherealGames"));
-const SituationsGame = lazy(() => import("./pages/ethereal/SituationsGame"));
+const EtherealGate = lazyWithRetry(() => import("./components/ethereal/EtherealGate").then(m => ({ default: m.EtherealGate })));
+const EtherealHome = lazyWithRetry(() => import("./pages/ethereal/EtherealHome"));
+const EtherealChat = lazyWithRetry(() => import("./pages/ethereal/EtherealChat"));
+const EtherealChronicles = lazyWithRetry(() => import("./pages/ethereal/EtherealChronicles"));
+const EtherealTasks = lazyWithRetry(() => import("./pages/ethereal/EtherealTasks"));
+const EtherealCalendar = lazyWithRetry(() => import("./pages/ethereal/EtherealCalendar"));
+const EtherealGames = lazyWithRetry(() => import("./pages/ethereal/EtherealGames"));
+const SituationsGame = lazyWithRetry(() => import("./pages/ethereal/SituationsGame"));
 
 const queryClient = new QueryClient();
 
@@ -87,6 +88,10 @@ function AppContent() {
   
   // Initialize notification listeners and navigation callback on mount
   useEffect(() => {
+    // Clear chunk reload flag on successful mount
+    // This allows future retries if a new deployment happens
+    clearChunkReloadFlag();
+    
     // Set navigation callback for deep-links (uses react-router navigate)
     setNavigationCallback((path: string) => navigate(path));
     
