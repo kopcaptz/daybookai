@@ -43,6 +43,7 @@ export function useEtherealRealtime() {
     historyInFlightRef.current = true;
 
     try {
+      console.log('[RT] history:start');
       const response = await fetch(
         `${SUPABASE_URL}/functions/v1/ethereal_messages?limit=50`,
         { headers: getEtherealApiHeaders() }
@@ -56,6 +57,7 @@ export function useEtherealRealtime() {
 
       const data = await response.json();
       if (data.success && Array.isArray(data.messages)) {
+        console.log('[RT] history:end', { count: data.messages.length });
         const merged = await mergeMessages(currentSession.roomId, data.messages);
         setMessages(merged);
       }
@@ -82,6 +84,7 @@ export function useEtherealRealtime() {
     channel
       .on('broadcast', { event: 'message' }, ({ payload }) => {
         if (!payload?.serverId) return;
+        console.log('[RT] broadcast:received', { serverId: payload.serverId, ts: payload.createdAtMs });
 
         setMessages((prev) => {
           // Don't add duplicates
@@ -135,6 +138,7 @@ export function useEtherealRealtime() {
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
+          console.log('[RT] connected + reconcile');
           setIsConnected(true);
           // Reconcile on every reconnect
           await loadHistory();
@@ -207,6 +211,7 @@ export function useEtherealRealtime() {
 
         const data = await response.json();
         if (!data.success) return data;
+        console.log('[RT] POST ok', { id: data.id, ts: data.createdAtMs });
 
         // Build the new message
         const newMsg: EtherealMessage = {
@@ -240,6 +245,7 @@ export function useEtherealRealtime() {
             createdAtMs: newMsg.createdAtMs,
           },
         });
+        console.log('[RT] broadcast:sent', { serverId: newMsg.serverId });
 
         return { success: true };
       } catch (error) {
