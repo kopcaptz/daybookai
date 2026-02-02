@@ -30,6 +30,7 @@ export function useEtherealRealtime() {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const lastTypingSentRef = useRef<number>(0);
   const historyInFlightRef = useRef(false);
+  const seenBroadcastRef = useRef(new Set<string>());
 
   const session = getEtherealSession();
 
@@ -82,31 +83,40 @@ export function useEtherealRealtime() {
     channelRef.current = channel;
 
     channel
-      .on('broadcast', { event: 'message' }, ({ payload }) => {
+      .on('broadcast', { event: 'message' }, async ({ payload }) => {
         if (!payload?.serverId) return;
+
+        // In-memory dedup guard (prevents double put in Strict Mode / rare duplicate broadcasts)
+        if (seenBroadcastRef.current.has(payload.serverId)) return;
+        seenBroadcastRef.current.add(payload.serverId);
+
         console.log('[RT] broadcast:received', { serverId: payload.serverId, ts: payload.createdAtMs });
 
+        const newMsg: EtherealMessage = {
+          serverId: payload.serverId,
+          roomId: session.roomId,
+          senderId: payload.senderId,
+          senderName: payload.senderName,
+          content: payload.content,
+          createdAtMs: payload.createdAtMs,
+          syncStatus: 'synced',
+          imagePath: payload.imagePath,
+          imageUrl: payload.imageUrl,
+        };
+
+        // 1) Update UI (pure computation only)
         setMessages((prev) => {
-          // Don't add duplicates
           if (prev.some((m) => m.serverId === payload.serverId)) return prev;
-
-          const newMsg: EtherealMessage = {
-            serverId: payload.serverId,
-            roomId: session.roomId,
-            senderId: payload.senderId,
-            senderName: payload.senderName,
-            content: payload.content,
-            createdAtMs: payload.createdAtMs,
-            syncStatus: 'synced',
-            imagePath: payload.imagePath,
-            imageUrl: payload.imageUrl,
-          };
-
-          // Upsert to Dexie
-          etherealDb.messages.put(newMsg);
-
           return [...prev, newMsg].sort(stableMsgSort);
         });
+
+        // 2) Persist to Dexie (outside setState)
+        await etherealDb.messages.put(newMsg);
+
+        // 3) Prevent Set from growing infinitely
+        if (seenBroadcastRef.current.size > 2000) {
+          seenBroadcastRef.current.clear();
+        }
       })
       .on('broadcast', { event: 'member_kicked' }, ({ payload }) => {
         if (payload?.targetMemberId === session.memberId) {
