@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { isEtherealSessionValid, getEtherealSession } from '@/lib/etherealTokenService';
 import { EtherealHeader } from '@/components/ethereal/EtherealHeader';
 import { useEtherealRealtime } from '@/hooks/useEtherealRealtime';
@@ -8,8 +8,32 @@ import { Input } from '@/components/ui/input';
 import { Send, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 export default function EtherealChat() {
+  const navigate = useNavigate();
+
+  // Handle kicked/expired events
+  useEffect(() => {
+    const handleKicked = () => {
+      toast.error('Вас удалили из комнаты');
+      navigate('/');
+    };
+
+    const handleExpired = () => {
+      toast.error('Сессия истекла');
+      navigate('/');
+    };
+
+    window.addEventListener('ethereal-kicked', handleKicked);
+    window.addEventListener('ethereal-session-expired', handleExpired);
+
+    return () => {
+      window.removeEventListener('ethereal-kicked', handleKicked);
+      window.removeEventListener('ethereal-session-expired', handleExpired);
+    };
+  }, [navigate]);
+
   if (!isEtherealSessionValid()) {
     return <Navigate to="/e/home" replace />;
   }
@@ -63,7 +87,7 @@ export default function EtherealChat() {
             const isOwn = msg.senderId === session?.memberId;
             return (
               <div
-                key={msg.serverId || msg.id}
+                key={msg.serverId}
                 className={cn('flex flex-col max-w-[80%]', isOwn ? 'ml-auto items-end' : 'items-start')}
               >
                 {!isOwn && (
