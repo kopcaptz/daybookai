@@ -1,225 +1,248 @@
 
-# План: Редизайн Ethereal Layer — «Роскошная Яхта» (v2)
+# План: Игровой модуль «Ситуации на борту»
 
 ## Обзор
 
-Переработанный план с учётом всех правок:
-- Смягчённый фон с градиентом (не сплошной тёмный тик)
-- Тема через shadcn-токены, scoped в `.ethereal`
-- Двойная подпись на каютах (морское название + функция)
-- Латунь только для акцентов, не для фона сообщений
-- Анимации строго во Фазе 2 с reduced-motion fallback
+Реализация интерактивной игры для двух игроков в разделе «Игровой зал» (/e/games). Игра использует ИИ для генерации жизненных ситуаций и анализа ответов партнёров, работает в реальном времени через существующую broadcast-архитектуру.
 
 ---
 
-## Цветовая палитра `.ethereal` (через shadcn tokens)
+## Архитектура
 
-```css
-.ethereal {
-  /* Смягчённый фон: нейтральный орех → морская глубина */
-  --background: 25 18% 8%;           /* #16120f — тёплый нейтральный */
-  --foreground: 35 15% 92%;          /* Кремовый текст */
+### Игровой цикл (Finite State Machine)
 
-  /* Панели: матовый орех */
-  --card: 28 16% 14%;                /* #292018 */
-  --card-foreground: 35 15% 92%;
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              GAME SESSION FSM                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌────────────┐      start      ┌────────────────┐                        │
+│   │   LOBBY    │ ──────────────> │  PICKER_TURN   │                        │
+│   │ (ждём 2+)  │                 │ (выбор ситуации)│                        │
+│   └────────────┘                 └───────┬────────┘                        │
+│         ^                                │ pick                            │
+│         │                                v                                 │
+│    end_game                      ┌────────────────┐                        │
+│         │                        │ RESPONDER_TURN │                        │
+│         │                        │ (ответ партнёра)│                        │
+│         │                        └───────┬────────┘                        │
+│         │                                │ respond                         │
+│         │                                v                                 │
+│         │                        ┌────────────────┐                        │
+│         │                        │   REFLECTION   │                        │
+│         │<─────── skip_ai ───────│  (опц. разбор) │                        │
+│         │                        └───────┬────────┘                        │
+│         │                                │ reveal / next                   │
+│         │                                v                                 │
+│         └─────── end ────────────────────┘                                 │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-  --popover: 28 16% 16%;
-  --popover-foreground: 35 15% 92%;
+### Структура данных
 
-  /* Латунь/золото — primary accent */
-  --primary: 43 75% 48%;             /* #c9a227 приближённо */
-  --primary-foreground: 25 18% 8%;
+**Таблица: `ethereal_game_sessions`**
 
-  /* Тёмный орех — secondary */
-  --secondary: 28 14% 18%;
-  --secondary-foreground: 35 12% 82%;
+| Колонка | Тип | Описание |
+|---------|-----|----------|
+| id | uuid | PK |
+| room_id | uuid | FK → ethereal_rooms |
+| game_type | text | 'situations' |
+| status | text | 'lobby' / 'active' / 'completed' |
+| current_round | int | 1-based |
+| picker_id | uuid | FK → ethereal_room_members (кто выбирает) |
+| responder_id | uuid | FK → ethereal_room_members (кто отвечает) |
+| adult_mode | boolean | Режим 18+ |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
 
-  --muted: 28 12% 16%;
-  --muted-foreground: 32 10% 65%;
+**Таблица: `ethereal_game_rounds`**
 
-  /* Глубокий морской — accent */
-  --accent: 210 45% 28%;             /* #1e3a5f приближённо */
-  --accent-foreground: 35 15% 95%;
+| Колонка | Тип | Описание |
+|---------|-----|----------|
+| id | uuid | PK |
+| session_id | uuid | FK → ethereal_game_sessions |
+| round_number | int | |
+| category | text | 'budget' / 'boundaries' / 'lifestyle' / ... |
+| situation_text | text | Сгенерированная ИИ ситуация |
+| options | jsonb | [{ id, text }] — варианты A/B/C |
+| picker_answer | text | Что выбрал picker (для сравнения) |
+| responder_answer | text | A/B/C/custom |
+| responder_custom | text | Свой вариант, если выбран |
+| values_questions | jsonb | [{q, a}] — уточняющие вопросы |
+| ai_reflection | text | ИИ-разбор (опционально) |
+| picker_revealed | boolean | Показал ли picker свой ответ |
+| created_at | timestamptz | |
 
-  --destructive: 0 55% 48%;
-  --destructive-foreground: 35 15% 95%;
+---
 
-  --border: 28 12% 22%;
-  --input: 28 12% 20%;
-  --ring: 43 75% 48%;                /* Латунь ring */
+## Компоненты UI
 
-  /* Yacht-specific glow */
-  --glow-primary: 43 80% 55%;        /* Тёплое латунное свечение */
-  --glow-secondary: 210 50% 45%;     /* Морской акцент */
+### Иерархия страниц
+
+```text
+/e/games
+├── EtherealGames.tsx (лобби / список игр)
+│
+└── /e/games/situations/:sessionId
+    └── SituationsGame.tsx
+        ├── GameLobby.tsx        (ожидание игроков)
+        ├── PickerView.tsx       (выбор ситуации)
+        ├── ResponderView.tsx    (карточка + ответ)
+        └── ReflectionView.tsx   (разбор + reveal)
+```
+
+### Визуальный стиль
+
+Карточки ситуаций стилизованы как «бортовые записки»:
+- Фон: кремовая бумага (`#f5f0e8`)
+- Рамка: латунный border
+- Шрифт: serif для заголовков
+- Варианты ответа: кнопки с иконками A/B/C
+
+---
+
+## Realtime-синхронизация
+
+Расширяем существующий broadcast-канал:
+
+```typescript
+// Новые события в useEtherealRealtime
+.on('broadcast', { event: 'game_update' }, ({ payload }) => {
+  // payload: { sessionId, action, data }
+  // actions: 'started', 'round_started', 'picked', 'responded', 'revealed'
+})
+```
+
+Игрок-инициатор отправляет события, другие получают через broadcast.
+
+---
+
+## Edge Function: `ethereal_games`
+
+Методы:
+- `POST /create` — создать сессию
+- `POST /join/:id` — присоединиться
+- `POST /start/:id` — начать игру
+- `POST /generate-situations` — запрос к ИИ (3 ситуации по категории)
+- `POST /pick/:id` — выбор ситуации picker'ом
+- `POST /respond/:id` — ответ responder'а
+- `POST /reveal/:id` — показать ответ picker'а
+- `POST /ai-reflect/:id` — запросить ИИ-разбор
+- `POST /next-round/:id` — следующий раунд (смена ролей)
+- `POST /end/:id` — завершить игру
+
+---
+
+## ИИ-интеграция
+
+### Генерация ситуаций
+
+Используем Lovable AI Gateway (google/gemini-2.5-flash):
+
+```typescript
+const systemPrompt = `
+Ты — ведущий игры "Ситуации на борту" для пар.
+Генерируй 3 реалистичные бытовые ситуации для категории "${category}".
+${adultMode ? 'Режим 18+: можно включать интимные темы.' : 'Режим SFW: избегай интимных тем.'}
+
+Формат JSON:
+{
+  "situations": [
+    {
+      "id": "sit_1",
+      "text": "Описание ситуации...",
+      "options": [
+        { "id": "A", "text": "Вариант A..." },
+        { "id": "B", "text": "Вариант B..." },
+        { "id": "C", "text": "Вариант C..." }
+      ],
+      "valuesQuestion": "Уточняющий вопрос о ценностях..."
+    }
+  ]
 }
+`;
 ```
 
-Градиентный overlay для фона (в компоненте):
-```css
-background: linear-gradient(
-  180deg,
-  hsl(var(--background)) 0%,
-  hsl(210 35% 10%) 100%
-);
+### ИИ-рефлексия
+
+```typescript
+const reflectionPrompt = `
+Партнёр 1 выбрал: ${pickerAnswer}
+Партнёр 2 ответил: ${responderAnswer}
+
+Дай мягкую, конструктивную обратную связь (2-3 предложения).
+Фокусируйся на понимании и сближении, НЕ на оценке "правильности".
+`;
 ```
 
 ---
 
-## Структура кают (страницы)
+## Категории ситуаций
 
-| Путь | Морское название | Функция | Иконка |
-|------|------------------|---------|--------|
-| `/e/home` | Главный салон | Лобби | `Ship` |
-| `/e/chat` | Бар | Чат | `Wine` или `MessageCircle` |
-| `/e/chronicles` | Библиотека | Хроники | `BookOpen` |
-| `/e/tasks` | Капитанский мостик | Задачи | `Anchor` |
-| `/e/calendar` | Штурманская карта | Календарь | `Map` |
-| `/e/games` | Игровой зал | Игры | `Gamepad2` (заглушка) |
+| Категория | Описание | 18+ |
+|-----------|----------|-----|
+| budget | Финансы, покупки, сбережения | Нет |
+| boundaries | Личные границы, время для себя | Нет |
+| lifestyle | Быт, уборка, распорядок | Нет |
+| social | Друзья, семья, гости | Нет |
+| travel | Путешествия, отпуск | Нет |
+| intimacy | Интимная жизнь | Да |
+| fantasies | Желания, фантазии | Да |
 
 ---
 
-## Фаза 1: Базовый редизайн
+## Безопасность
 
-### 1.1 CSS-тема (src/index.css)
+1. **Ethereal Token** — все запросы через существующую валидацию
+2. **Room Scope** — игра ограничена участниками комнаты
+3. **Тон** — системный промпт запрещает конфликтные/манипулятивные формулировки
+4. **18+ Gate** — взрослые категории требуют явного включения режима обоими игроками
 
-Добавить scoped shadcn-токены в `.ethereal`:
+---
 
-```css
-.ethereal {
-  --background: 25 18% 8%;
-  --foreground: 35 15% 92%;
-  --card: 28 16% 14%;
-  /* ... остальные токены */
-}
-```
+## Фаза 1: MVP (Этот план)
 
-Все shadcn-компоненты (Button, Card, Input) автоматически подхватят новые значения внутри `.ethereal` контейнера.
+1. Создать таблицы `ethereal_game_sessions` и `ethereal_game_rounds`
+2. Создать Edge Function `ethereal_games`
+3. Обновить `EtherealGames.tsx` — лобби с кнопкой "Создать игру"
+4. Создать `SituationsGame.tsx` — основной компонент игры
+5. Добавить broadcast события в `useEtherealRealtime`
+6. Интеграция с ИИ для генерации ситуаций
 
-### 1.2 EtherealGate (Layout wrapper)
+## Фаза 2: Улучшения
 
-Обновить обёртку:
-- Добавить градиентный overlay на фон
-- Класс `ethereal` уже применяется ✓
-
-### 1.3 EtherealHome → YachtSalon
-
-**Структура:**
-
-```
-┌─────────────────────────────────────┐
-│  ⚓ S/Y Aurora        ● На ходу     │  ← Header (название яхты + статус)
-├─────────────────────────────────────┤
-│                                     │
-│   Добро пожаловать на борт,         │
-│        {displayName}!               │
-│                                     │
-├─────────────────────────────────────┤
-│  ┌─────────────┐  ┌─────────────┐   │
-│  │  🍷 Бар     │  │ 📖 Библиот. │   │
-│  │    Чат     │  │   Хроники   │   │  ← Двойная подпись
-│  └─────────────┘  └─────────────┘   │
-│  ┌─────────────┐  ┌─────────────┐   │
-│  │ ⚓ Мостик   │  │ 🗺️ Карта    │   │
-│  │   Задачи   │  │  Календарь  │   │
-│  └─────────────┘  └─────────────┘   │
-│  ┌─────────────┐                    │
-│  │ 🎮 Игровой  │  ← "Скоро"        │
-│  │     зал    │                    │
-│  └─────────────┘                    │
-├─────────────────────────────────────┤
-│  Гости на борту: 3                  │
-│  ● Капитан  ● Штурман  ● Гость     │
-└─────────────────────────────────────┘
-```
-
-Карточка каюты (`CabinCard`):
-- Тёмный орех фон (`bg-card`)
-- Латунный border при hover
-- Иконка + морское название (крупно)
-- Функциональное название (мелко, muted)
-
-### 1.4 EtherealBottomTabs → YachtDeck
-
-**Обновления:**
-- Фон: `bg-card` (орех)
-- Активный таб: латунный цвет (`text-primary`) + тонкий top-border
-- Иконки: `Wine`, `BookOpen`, `Anchor`, `Map`
-- Двойная подпись: морское название + функция (или только короткое)
-
-### 1.5 EtherealHeader → YachtHeader
-
-**Обновления:**
-- Название: "S/Y Aurora" (или кастомное из комнаты)
-- Статус подключения: "На ходу" (connected) / "В порту" (connecting)
-- Кнопка "Команда" (Users) → "Экипаж"
-- "Покинуть борт" вместо LogOut
-
-### 1.6 EtherealChat → BarLounge
-
-**Стилизация сообщений:**
-- Входящие: кремовая бумага (`bg-[#f5f0e8]` / `text-[#1a1612]`)
-- Исходящие: тёмный орех (`bg-card`) + тонкий латунный border слева
-- Латунь ТОЛЬКО для: кнопки send, активных состояний, иконок
-- Input placeholder: "Шепнуть в бар..."
-- Typing indicator: "Кто-то наливает..."
-
-### 1.7 Заглушка /e/games
-
-Новый файл: `src/pages/ethereal/EtherealGames.tsx`
-- Иконка `Gamepad2`
-- "Игровой зал"
-- "Скоро откроется..."
-- Регистрация route в App.tsx
+- История сыгранных игр
+- Статистика совпадений
+- Кастомные категории
+- Режим "Быстрая игра" (1 раунд)
 
 ---
 
 ## Изменяемые файлы
 
-| Файл | Изменения |
-|------|-----------|
-| `src/index.css` | Добавить `.ethereal { --background: ...; }` shadcn tokens |
-| `src/components/ethereal/EtherealGate.tsx` | Градиентный overlay |
-| `src/components/ethereal/EtherealHeader.tsx` | Yacht-стиль: название, статус, терминология |
-| `src/components/ethereal/EtherealBottomTabs.tsx` | Новые иконки, двойные подписи, yacht-стили |
-| `src/pages/ethereal/EtherealHome.tsx` | Полный редизайн в YachtSalon с CabinCards |
-| `src/pages/ethereal/EtherealChat.tsx` | Bar-стилизация: бумага/орех bubbles, латунные акценты |
-| `src/pages/ethereal/EtherealChronicles.tsx` | Обновить заголовок "Библиотека / Хроники" |
-| `src/pages/ethereal/EtherealTasks.tsx` | Обновить заголовок "Мостик / Задачи" |
-| `src/pages/ethereal/EtherealCalendar.tsx` | Обновить заголовок "Карта / Календарь" |
-| **Новый:** `src/pages/ethereal/EtherealGames.tsx` | Заглушка игрового зала |
-| `src/App.tsx` | Добавить route `/e/games` |
-
----
-
-## Фаза 2 (Атмосфера) — Отложено
-
-После одобрения Фазы 1:
-- `YachtPorthole.tsx` — анимированный иллюминатор с водой
-- Hover-эффекты на дверях кают (латунная ручка, свечение)
-- `@media (prefers-reduced-motion: reduce)` → статичная версия
-- Лёгкие текстуры webp с низкой opacity (опционально)
-
----
-
-## Порядок реализации
-
-1. CSS: добавить `.ethereal` tokens в index.css
-2. EtherealGate: градиентный overlay
-3. EtherealHeader: yacht-терминология
-4. EtherealBottomTabs: новые иконки + стили
-5. EtherealHome: YachtSalon с карточками кают
-6. EtherealChat: Bar-стилизация
-7. Остальные страницы: обновить заголовки
-8. EtherealGames: заглушка
-9. App.tsx: route /e/games
+| Файл | Действие |
+|------|----------|
+| **База данных** | Миграция: 2 новые таблицы |
+| `supabase/functions/ethereal_games/index.ts` | Создать Edge Function |
+| `src/pages/ethereal/EtherealGames.tsx` | Редизайн в лобби |
+| `src/pages/ethereal/SituationsGame.tsx` | Новый: основная страница игры |
+| `src/components/games/GameLobby.tsx` | Новый: ожидание игроков |
+| `src/components/games/PickerView.tsx` | Новый: выбор ситуации |
+| `src/components/games/ResponderView.tsx` | Новый: ответ на ситуацию |
+| `src/components/games/ReflectionView.tsx` | Новый: рефлексия + reveal |
+| `src/components/games/SituationCard.tsx` | Новый: стилизованная карточка |
+| `src/hooks/useEtherealRealtime.ts` | Добавить game_update события |
+| `src/lib/etherealDb.ts` | Добавить таблицы для локального кэша |
+| `src/App.tsx` | Добавить route `/e/games/situations/:id` |
 
 ---
 
 ## Результат
 
-Пользователи попадают в **атмосферный салон роскошной яхты**, где:
-- Тёплая палитра ореха и латуни создаёт ощущение эксклюзивности
-- Каждая "каюта" — раздел функционала с понятной навигацией
-- Двойные подписи убирают когнитивный разрыв
-- shadcn-компоненты автоматически работают в новой теме
+Интерактивная игра для двоих, интегрированная в яхтенную эстетику «Эфирного слоя». Пользователи могут:
+- Создавать игровые сессии
+- Выбирать категории и режим (SFW/18+)
+- Обмениваться ситуациями в реальном времени
+- Получать мягкую ИИ-обратную связь о совместимости взглядов
+- Сохранять историю раундов для рефлексии
