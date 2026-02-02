@@ -241,58 +241,26 @@ class EtherealDatabase extends Dexie {
         }
       });
 
-    // v5 - tasks with serverId as primary key + priority/completed fields
-    this.version(5)
-      .stores({
-        messages: 'serverId, roomId, createdAtMs, [roomId+createdAtMs]',
-        chronicles: 'serverId, roomId, updatedAtMs, pinned, [roomId+updatedAtMs]',
-        tasks: 'serverId, roomId, status, dueAtMs, updatedAtMs, [roomId+status]',
-        events: '++id, serverId, roomId, startAtMs',
-        members: 'id, roomId, joinedAtMs',
-        settings: 'key',
-      })
-      .upgrade(async (tx) => {
-        const oldTasks = await tx.table('tasks').toArray();
-        
-        const byServerId = new Map<string, EtherealTask>();
-        
-        for (let i = 0; i < oldTasks.length; i++) {
-          // deno-lint-ignore no-explicit-any
-          const t: any = oldTasks[i];
-          const serverId = t.serverId || `legacy-${t.id ?? i}`;
-          
-          if (!byServerId.has(serverId)) {
-            // Map old in_progress to todo for v1.0
-            const status = t.status === 'done' ? 'done' : 'todo';
-            
-            byServerId.set(serverId, {
-              serverId,
-              roomId: t.roomId,
-              creatorId: t.creatorId,
-              creatorName: t.creatorName || 'Unknown',
-              assigneeId: t.assigneeId,
-              assigneeName: t.assigneeName,
-              title: t.title || '',
-              description: t.description,
-              status,
-              priority: t.priority || 'normal',
-              dueAtMs: t.dueAtMs,
-              completedAtMs: t.completedAtMs,
-              completedByName: t.completedByName,
-              createdAtMs: t.createdAtMs || Date.now(),
-              updatedAtMs: t.updatedAtMs || Date.now(),
-              syncStatus: 'synced',
-            });
-          }
-        }
-        
-        await tx.table('tasks').clear();
-        
-        const migrated = [...byServerId.values()];
-        if (migrated.length > 0) {
-          await tx.table('tasks').bulkPut(migrated);
-        }
-      });
+    // v5 - DELETE old tasks table (required to change primary key)
+    // Dexie doesn't support changing primary key, so we delete and recreate
+    this.version(5).stores({
+      messages: 'serverId, roomId, createdAtMs, [roomId+createdAtMs]',
+      chronicles: 'serverId, roomId, updatedAtMs, pinned, [roomId+updatedAtMs]',
+      tasks: null,  // DELETE the table
+      events: '++id, serverId, roomId, startAtMs',
+      members: 'id, roomId, joinedAtMs',
+      settings: 'key',
+    });
+
+    // v6 - CREATE new tasks table with serverId as primary key
+    this.version(6).stores({
+      messages: 'serverId, roomId, createdAtMs, [roomId+createdAtMs]',
+      chronicles: 'serverId, roomId, updatedAtMs, pinned, [roomId+updatedAtMs]',
+      tasks: 'serverId, roomId, status, dueAtMs, updatedAtMs, [roomId+status]',
+      events: '++id, serverId, roomId, startAtMs',
+      members: 'id, roomId, joinedAtMs',
+      settings: 'key',
+    });
   }
 }
 
