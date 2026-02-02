@@ -1,62 +1,106 @@
 
 
-# Исправление ошибки Dexie: изменение primary key таблицы tasks
+# Переименование приложения: "Кибер-Гримуар" → "Магический блокнот"
 
-## Проблема
+## Обзор изменений
 
-При попытке открыть страницу "Мостик" (Tasks) возникает ошибка:
-```
-DatabaseClosedError: UpgradeError Not yet support for changing primary key
-```
+Переименование затрагивает 11 файлов в нескольких категориях: SEO/meta-теги, PWA-манифест, интерфейс и AI-промпты.
 
-**Причина:** В Dexie нельзя изменить primary key существующей таблицы. Схема v5 пытается изменить `tasks` с `++id` (auto-increment) на `serverId`, что невозможно.
+---
 
-## Решение
+## 1. HTML и SEO (`index.html`)
 
-Использовать специальный паттерн Dexie для пересоздания таблицы:
-1. В промежуточной версии (v5.1) установить `tasks: null` для удаления таблицы
-2. В следующей версии (v6) создать новую таблицу с правильной схемой
+| Строка | Было | Станет |
+|--------|------|--------|
+| 23 | `apple-mobile-web-app-title="Кибер-Гримуар"` | `"Магический блокнот"` |
+| 27 | `description="Кибер-Гримуар — цифровой гримуар..."` | `"Магический блокнот — цифровой дневник..."` |
+| 29 | `og:title="Кибер-Гримуар — Цифровой гримуар"` | `"Магический блокнот — Цифровой дневник"` |
+| 30 | `og:description="Личные хроники с AI-печатью дня"` | `"Персональный дневник с AI-помощником"` |
+| 37 | `<title>Кибер-Гримуар — Цифровой гримуар</title>` | `"Магический блокнот — Цифровой дневник"` |
 
-## Технические изменения
+---
 
-### Файл: `src/lib/etherealDb.ts`
+## 2. PWA Манифест (`vite.config.ts`)
 
-Заменить версию 5 на две версии:
+| Поле | Было | Станет |
+|------|------|--------|
+| `name` | `"Daybook — Персональный дневник"` | `"Магический блокнот"` |
+| `short_name` | `"Daybook"` | `"Блокнот"` |
+| `description` | `"Уютный персональный дневник..."` | `"Уютный персональный дневник с AI-помощником"` |
+
+---
+
+## 3. Локализация (`src/lib/i18n.tsx`)
 
 ```typescript
-// v5 - DELETE old tasks table (required to change primary key)
-this.version(5).stores({
-  messages: 'serverId, roomId, createdAtMs, [roomId+createdAtMs]',
-  chronicles: 'serverId, roomId, updatedAtMs, pinned, [roomId+updatedAtMs]',
-  tasks: null,  // <-- УДАЛИТЬ таблицу
-  events: '++id, serverId, roomId, startAtMs',
-  members: 'id, roomId, joinedAtMs',
-  settings: 'key',
-});
+// Было
+'app.name': { ru: 'Кибер-Гримуар', en: 'Cyber-Grimoire' }
 
-// v6 - CREATE new tasks table with serverId as primary key
-this.version(6).stores({
-  messages: 'serverId, roomId, createdAtMs, [roomId+createdAtMs]',
-  chronicles: 'serverId, roomId, updatedAtMs, pinned, [roomId+updatedAtMs]',
-  tasks: 'serverId, roomId, status, dueAtMs, updatedAtMs, [roomId+status]',
-  events: '++id, serverId, roomId, startAtMs',
-  members: 'id, roomId, joinedAtMs',
-  settings: 'key',
-});
+// Станет
+'app.name': { ru: 'Магический блокнот', en: 'Magic Notebook' }
 ```
 
-## Последствия
+---
 
-- Все локальные задачи будут удалены (но их и так не было в production)
-- После перезагрузки страницы задачи загрузятся с сервера
-- Функционал будет работать корректно
+## 4. Онбординг (`src/pages/OnboardingPage.tsx`)
+
+| Язык | Было | Станет |
+|------|------|--------|
+| RU | `"Кибер-Гримуар — дневник и мягкие подсказки..."` | `"Магический блокнот — дневник с мягкими AI-подсказками..."` |
+| EN | `"Cyber-Grimoire is a journal..."` | `"Magic Notebook is a journal..."` |
+
+---
+
+## 5. Установка PWA (`src/components/InstallPrompt.tsx`)
+
+```typescript
+// Было
+"Добавьте Daybook на главный экран..."
+
+// Станет  
+"Добавьте Магический блокнот на главный экран..."
+```
+
+---
+
+## 6. AI-промпты (Edge Functions)
+
+| Файл | Изменение |
+|------|-----------|
+| `ai-entry-analyze/index.ts` | `"кибер-гримуара"` → `"магического блокнота"` |
+| `ai-whisper/index.ts` | `"Оракул приложения «Кибер-Гримуар»"` → `"Оракул «Магического блокнота»"` |
+| `ai-weekly-insights/index.ts` | `"кибер-гримуара"` → `"магического блокнота"` |
+
+---
+
+## 7. Клиентские AI-сервисы
+
+| Файл | Изменение |
+|------|-----------|
+| `src/lib/aiService.ts` | `"Cyber-Grimoire"` → `"Magic Notebook"` |
+| `src/lib/imageAnalysisService.ts` | `"Кибер-Гримуар"` → `"Магический блокнот"` |
+
+---
 
 ## План выполнения
 
-| Шаг | Задача |
-|-----|--------|
-| 1 | Изменить схему Dexie: v5 удаляет tasks, v6 создаёт с новым PK |
-| 2 | Протестировать загрузку страницы Tasks |
-| 3 | Создать тестовую задачу |
-| 4 | Проверить toggle, редактирование, удаление |
+| Шаг | Файлы | Критичность |
+|-----|-------|-------------|
+| 1 | `index.html` — meta/title | Высокая |
+| 2 | `vite.config.ts` — PWA manifest | Высокая |
+| 3 | `src/lib/i18n.tsx` — app.name | Высокая |
+| 4 | `src/pages/OnboardingPage.tsx` | Средняя |
+| 5 | `src/components/InstallPrompt.tsx` | Средняя |
+| 6 | Edge Functions (3 файла) | Низкая |
+| 7 | Client AI services (2 файла) | Низкая |
+
+---
+
+## Результат
+
+После изменений:
+- Вкладка браузера: **"Магический блокнот — Цифровой дневник"**
+- PWA на домашнем экране: **"Блокнот"**
+- Внутри приложения: **"Магический блокнот"**
+- AI-ассистент представляется как помощник **"Магического блокнота"**
 
