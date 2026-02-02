@@ -14,6 +14,16 @@ import { toast } from 'sonner';
 export default function EtherealChat() {
   const navigate = useNavigate();
 
+  // 1. ALL HOOKS MUST BE CALLED FIRST - before any conditional returns
+  const { messages, typingMembers, sendTyping, sendMessage, isConnected } = useEtherealRealtime();
+  const [input, setInput] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [pendingImage, setPendingImage] = useState<{
+    blob: Blob;
+    preview: string;
+  } | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
   // Handle kicked/expired events
   useEffect(() => {
     const handleKicked = () => {
@@ -35,25 +45,12 @@ export default function EtherealChat() {
     };
   }, [navigate]);
 
-  if (!isEtherealSessionValid()) {
-    return <Navigate to="/e/home" replace />;
-  }
-
-  const session = getEtherealSession();
-  const { messages, typingMembers, sendTyping, sendMessage, isConnected } = useEtherealRealtime();
-  const [input, setInput] = useState('');
-  const [isSending, setIsSending] = useState(false);
-  const [pendingImage, setPendingImage] = useState<{
-    blob: Blob;
-    preview: string;
-  } | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
   // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Handler functions
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
     sendTyping();
@@ -91,6 +88,14 @@ export default function EtherealChat() {
       handleSend();
     }
   };
+
+  // 2. CONDITIONAL RETURN AFTER ALL HOOKS
+  if (!isEtherealSessionValid()) {
+    return <Navigate to="/e/home" replace />;
+  }
+
+  // Get session only after validation
+  const session = getEtherealSession();
 
   return (
     <div className="flex flex-col h-screen yacht-gradient">
