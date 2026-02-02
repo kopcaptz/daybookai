@@ -27,3 +27,18 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 createRoot(document.getElementById("root")!).render(<App />);
+
+// Defer service worker registration to after first paint for better FCP
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then(registration => {
+          console.log('[SW] Registered:', registration.scope);
+        })
+        .catch(err => {
+          console.log('[SW] Registration failed:', err);
+        });
+    }, 100); // Small delay after load to ensure FCP is complete
+  });
+}

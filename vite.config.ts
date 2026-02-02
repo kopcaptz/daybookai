@@ -21,6 +21,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
+      injectRegister: false, // Manual registration to avoid render-blocking
       includeAssets: [
         "favicon.ico", 
         "apple-touch-icon.svg", 
