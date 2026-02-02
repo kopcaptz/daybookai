@@ -59,8 +59,6 @@ export default function EtherealHome() {
             icon={Gamepad2}
             title="Игровой зал"
             subtitle="Игры"
-            badge="Скоро"
-            disabled
           />
         </div>
 
