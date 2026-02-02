@@ -36,11 +36,11 @@ export default function EtherealGames() {
     loadSessions();
   }, []);
 
-  const handleCreate = async (adultMode: boolean) => {
+  const handleCreate = async (adultLevel: number) => {
     setIsCreating(true);
     setError(null);
 
-    const result = await createGameSession(adultMode);
+    const result = await createGameSession(adultLevel);
     if (result.success && result.data?.session) {
       navigate(`/e/games/situations/${result.data.session.id}`);
     } else {

@@ -10,8 +10,10 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SituationCard } from './SituationCard';
+import { AftercareRating } from './AftercareRating';
 import {
   GameRound,
+  GameSession,
   revealPickerAnswer,
   requestReflection,
   nextRound,
@@ -20,6 +22,7 @@ import {
 
 interface ReflectionViewProps {
   sessionId: string;
+  session: GameSession;
   round: GameRound;
   myRole: 'picker' | 'responder';
   onNext: () => void;
@@ -28,6 +31,7 @@ interface ReflectionViewProps {
 
 export function ReflectionView({
   sessionId,
+  session,
   round,
   myRole,
   onNext,
@@ -38,17 +42,19 @@ export function ReflectionView({
   const [reflection, setReflection] = useState(round.ai_reflection || '');
   const [isEnding, setIsEnding] = useState(false);
   const [isNexting, setIsNexting] = useState(false);
+  const [showAftercare, setShowAftercare] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isPicker = myRole === 'picker';
   const isRevealed = round.picker_revealed;
+  const isOpenCard = round.card_type === 'open';
 
   // Find answer texts
   const pickerOption = round.options.find((o) => o.id === round.picker_answer);
   const responderOption = round.options.find(
     (o) => o.id === round.responder_answer
   );
-  const isMatch = round.picker_answer === round.responder_answer;
+  const isMatch = !isOpenCard && round.picker_answer === round.responder_answer;
 
   const handleReveal = async () => {
     setIsRevealing(true);
@@ -75,6 +81,26 @@ export function ReflectionView({
   };
 
   const handleNext = async () => {
+    // Show aftercare for adult levels
+    if (session.adult_level > 0 && !showAftercare) {
+      setShowAftercare(true);
+      return;
+    }
+
+    setIsNexting(true);
+    const result = await nextRound(sessionId);
+    if (result.success) {
+      onNext();
+    }
+    setIsNexting(false);
+  };
+
+  const handleAftercareComplete = () => {
+    setShowAftercare(false);
+    handleNextRound();
+  };
+
+  const handleNextRound = async () => {
     setIsNexting(true);
     const result = await nextRound(sessionId);
     if (result.success) {
@@ -91,6 +117,26 @@ export function ReflectionView({
     }
     setIsEnding(false);
   };
+
+  // Show aftercare rating
+  if (showAftercare && isRevealed) {
+    return (
+      <div className="space-y-4">
+        <div className="text-center mb-4">
+          <h2 className="text-lg font-semibold">Как ощущения?</h2>
+          <p className="text-sm text-muted-foreground">
+            Раунд {round.round_number} завершён
+          </p>
+        </div>
+
+        <AftercareRating
+          sessionId={sessionId}
+          currentLevel={session.adult_level}
+          onRated={handleAftercareComplete}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -110,7 +156,9 @@ export function ReflectionView({
       <SituationCard title="Ответ партнёра" variant="default">
         <div className="flex items-start gap-3">
           <span className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-bold shrink-0">
-            {round.responder_answer === 'custom' ? '✎' : round.responder_answer}
+            {isOpenCard || round.responder_answer === 'custom' || round.responder_answer === 'open'
+              ? '✎'
+              : round.responder_answer}
           </span>
           <p className="text-sm">
             {round.responder_custom || responderOption?.text || 'Свой вариант'}
@@ -127,29 +175,33 @@ export function ReflectionView({
         >
           <div className="flex items-start gap-3">
             <span className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-bold shrink-0">
-              {round.picker_answer}
+              {isOpenCard ? '✎' : round.picker_answer}
             </span>
-            <p className="text-sm">{pickerOption?.text}</p>
+            <p className="text-sm">
+              {isOpenCard ? round.picker_answer : pickerOption?.text}
+            </p>
           </div>
 
-          {/* Match indicator */}
-          <div className="mt-4 flex items-center gap-2">
-            {isMatch ? (
-              <>
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
-                <span className="text-sm text-green-600">
-                  Ваши ответы совпали!
-                </span>
-              </>
-            ) : (
-              <>
-                <XCircle className="w-5 h-5 text-amber-500" />
-                <span className="text-sm text-amber-600">
-                  Разные подходы — это нормально
-                </span>
-              </>
-            )}
-          </div>
+          {/* Match indicator - only for ABC cards */}
+          {!isOpenCard && (
+            <div className="mt-4 flex items-center gap-2">
+              {isMatch ? (
+                <>
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  <span className="text-sm text-green-600">
+                    Ваши ответы совпали!
+                  </span>
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-5 h-5 text-amber-500" />
+                  <span className="text-sm text-amber-600">
+                    Разные подходы — это нормально
+                  </span>
+                </>
+              )}
+            </div>
+          )}
         </SituationCard>
       ) : (
         <SituationCard title="Ответ скрыт" variant="default">

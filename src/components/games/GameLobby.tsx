@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Play, Loader2, Shield, ShieldAlert, Wine } from 'lucide-react';
+import { Users, Play, Loader2, ShieldCheck, Wine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { SituationCard } from './SituationCard';
-import { GameSession, startGame, joinGameSession } from '@/lib/gameService';
+import { AdultLevelSelector } from './AdultLevelSelector';
+import { ConsentModal } from './ConsentModal';
+import { GameSession, startGame, joinGameSession, getLevelLabel } from '@/lib/gameService';
 import { getEtherealSession } from '@/lib/etherealTokenService';
 
 interface GameLobbyProps {
@@ -17,6 +18,7 @@ export function GameLobby({ session, onUpdate }: GameLobbyProps) {
   const [isStarting, setIsStarting] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showConsentModal, setShowConsentModal] = useState(false);
 
   const ethSession = getEtherealSession();
   const myId = ethSession?.memberId;
@@ -24,6 +26,11 @@ export function GameLobby({ session, onUpdate }: GameLobbyProps) {
   const isResponder = session.responder_id === myId;
   const canJoin = !isPicker && !isResponder;
   const canStart = isPicker && session.responder_id !== null;
+  
+  const levelInfo = getLevelLabel(session.adult_level);
+  const needsConsent = session.adult_level > 0 && 
+    !(session.consent_picker && session.consent_responder);
+  const myRole = isPicker ? 'picker' : 'responder';
 
   const handleJoin = async () => {
     setIsJoining(true);
@@ -39,16 +46,29 @@ export function GameLobby({ session, onUpdate }: GameLobbyProps) {
   };
 
   const handleStart = async () => {
+    // Check if consent is needed
+    if (needsConsent) {
+      setShowConsentModal(true);
+      return;
+    }
+
     setIsStarting(true);
     setError(null);
 
     const result = await startGame(session.id);
     if (result.success) {
       onUpdate();
+    } else if (result.needsConsent) {
+      setShowConsentModal(true);
     } else {
       setError(result.error || 'Не удалось начать игру');
     }
     setIsStarting(false);
+  };
+
+  const handleConsentGiven = () => {
+    setShowConsentModal(false);
+    onUpdate();
   };
 
   return (
@@ -101,20 +121,32 @@ export function GameLobby({ session, onUpdate }: GameLobbyProps) {
             </div>
           </div>
 
-          {/* Adult mode indicator */}
+          {/* Adult level indicator */}
           <div className="flex items-center gap-2 text-sm">
-            {session.adult_mode ? (
-              <>
-                <ShieldAlert className="w-4 h-4 text-destructive" />
-                <span className="text-muted-foreground">Режим 18+</span>
-              </>
-            ) : (
-              <>
-                <Shield className="w-4 h-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Безопасный режим</span>
-              </>
+            <ShieldCheck className="w-4 h-4 text-muted-foreground" />
+            <span className="text-muted-foreground">
+              {levelInfo.name} {levelInfo.icon || ''}
+            </span>
+            {needsConsent && (
+              <span className="text-xs text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded">
+                Требуется согласие
+              </span>
             )}
           </div>
+
+          {/* Consent status for adult levels */}
+          {session.adult_level > 0 && (
+            <div className="text-xs text-muted-foreground bg-secondary/50 rounded-lg p-2">
+              <div className="flex items-center gap-2">
+                <span className={session.consent_picker ? 'text-green-600' : ''}>
+                  {session.consent_picker ? '✓' : '○'} Организатор
+                </span>
+                <span className={session.consent_responder ? 'text-green-600' : ''}>
+                  {session.consent_responder ? '✓' : '○'} Партнёр
+                </span>
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="text-sm text-destructive bg-destructive/10 rounded p-2">
@@ -150,11 +182,21 @@ export function GameLobby({ session, onUpdate }: GameLobbyProps) {
                 ) : (
                   <Play className="w-4 h-4 mr-2" />
                 )}
-                Начать игру
+                {needsConsent ? 'Подтвердить и начать' : 'Начать игру'}
               </Button>
             )}
 
-            {isResponder && !canStart && (
+            {isResponder && session.adult_level > 0 && !session.consent_responder && (
+              <Button
+                onClick={() => setShowConsentModal(true)}
+                className="flex-1"
+              >
+                <ShieldCheck className="w-4 h-4 mr-2" />
+                Подтвердить уровень
+              </Button>
+            )}
+
+            {isResponder && (!needsConsent || session.consent_responder) && !canStart && (
               <div className="flex-1 text-center text-sm text-muted-foreground py-2">
                 Ожидание начала игры...
               </div>
@@ -170,17 +212,28 @@ export function GameLobby({ session, onUpdate }: GameLobbyProps) {
       >
         ← Вернуться в лобби
       </Button>
+
+      {/* Consent Modal */}
+      {showConsentModal && (isPicker || isResponder) && (
+        <ConsentModal
+          open={showConsentModal}
+          session={session}
+          myRole={myRole}
+          onConsentGiven={handleConsentGiven}
+          onClose={() => setShowConsentModal(false)}
+        />
+      )}
     </div>
   );
 }
 
 interface CreateGameFormProps {
-  onCreate: (adultMode: boolean) => void;
+  onCreate: (adultLevel: number) => void;
   isCreating: boolean;
 }
 
 export function CreateGameForm({ onCreate, isCreating }: CreateGameFormProps) {
-  const [adultMode, setAdultMode] = useState(false);
+  const [adultLevel, setAdultLevel] = useState(0);
 
   return (
     <SituationCard
@@ -195,23 +248,14 @@ export function CreateGameForm({ onCreate, isCreating }: CreateGameFormProps) {
           на вопросы и узнавайте друг друга лучше.
         </p>
 
-        <div className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm">Режим 18+</span>
-          </div>
-          <Switch checked={adultMode} onCheckedChange={setAdultMode} />
-        </div>
-
-        {adultMode && (
-          <p className="text-xs text-muted-foreground bg-destructive/10 p-2 rounded">
-            В режиме 18+ доступны категории на интимные темы. Убедитесь, что оба
-            партнёра готовы.
-          </p>
-        )}
+        <AdultLevelSelector
+          value={adultLevel}
+          onChange={setAdultLevel}
+          disabled={isCreating}
+        />
 
         <Button
-          onClick={() => onCreate(adultMode)}
+          onClick={() => onCreate(adultLevel)}
           disabled={isCreating}
           className="w-full"
         >

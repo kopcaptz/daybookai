@@ -7,7 +7,7 @@ import { GameLobby } from '@/components/games/GameLobby';
 import { PickerView } from '@/components/games/PickerView';
 import { ResponderView } from '@/components/games/ResponderView';
 import { ReflectionView } from '@/components/games/ReflectionView';
-import { getCurrentRound, GameSession, GameRound } from '@/lib/gameService';
+import { getCurrentRound, GameSession, GameRound, getLevelLabel } from '@/lib/gameService';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function SituationsGame() {
@@ -113,6 +113,8 @@ export default function SituationsGame() {
     );
   }
 
+  const levelInfo = getLevelLabel(session.adult_level);
+
   // Determine current view based on game state
   const renderGameView = () => {
     // Lobby state
@@ -129,7 +131,7 @@ export default function SituationsGame() {
             <div className="p-4">
               <PickerView
                 sessionId={session.id}
-                adultMode={session.adult_mode}
+                adultLevel={session.adult_level}
                 roundNumber={session.current_round}
                 onPicked={handleUpdate}
               />
@@ -154,6 +156,7 @@ export default function SituationsGame() {
             <div className="p-4">
               <ResponderView
                 sessionId={session.id}
+                session={session}
                 round={round}
                 onResponded={handleUpdate}
               />
@@ -178,6 +181,7 @@ export default function SituationsGame() {
           <div className="p-4">
             <ReflectionView
               sessionId={session.id}
+              session={session}
               round={round}
               myRole={myRole}
               onNext={handleUpdate}
@@ -213,7 +217,7 @@ export default function SituationsGame() {
     <div className="flex flex-col min-h-screen">
       <EtherealHeader
         title="Ситуации на борту"
-        subtitle={`Раунд ${session.current_round || 1}`}
+        subtitle={`Раунд ${session.current_round || 1} ${levelInfo.icon || ''}`}
       />
       <div className="flex-1 overflow-auto">{renderGameView()}</div>
     </div>

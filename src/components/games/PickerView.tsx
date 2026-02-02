@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { Loader2, Shuffle, Check, ChevronRight } from 'lucide-react';
+import { Loader2, Shuffle, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { SituationCard, OptionButton } from './SituationCard';
+import { SafetyControls } from './SafetyControls';
 import {
   Situation,
   Category,
@@ -12,7 +14,7 @@ import {
 
 interface PickerViewProps {
   sessionId: string;
-  adultMode: boolean;
+  adultLevel: number;
   roundNumber: number;
   onPicked: () => void;
 }
@@ -21,7 +23,7 @@ type Step = 'category' | 'generating' | 'select' | 'answer' | 'submitting';
 
 export function PickerView({
   sessionId,
-  adultMode,
+  adultLevel,
   roundNumber,
   onPicked,
 }: PickerViewProps) {
@@ -30,9 +32,11 @@ export function PickerView({
   const [situations, setSituations] = useState<Situation[]>([]);
   const [selectedSituation, setSelectedSituation] = useState<Situation | null>(null);
   const [myAnswer, setMyAnswer] = useState<string | null>(null);
+  const [openAnswer, setOpenAnswer] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const categories = getAvailableCategories(adultMode);
+  const categories = getAvailableCategories(adultLevel);
+  const isOpenCard = selectedSituation?.cardType === 'open';
 
   const handleCategorySelect = async (category: Category) => {
     setSelectedCategory(category);
@@ -51,6 +55,8 @@ export function PickerView({
 
   const handleSituationSelect = (situation: Situation) => {
     setSelectedSituation(situation);
+    setMyAnswer(null);
+    setOpenAnswer('');
     setStep('answer');
   };
 
@@ -59,7 +65,10 @@ export function PickerView({
   };
 
   const handleSubmit = async () => {
-    if (!selectedCategory || !selectedSituation || !myAnswer) return;
+    if (!selectedCategory || !selectedSituation) return;
+    
+    const finalAnswer = isOpenCard ? openAnswer : myAnswer;
+    if (!finalAnswer) return;
 
     setStep('submitting');
     setError(null);
@@ -68,7 +77,7 @@ export function PickerView({
       sessionId,
       selectedCategory.id,
       selectedSituation,
-      myAnswer
+      finalAnswer
     );
 
     if (result.success) {
@@ -77,6 +86,11 @@ export function PickerView({
       setError(result.error || 'Не удалось отправить выбор');
       setStep('answer');
     }
+  };
+
+  const handleSafetyUpdate = () => {
+    // Refresh state after safety action
+    onPicked();
   };
 
   // Category selection
@@ -96,8 +110,10 @@ export function PickerView({
               className="p-4 rounded-lg bg-card border border-border hover:border-primary/50 transition-all text-left"
             >
               <span className="font-medium">{cat.label}</span>
-              {cat.adult && (
-                <span className="ml-2 text-xs text-destructive">18+</span>
+              {cat.minLevel > 0 && (
+                <span className="ml-2 text-xs text-destructive">
+                  {'🔥'.repeat(cat.minLevel)}
+                </span>
               )}
             </button>
           ))}
@@ -147,7 +163,14 @@ export function PickerView({
                 <span className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium shrink-0">
                   {idx + 1}
                 </span>
-                <p className="text-sm leading-relaxed">{sit.text}</p>
+                <div>
+                  <p className="text-sm leading-relaxed">{sit.text}</p>
+                  {sit.cardType === 'open' && (
+                    <span className="text-xs text-muted-foreground mt-1 inline-block">
+                      Открытый вопрос
+                    </span>
+                  )}
+                </div>
               </div>
             </button>
           ))}
@@ -169,6 +192,12 @@ export function PickerView({
   if (step === 'answer' || step === 'submitting') {
     return (
       <div className="space-y-4">
+        <SafetyControls
+          sessionId={sessionId}
+          currentLevel={adultLevel}
+          onUpdate={handleSafetyUpdate}
+        />
+
         <SituationCard
           title="Ваш выбор"
           subtitle="Ваш ответ останется скрытым до конца раунда"
@@ -178,19 +207,30 @@ export function PickerView({
             {selectedSituation?.text}
           </p>
 
-          <div className="space-y-2">
-            {selectedSituation?.options.map((opt) => (
-              <OptionButton
-                key={opt.id}
-                id={opt.id}
-                text={opt.text}
-                selected={myAnswer === opt.id}
-                disabled={step === 'submitting'}
-                onSelect={handleAnswerSelect}
-                variant="paper"
-              />
-            ))}
-          </div>
+          {isOpenCard ? (
+            <Textarea
+              value={openAnswer}
+              onChange={(e) => setOpenAnswer(e.target.value)}
+              placeholder="Опишите ваш ответ..."
+              className="bg-[#faf7f2] border-[#d4c9b8] text-[#1a1612] placeholder:text-[#1a1612]/50"
+              rows={4}
+              disabled={step === 'submitting'}
+            />
+          ) : (
+            <div className="space-y-2">
+              {selectedSituation?.options.map((opt) => (
+                <OptionButton
+                  key={opt.id}
+                  id={opt.id}
+                  text={opt.text}
+                  selected={myAnswer === opt.id}
+                  disabled={step === 'submitting'}
+                  onSelect={handleAnswerSelect}
+                  variant="paper"
+                />
+              ))}
+            </div>
+          )}
         </SituationCard>
 
         {error && (
@@ -210,7 +250,10 @@ export function PickerView({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!myAnswer || step === 'submitting'}
+            disabled={
+              step === 'submitting' ||
+              (isOpenCard ? !openAnswer.trim() : !myAnswer)
+            }
             className="flex-1"
           >
             {step === 'submitting' ? (
