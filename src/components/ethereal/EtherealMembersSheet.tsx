@@ -25,6 +25,7 @@ interface EtherealMembersSheetProps {
   onOpenChange: (open: boolean) => void;
   isOwner: boolean;
   currentMemberId: string;
+  onKickSuccess?: (targetMemberId: string) => void;
 }
 
 export function EtherealMembersSheet({
@@ -32,6 +33,7 @@ export function EtherealMembersSheet({
   onOpenChange,
   isOwner,
   currentMemberId,
+  onKickSuccess,
 }: EtherealMembersSheetProps) {
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -54,7 +56,7 @@ export function EtherealMembersSheet({
         setMembers(data.members);
       }
     } catch (error) {
-      console.log('Failed to load members');
+      // Masked error
     } finally {
       setIsLoading(false);
     }
@@ -73,10 +75,13 @@ export function EtherealMembersSheet({
 
       const data = await response.json();
       if (data.success) {
+        // Broadcast kick to force target logout
+        onKickSuccess?.(memberId);
+        // Update local list
         setMembers((prev) => prev.filter((m) => m.id !== memberId));
       }
     } catch (error) {
-      console.log('Kick failed');
+      // Masked error
     } finally {
       setKickingId(null);
     }

@@ -6,7 +6,12 @@ import {
   clearEtherealSession,
   getEtherealApiHeaders,
 } from '@/lib/etherealTokenService';
-import { etherealDb, mergeMessages, type EtherealMessage } from '@/lib/etherealDb';
+import {
+  etherealDb,
+  mergeMessages,
+  stableMsgSort,
+  type EtherealMessage,
+} from '@/lib/etherealDb';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
@@ -24,18 +29,18 @@ export function useEtherealRealtime() {
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const lastTypingSentRef = useRef<number>(0);
+  const historyInFlightRef = useRef(false);
 
   const session = getEtherealSession();
 
-  // B.6: loadHistory depends on channelKey
-  useEffect(() => {
-    if (!session) return;
-    loadHistory();
-  }, [session?.channelKey]);
-
-  async function loadHistory() {
+  // Load history with guard against parallel calls
+  const loadHistory = useCallback(async () => {
     const currentSession = getEtherealSession();
     if (!currentSession) return;
+
+    // Guard: prevent parallel loadHistory calls
+    if (historyInFlightRef.current) return;
+    historyInFlightRef.current = true;
 
     try {
       const response = await fetch(
@@ -44,44 +49,67 @@ export function useEtherealRealtime() {
       );
 
       if (response.status === 401 || response.status === 403) {
-        // Session revoked (kick) or expired
         clearEtherealSession();
         window.dispatchEvent(new CustomEvent('ethereal-session-expired'));
         return;
       }
 
       const data = await response.json();
-      if (data.success) {
+      if (data.success && Array.isArray(data.messages)) {
         const merged = await mergeMessages(currentSession.roomId, data.messages);
         setMessages(merged);
       }
     } catch (error) {
-      console.log('Load failed');
+      // Silent fail - masked error
+    } finally {
+      historyInFlightRef.current = false;
     }
-  }
+  }, []);
 
+  // Initial load when session changes
+  useEffect(() => {
+    if (!session?.channelKey) return;
+    loadHistory();
+  }, [session?.channelKey, loadHistory]);
+
+  // Main channel subscription
   useEffect(() => {
     if (!session?.channelKey) return;
 
-    // One channel for the entire hook lifetime
     const channel = supabase.channel(`ethereal:${session.channelKey}`);
     channelRef.current = channel;
 
     channel
       .on('broadcast', { event: 'message' }, ({ payload }) => {
-        // Only if it has serverId (protection against fake)
-        if (payload.serverId) {
-          setMessages((prev) => {
-            // Don't add duplicates
-            if (prev.some((m) => m.serverId === payload.serverId)) return prev;
-            const newMsg: EtherealMessage = {
-              ...payload,
-              roomId: session.roomId,
-              syncStatus: 'synced',
-            };
-            etherealDb.messages.put(newMsg);
-            return [...prev, newMsg].sort((a, b) => a.createdAtMs - b.createdAtMs);
-          });
+        if (!payload?.serverId) return;
+
+        setMessages((prev) => {
+          // Don't add duplicates
+          if (prev.some((m) => m.serverId === payload.serverId)) return prev;
+
+          const newMsg: EtherealMessage = {
+            serverId: payload.serverId,
+            roomId: session.roomId,
+            senderId: payload.senderId,
+            senderName: payload.senderName,
+            content: payload.content,
+            createdAtMs: payload.createdAtMs,
+            syncStatus: 'synced',
+          };
+
+          // Upsert to Dexie
+          etherealDb.messages.put(newMsg);
+
+          return [...prev, newMsg].sort(stableMsgSort);
+        });
+      })
+      .on('broadcast', { event: 'member_kicked' }, ({ payload }) => {
+        if (payload?.targetMemberId === session.memberId) {
+          clearEtherealSession();
+          supabase.removeChannel(channel);
+          channelRef.current = null;
+          setIsConnected(false);
+          window.dispatchEvent(new CustomEvent('ethereal-kicked'));
         }
       })
       .on('presence', { event: 'sync' }, () => {
@@ -108,6 +136,8 @@ export function useEtherealRealtime() {
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           setIsConnected(true);
+          // Reconcile on every reconnect
+          await loadHistory();
           await channel.track({
             memberId: session.memberId,
             displayName: session.displayName,
@@ -123,24 +153,40 @@ export function useEtherealRealtime() {
       channelRef.current = null;
       setIsConnected(false);
     };
-  }, [session?.channelKey, session?.memberId, session?.displayName, session?.roomId]);
+  }, [session?.channelKey, session?.memberId, session?.displayName, session?.roomId, loadHistory]);
+
+  // Smart periodic reconcile (only when visible, saves battery on Android)
+  useEffect(() => {
+    if (!session?.channelKey) return;
+
+    const intervalId = setInterval(() => {
+      // Only reconcile if tab is visible and channel exists
+      if (document.visibilityState === 'visible' && channelRef.current) {
+        loadHistory();
+      }
+    }, 45_000);
+
+    return () => clearInterval(intervalId);
+  }, [session?.channelKey, loadHistory]);
 
   // Throttled typing indicator (400ms)
   const sendTyping = useCallback(() => {
     const now = Date.now();
     if (now - lastTypingSentRef.current < 400) return;
     if (!channelRef.current) return;
-    if (!session) return;
+
+    const currentSession = getEtherealSession();
+    if (!currentSession) return;
 
     lastTypingSentRef.current = now;
     channelRef.current.send({
       type: 'broadcast',
       event: 'typing',
-      payload: { memberId: session.memberId, displayName: session.displayName },
+      payload: { memberId: currentSession.memberId, displayName: currentSession.displayName },
     });
-  }, [session?.memberId, session?.displayName]);
+  }, []);
 
-  // Send message + broadcast
+  // Send message with instant UI update
   const sendMessage = useCallback(
     async (content: string) => {
       const currentSession = getEtherealSession();
@@ -162,32 +208,56 @@ export function useEtherealRealtime() {
         const data = await response.json();
         if (!data.success) return data;
 
-        // Broadcast via existing channel
-        const payload = {
+        // Build the new message
+        const newMsg: EtherealMessage = {
           serverId: data.id,
+          roomId: currentSession.roomId,
           senderId: currentSession.memberId,
           senderName: currentSession.displayName,
           content,
           createdAtMs: data.createdAtMs,
+          syncStatus: 'synced',
         };
 
-        channelRef.current?.send({ type: 'broadcast', event: 'message', payload });
+        // 1) Instant UI update
+        setMessages((prev) => {
+          if (prev.some((m) => m.serverId === newMsg.serverId)) return prev;
+          return [...prev, newMsg].sort(stableMsgSort);
+        });
 
-        // Save locally
-        await etherealDb.messages.put({
-          ...payload,
-          roomId: currentSession.roomId,
-          syncStatus: 'synced',
+        // 2) Persist to Dexie
+        await etherealDb.messages.put(newMsg);
+
+        // 3) Broadcast to others
+        channelRef.current?.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: {
+            serverId: newMsg.serverId,
+            senderId: newMsg.senderId,
+            senderName: newMsg.senderName,
+            content: newMsg.content,
+            createdAtMs: newMsg.createdAtMs,
+          },
         });
 
         return { success: true };
       } catch (error) {
-        console.log('Send failed');
+        // Could save as 'failed' for retry logic
         return { success: false, error: 'network_error' };
       }
     },
     []
   );
+
+  // Broadcast kick event to force target member logout
+  const broadcastKick = useCallback((targetMemberId: string) => {
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'member_kicked',
+      payload: { targetMemberId },
+    });
+  }, []);
 
   return {
     messages,
@@ -195,7 +265,8 @@ export function useEtherealRealtime() {
     typingMembers,
     sendTyping,
     sendMessage,
-    isConnected,
+    broadcastKick,
     refresh: loadHistory,
+    isConnected,
   };
 }
