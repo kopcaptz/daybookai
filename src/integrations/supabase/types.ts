@@ -169,6 +169,10 @@ export type Database = {
           content: string
           created_at: string | null
           id: string
+          image_h: number | null
+          image_mime: string | null
+          image_path: string | null
+          image_w: number | null
           room_id: string
           sender_id: string
         }
@@ -176,6 +180,10 @@ export type Database = {
           content: string
           created_at?: string | null
           id?: string
+          image_h?: number | null
+          image_mime?: string | null
+          image_path?: string | null
+          image_w?: number | null
           room_id: string
           sender_id: string
         }
@@ -183,6 +191,10 @@ export type Database = {
           content?: string
           created_at?: string | null
           id?: string
+          image_h?: number | null
+          image_mime?: string | null
+          image_path?: string | null
+          image_w?: number | null
           room_id?: string
           sender_id?: string
         }
