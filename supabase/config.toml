@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.ethereal_chronicles]
 verify_jwt = false
+
+[functions.ethereal_tasks]
+verify_jwt = false

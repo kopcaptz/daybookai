@@ -504,11 +504,14 @@ export type Database = {
       ethereal_tasks: {
         Row: {
           assignee_id: string | null
+          completed_at: string | null
+          completed_by: string | null
           created_at: string | null
           creator_id: string
           description: string | null
           due_at: string | null
           id: string
+          priority: string
           room_id: string
           status: string | null
           title: string
@@ -516,11 +519,14 @@ export type Database = {
         }
         Insert: {
           assignee_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string | null
           creator_id: string
           description?: string | null
           due_at?: string | null
           id?: string
+          priority?: string
           room_id: string
           status?: string | null
           title: string
@@ -528,11 +534,14 @@ export type Database = {
         }
         Update: {
           assignee_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string | null
           creator_id?: string
           description?: string | null
           due_at?: string | null
           id?: string
+          priority?: string
           room_id?: string
           status?: string | null
           title?: string
@@ -542,6 +551,13 @@ export type Database = {
           {
             foreignKeyName: "ethereal_tasks_assignee_id_fkey"
             columns: ["assignee_id"]
+            isOneToOne: false
+            referencedRelation: "ethereal_room_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ethereal_tasks_completed_by_fkey"
+            columns: ["completed_by"]
             isOneToOne: false
             referencedRelation: "ethereal_room_members"
             referencedColumns: ["id"]
