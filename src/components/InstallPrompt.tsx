@@ -19,7 +19,7 @@ export function InstallPrompt() {
           <div className="flex-1 space-y-1">
             <h3 className="font-semibold">Установить на телефон</h3>
             <p className="text-sm text-muted-foreground">
-              Добавьте Daybook на главный экран для быстрого доступа и работы офлайн
+              Добавьте Магический блокнот на главный экран для быстрого доступа и работы офлайн
             </p>
           </div>
 

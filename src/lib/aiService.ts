@@ -148,7 +148,7 @@ export async function retrieveRelevantEntries(
 
 // Build system prompt for chat - multilingual with vision support
 function buildChatSystemPrompt(contexts: string[]): string {
-  let prompt = `You are a friendly AI assistant named Sigil for the personal diary app "Daybook" (Cyber-Grimoire).
+  let prompt = `You are a friendly AI assistant named Sigil for the personal diary app "Magic Notebook".
 You help users analyze their entries, find patterns, and give recommendations.
 
 CRITICAL LANGUAGE RULE:

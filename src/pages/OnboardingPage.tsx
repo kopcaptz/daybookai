@@ -18,7 +18,7 @@ const slides = {
   ru: [
     {
       title: 'Добро пожаловать',
-      body: 'Кибер-Гримуар — дневник и мягкие подсказки на каждый день.',
+      body: 'Магический блокнот — дневник с мягкими AI-подсказками на каждый день.',
     },
     {
       title: 'Сегодня — ваш хаб',
@@ -36,7 +36,7 @@ const slides = {
   en: [
     {
       title: 'Welcome',
-      body: 'Cyber-Grimoire is a journal with gentle nudges for each day.',
+      body: 'Magic Notebook is a journal with gentle AI nudges for each day.',
     },
     {
       title: 'Today is your hub',

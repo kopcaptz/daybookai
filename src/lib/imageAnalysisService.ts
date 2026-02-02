@@ -36,7 +36,7 @@ export interface AnalysisCallbacks {
 // System prompt for image analysis (privacy-focused)
 const getSystemPrompt = (language: 'ru' | 'en'): string => {
   if (language === 'ru') {
-    return `Ты Сигил — ассистент дневника Кибер-Гримуар. 
+    return `Ты Сигил — ассистент дневника «Магический блокнот». 
 Анализируй фото в контексте личного дневника.
 СТРОГИЕ ПРАВИЛА:
 - НЕ пытайся идентифицировать людей
@@ -44,7 +44,7 @@ const getSystemPrompt = (language: 'ru' | 'en'): string => {
 - Фокусируйся на настроении, обстановке, деталях
 - Отвечай кратко и уважительно`;
   }
-  return `You are Sigil — the Cyber-Grimoire diary assistant.
+  return `You are Sigil — the Magic Notebook diary assistant.
 Analyze photos in a personal diary context.
 STRICT RULES:
 - Do NOT try to identify people

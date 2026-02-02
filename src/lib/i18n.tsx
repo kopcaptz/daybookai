@@ -5,7 +5,7 @@ export type Language = 'ru' | 'en';
 // Translation keys - single source of truth for all UI strings
 export const translations = {
   // Common
-  'app.name': { ru: 'Кибер-Гримуар', en: 'Cyber-Grimoire' },
+  'app.name': { ru: 'Магический блокнот', en: 'Magic Notebook' },
   'app.subtitle': { ru: 'Записи • Медиа • Хроника дня', en: 'Entries • Media • Day Chronicle' },
   'app.tagline': { ru: 'Записи • Медиа • Хроника дня', en: 'Entries • Media • Day Chronicle' },
   'common.save': { ru: 'Сохранить', en: 'Save' },

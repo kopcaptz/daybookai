@@ -40,9 +40,9 @@ serve(async (req) => {
     const timeName = TIME_NAMES[lang][timeOfDay as keyof typeof TIME_NAMES['ru']] || '';
 
     const systemPrompt = lang === 'ru'
-      ? `Ты — мистический Оракул приложения «Кибер-Гримуар». Генерируй одну короткую, поэтичную фразу-приглашение начать день (максимум 10 слов). 
+      ? `Ты — мистический Оракул «Магического блокнота». Генерируй одну короткую, поэтичную фразу-приглашение начать день (максимум 10 слов). 
          Стиль: техно-эзотерика, загадочность, тепло. Без кавычек. Без эмодзи. Одно предложение.`
-      : `You are the mystical Oracle of the Cyber-Grimoire app. Generate one short, poetic invitation to start the day (maximum 10 words).
+      : `You are the mystical Oracle of the Magic Notebook app. Generate one short, poetic invitation to start the day (maximum 10 words).
          Style: techno-esoteric, mysterious, warm. No quotes. No emojis. One sentence.`;
 
     const userPrompt = lang === 'ru'

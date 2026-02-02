@@ -170,7 +170,7 @@ async function handleFullMode(
   const truncatedText = text.length > 1000 ? text.slice(0, 1000) + "..." : text;
 
   const systemPrompt = language === "ru"
-    ? `Ты — анализатор дневниковых записей в стиле "кибер-гримуара".
+    ? `Ты — анализатор дневниковых записей «Магического блокнота».
 
 Анализируй текст и возвращай:
 1. mood (1-5): эмоциональный тон записи
