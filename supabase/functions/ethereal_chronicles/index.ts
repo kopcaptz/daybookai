@@ -1,5 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
-import { createHmac } from 'node:crypto';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,6 +9,7 @@ interface TokenPayload {
   sessionId: string;
   roomId: string;
   memberId: string;
+  exp?: number;
 }
 
 interface ChronicleRow {
@@ -33,7 +33,8 @@ interface MemberRow {
   display_name: string;
 }
 
-function verifyToken(token: string): TokenPayload | null {
+// Web Crypto API for HMAC verification (same as ethereal_messages)
+async function verifyToken(token: string): Promise<TokenPayload | null> {
   try {
     const secret = Deno.env.get('ETHEREAL_TOKEN_SECRET');
     if (!secret) {
@@ -42,17 +43,46 @@ function verifyToken(token: string): TokenPayload | null {
     }
 
     const parts = token.split('.');
-    if (parts.length !== 2) return null;
-
-    const [payloadB64, signature] = parts;
-    const expectedSig = createHmac('sha256', secret).update(payloadB64).digest('hex');
-
-    if (signature !== expectedSig) {
-      console.error('[ethereal_chronicles] Invalid signature');
+    if (parts.length !== 2) {
+      console.error('[ethereal_chronicles] Invalid token format');
       return null;
     }
 
+    const [payloadB64, signatureB64] = parts;
+
+    // Import key for Web Crypto
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(secret);
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+
+    // Generate expected signature
+    const dataToSign = encoder.encode(payloadB64);
+    const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, dataToSign);
+
+    // Convert to base64
+    const expectedSigB64 = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)));
+
+    // Compare signatures
+    if (signatureB64 !== expectedSigB64) {
+      console.error('[ethereal_chronicles] Signature mismatch');
+      return null;
+    }
+
+    // Decode payload
     const payload = JSON.parse(atob(payloadB64)) as TokenPayload;
+
+    // Check expiration
+    if (payload.exp && payload.exp < Date.now()) {
+      console.error('[ethereal_chronicles] Token expired');
+      return null;
+    }
+
     return payload;
   } catch (err) {
     console.error('[ethereal_chronicles] Token verification failed:', err);
@@ -180,7 +210,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
     if (!payload) {
       return new Response(JSON.stringify({ error: 'Invalid token' }), {
         status: 401,
