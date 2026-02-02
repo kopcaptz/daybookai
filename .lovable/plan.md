@@ -1,109 +1,101 @@
 
-# План: Финальный upgrade-блок v2
+# План: Диагностические логи для тестирования Ethereal
 
 ## Обзор
-Применить рекомендованный upgrade-блок с 3 улучшениями для надёжной миграции данных.
+Добавить 4 ключевых console.log в `useEtherealRealtime.ts` для мгновенной диагностики проблем в цепочке: POST → Dexie → Broadcast → Reconcile.
 
 ---
 
-## Изменения в `src/lib/etherealDb.ts`
+## Изменения в `src/hooks/useEtherealRealtime.ts`
 
-### Строки 118-144: Заменить upgrade-блок
+### 1. Лог при loadHistory() (строки 45-61)
 
-**Было:**
+**Добавить:**
 ```typescript
-.upgrade(async (tx) => {
-  const oldMessages = await tx.table('messages').toArray();
+// строка 45, после try {
+console.log('[RT] history:start');
 
-  const byServerId = new Map<string, any>();
-  for (const msg of oldMessages) {
-    if (!msg.serverId) continue; // skip invalid entries
-
-    const existing = byServerId.get(msg.serverId);
-    if (!existing || (msg.createdAtMs ?? 0) > (existing.createdAtMs ?? 0)) {
-      const { id, ...rest } = msg;
-      byServerId.set(msg.serverId, {
-        ...rest,
-        syncStatus: rest.syncStatus === 'pending' ? 'synced' : rest.syncStatus,
-      });
-    }
-  }
-
-  await tx.table('messages').clear();
-  const deduplicated = [...byServerId.values()];
-  if (deduplicated.length > 0) {
-    await tx.table('messages').bulkPut(deduplicated);
-  }
-});
+// строка 58, внутри if (data.success...)
+console.log('[RT] history:end', { count: data.messages.length });
 ```
 
-**Станет:**
+### 2. Лог при SUBSCRIBED (строка 137-140)
+
+**Добавить:**
 ```typescript
-.upgrade(async (tx) => {
-  const oldMessages = await tx.table('messages').toArray();
+// строка 137, после if (status === 'SUBSCRIBED')
+console.log('[RT] connected + reconcile');
+```
 
-  // Safe timestamp parsing
-  const safeParseMs = (v: any): number => {
-    const ms = new Date(v).getTime();
-    return Number.isFinite(ms) ? ms : 0;
-  };
+### 3. Лог при sendMessage() (строки 208-242)
 
-  // Normalize timestamps from various formats
-  const getTimestamp = (m: any): number => {
-    if (typeof m.createdAtMs === 'number') return m.createdAtMs;
-    if (m.createdAt) return safeParseMs(m.createdAt);
-    if (m.created_at) return safeParseMs(m.created_at);
-    return 0;
-  };
+**Добавить:**
+```typescript
+// строка 209, после if (!data.success) return data;
+console.log('[RT] POST ok', { id: data.id, ts: data.createdAtMs });
 
-  const byServerId = new Map<string, any>();
+// строка 242, после channelRef.current?.send(...)
+console.log('[RT] broadcast:sent', { serverId: newMsg.serverId });
+```
 
-  for (let i = 0; i < oldMessages.length; i++) {
-    const msg: any = oldMessages[i];
+### 4. Лог при получении broadcast (строки 83-104)
 
-    // 1) Legacy serverId (deterministic) - preserve messages without serverId
-    const legacyIdPart = msg.id ?? i;
-    const serverId = msg.serverId || `legacy-${legacyIdPart}`;
-
-    // 2) Normalize time once
-    const msgTime = getTimestamp(msg);
-
-    const existing = byServerId.get(serverId);
-    const existingTime = existing ? (existing.createdAtMs ?? getTimestamp(existing)) : 0;
-
-    // Keep newest
-    if (!existing || msgTime > existingTime) {
-      const { id, ...rest } = msg;
-
-      byServerId.set(serverId, {
-        ...rest,
-        serverId,
-        createdAtMs: msgTime,
-        // 3) syncStatus default - never undefined
-        syncStatus: rest.syncStatus === 'failed' ? 'failed' : 'synced',
-      });
-    }
-  }
-
-  await tx.table('messages').clear();
-
-  const deduplicated = [...byServerId.values()];
-  if (deduplicated.length > 0) {
-    await tx.table('messages').bulkPut(deduplicated);
-  }
+**Добавить:**
+```typescript
+// строка 84, после if (!payload?.serverId) return;
+console.log('[RT] broadcast:received', { 
+  serverId: payload.serverId, 
+  ts: payload.createdAtMs 
 });
 ```
 
 ---
 
-## Улучшения
+## Полный список точек логирования
 
-| Проблема | Решение |
-|----------|---------|
-| Потеря сообщений без serverId | `legacy-${id}` — детерминированный, стабильный ID |
-| Некорректный дедуп по времени | `safeParseMs()` + `getTimestamp()` для createdAt/created_at |
-| undefined syncStatus | Дефолт `'synced'`, сохраняем только `'failed'` |
-| Потеря normalized времени | Записываем `createdAtMs: msgTime` в результат |
+| Точка | Лог | Что показывает |
+|-------|-----|----------------|
+| SUBSCRIBED | `[RT] connected + reconcile` | Канал подключен, начинается reconcile |
+| loadHistory start | `[RT] history:start` | Запрос истории начался |
+| loadHistory end | `[RT] history:end {count}` | Сколько сообщений получено |
+| sendMessage POST | `[RT] POST ok {id, ts}` | Сервер принял сообщение |
+| sendMessage broadcast | `[RT] broadcast:sent {serverId}` | Отправлен broadcast другим |
+| broadcast handler | `[RT] broadcast:received {serverId, ts}` | Получен broadcast от другого |
+
+---
+
+## Как использовать при тестировании
+
+### Сценарий "Отправка сообщений":
+```
+Ожидаемая последовательность в консоли:
+[RT] POST ok {id: "uuid", ts: 1234567890}
+[RT] broadcast:sent {serverId: "uuid"}
+```
+
+### Сценарий "Reconnect":
+```
+Ожидаемая последовательность:
+[RT] connected + reconcile
+[RT] history:start
+[RT] history:end {count: 50}
+```
+
+### Сценарий "Получение от другого устройства":
+```
+[RT] broadcast:received {serverId: "uuid", ts: 1234567890}
+```
+
+---
+
+## Быстрая диагностика по логам
+
+| Проблема | Что видим | Где баг |
+|----------|-----------|---------|
+| Сообщение не отправилось | Нет `POST ok` | Сеть или Edge Function |
+| Сообщение отправилось, но не broadcast | Есть `POST ok`, нет `broadcast:sent` | `channelRef.current` = null |
+| Другой не получил | У отправителя `broadcast:sent`, у получателя нет `received` | Realtime канал / channelKey |
+| После reconnect пусто | `connected + reconcile`, но `history:end {count: 0}` | Edge Function GET или токен |
 
 ---
 
@@ -111,12 +103,12 @@
 
 | Файл | Изменение |
 |------|-----------|
-| `src/lib/etherealDb.ts` | Финальный upgrade-блок с 3 фиксами |
+| `src/hooks/useEtherealRealtime.ts` | +6 console.log в ключевых точках |
 
 ---
 
-## Подтверждения после внедрения
+## После тестирования
 
-1. ✅ `EtherealMessage.serverId` — уже обязательный (строка 5)
-2. ✅ `EntityTable<EtherealMessage, 'serverId'>` — уже есть (строка 88)  
-3. ✅ `mergeMessages()` — тип `Promise<EtherealMessage[]>` уже корректный (строка 160)
+Когда тесты пройдены — можно:
+1. Удалить логи (или оставить с флагом `DEBUG`)
+2. Перейти к реализации Edge Function для календаря
