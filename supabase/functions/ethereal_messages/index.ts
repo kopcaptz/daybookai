@@ -209,13 +209,44 @@ Deno.serve(async (req) => {
         }
 
         // Update message with image metadata
-        await supabase
+        const { error: updateError } = await supabase
           .from("ethereal_messages")
           .update({
             image_path: imagePath,
             image_mime: imageFile.type,
           })
           .eq("id", msg.id);
+
+        if (updateError) {
+          console.error("Update error:", updateError);
+
+          // 1) Try remove file (best effort)
+          try {
+            await supabase.storage.from("ethereal-media").remove([imagePath]);
+          } catch (e) {
+            console.error("Cleanup remove file failed:", e);
+          }
+
+          // 2) Try delete message (best effort)
+          const { error: delErr } = await supabase
+            .from("ethereal_messages")
+            .delete()
+            .eq("id", msg.id);
+
+          if (delErr) {
+            console.error("Cleanup delete msg failed:", delErr);
+            // 3) Fallback: mark message as failed so UI doesn't show ghost
+            await supabase
+              .from("ethereal_messages")
+              .update({ content: "[image upload failed]" })
+              .eq("id", msg.id);
+          }
+
+          return new Response(
+            JSON.stringify({ success: false, error: "update_error" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
 
         // Generate signed URL for immediate use
         const { data: signedData } = await supabase.storage
