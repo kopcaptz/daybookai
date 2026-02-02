@@ -1,153 +1,176 @@
 
-# План: Усиление надёжности Ethereal Photo Upload
+# План: Редизайн Ethereal Layer — «Роскошная Яхта» (v2)
 
 ## Обзор
 
-Два критических улучшения для повышения надёжности реализации отправки фото:
-1. **Edge Function**: "мягкий rollback" при ошибке update() с fallback на `[image upload failed]`
-2. **useEtherealRealtime**: вынести Dexie put из setState + добавить in-memory dedup guard
+Переработанный план с учётом всех правок:
+- Смягчённый фон с градиентом (не сплошной тёмный тик)
+- Тема через shadcn-токены, scoped в `.ethereal`
+- Двойная подпись на каютах (морское название + функция)
+- Латунь только для акцентов, не для фона сообщений
+- Анимации строго во Фазе 2 с reduced-motion fallback
 
 ---
 
-## 1. Edge Function: updateError + мягкий rollback
+## Цветовая палитра `.ethereal` (через shadcn tokens)
 
-### Текущая проблема (строки 211-218)
+```css
+.ethereal {
+  /* Смягчённый фон: нейтральный орех → морская глубина */
+  --background: 25 18% 8%;           /* #16120f — тёплый нейтральный */
+  --foreground: 35 15% 92%;          /* Кремовый текст */
 
-```typescript
-// Сейчас — без проверки ошибки:
-await supabase
-  .from("ethereal_messages")
-  .update({ image_path: imagePath, image_mime: imageFile.type })
-  .eq("id", msg.id);
-```
+  /* Панели: матовый орех */
+  --card: 28 16% 14%;                /* #292018 */
+  --card-foreground: 35 15% 92%;
 
-Если update упадёт:
-- Файл уже в storage
-- `image_path` не записался в БД
-- Orphan file (файл без ссылки)
+  --popover: 28 16% 16%;
+  --popover-foreground: 35 15% 92%;
 
-### Исправление
+  /* Латунь/золото — primary accent */
+  --primary: 43 75% 48%;             /* #c9a227 приближённо */
+  --primary-foreground: 25 18% 8%;
 
-Добавить проверку `updateError` с каскадным cleanup:
-1. Удалить файл (best effort)
-2. Попытаться удалить сообщение
-3. Если delete не удался → обновить content на `[image upload failed]`
+  /* Тёмный орех — secondary */
+  --secondary: 28 14% 18%;
+  --secondary-foreground: 35 12% 82%;
 
-```typescript
-// После строки 218:
-const { error: updateError } = await supabase
-  .from("ethereal_messages")
-  .update({
-    image_path: imagePath,
-    image_mime: imageFile.type,
-  })
-  .eq("id", msg.id);
+  --muted: 28 12% 16%;
+  --muted-foreground: 32 10% 65%;
 
-if (updateError) {
-  console.error("Update error:", updateError);
-  
-  // 1) Try remove file (best effort)
-  try {
-    await supabase.storage.from("ethereal-media").remove([imagePath]);
-  } catch (e) {
-    console.error("Cleanup remove file failed:", e);
-  }
-  
-  // 2) Try delete message (best effort)
-  const { error: delErr } = await supabase
-    .from("ethereal_messages")
-    .delete()
-    .eq("id", msg.id);
-  
-  if (delErr) {
-    console.error("Cleanup delete msg failed:", delErr);
-    // 3) Fallback: mark message as failed so UI doesn't show ghost
-    await supabase
-      .from("ethereal_messages")
-      .update({ content: "[image upload failed]" })
-      .eq("id", msg.id);
-  }
-  
-  return new Response(
-    JSON.stringify({ success: false, error: "update_error" }),
-    { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
+  /* Глубокий морской — accent */
+  --accent: 210 45% 28%;             /* #1e3a5f приближённо */
+  --accent-foreground: 35 15% 95%;
+
+  --destructive: 0 55% 48%;
+  --destructive-foreground: 35 15% 95%;
+
+  --border: 28 12% 22%;
+  --input: 28 12% 20%;
+  --ring: 43 75% 48%;                /* Латунь ring */
+
+  /* Yacht-specific glow */
+  --glow-primary: 43 80% 55%;        /* Тёплое латунное свечение */
+  --glow-secondary: 210 50% 45%;     /* Морской акцент */
 }
 ```
 
-**Результат**: даже при двойных сбоях система "самозаживляется"
+Градиентный overlay для фона (в компоненте):
+```css
+background: linear-gradient(
+  180deg,
+  hsl(var(--background)) 0%,
+  hsl(210 35% 10%) 100%
+);
+```
 
 ---
 
-## 2. useEtherealRealtime: вынести put из setState + dedup guard
+## Структура кают (страницы)
 
-### Текущая проблема (строки 85-109)
+| Путь | Морское название | Функция | Иконка |
+|------|------------------|---------|--------|
+| `/e/home` | Главный салон | Лобби | `Ship` |
+| `/e/chat` | Бар | Чат | `Wine` или `MessageCircle` |
+| `/e/chronicles` | Библиотека | Хроники | `BookOpen` |
+| `/e/tasks` | Капитанский мостик | Задачи | `Anchor` |
+| `/e/calendar` | Штурманская карта | Календарь | `Map` |
+| `/e/games` | Игровой зал | Игры | `Gamepad2` (заглушка) |
 
-```typescript
-.on('broadcast', { event: 'message' }, ({ payload }) => {
-  // ...
-  setMessages((prev) => {
-    // ...
-    etherealDb.messages.put(newMsg); // ← async side-effect внутри setState!
-    return [...prev, newMsg].sort(stableMsgSort);
-  });
-})
+---
+
+## Фаза 1: Базовый редизайн
+
+### 1.1 CSS-тема (src/index.css)
+
+Добавить scoped shadcn-токены в `.ethereal`:
+
+```css
+.ethereal {
+  --background: 25 18% 8%;
+  --foreground: 35 15% 92%;
+  --card: 28 16% 14%;
+  /* ... остальные токены */
+}
 ```
 
-- React Strict Mode может вызвать callback дважды → двойной `put()`
-- Редкие дубли broadcast тоже вызовут лишние операции
+Все shadcn-компоненты (Button, Card, Input) автоматически подхватят новые значения внутри `.ethereal` контейнера.
 
-### Исправление
+### 1.2 EtherealGate (Layout wrapper)
 
-1. Добавить `seenBroadcastRef` для in-memory dedup
-2. Вынести `etherealDb.messages.put()` из setState callback
+Обновить обёртку:
+- Добавить градиентный overlay на фон
+- Класс `ethereal` уже применяется ✓
 
-```typescript
-// Новый ref (после строки 32):
-const seenBroadcastRef = useRef(new Set<string>());
+### 1.3 EtherealHome → YachtSalon
 
-// Обновлённый handler (строки 85-109):
-.on('broadcast', { event: 'message' }, async ({ payload }) => {
-  if (!payload?.serverId) return;
-  
-  // In-memory dedup guard
-  if (seenBroadcastRef.current.has(payload.serverId)) return;
-  seenBroadcastRef.current.add(payload.serverId);
-  
-  console.log('[RT] broadcast:received', { serverId: payload.serverId, ts: payload.createdAtMs });
+**Структура:**
 
-  const newMsg: EtherealMessage = {
-    serverId: payload.serverId,
-    roomId: session.roomId,
-    senderId: payload.senderId,
-    senderName: payload.senderName,
-    content: payload.content,
-    createdAtMs: payload.createdAtMs,
-    syncStatus: 'synced',
-    imagePath: payload.imagePath,
-    imageUrl: payload.imageUrl,
-  };
-
-  // 1) Update UI (pure computation only)
-  setMessages((prev) => {
-    if (prev.some((m) => m.serverId === payload.serverId)) return prev;
-    return [...prev, newMsg].sort(stableMsgSort);
-  });
-
-  // 2) Persist to Dexie (outside setState)
-  await etherealDb.messages.put(newMsg);
-
-  // 3) Prevent Set from growing infinitely
-  if (seenBroadcastRef.current.size > 2000) {
-    seenBroadcastRef.current.clear();
-  }
-})
+```
+┌─────────────────────────────────────┐
+│  ⚓ S/Y Aurora        ● На ходу     │  ← Header (название яхты + статус)
+├─────────────────────────────────────┤
+│                                     │
+│   Добро пожаловать на борт,         │
+│        {displayName}!               │
+│                                     │
+├─────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐   │
+│  │  🍷 Бар     │  │ 📖 Библиот. │   │
+│  │    Чат     │  │   Хроники   │   │  ← Двойная подпись
+│  └─────────────┘  └─────────────┘   │
+│  ┌─────────────┐  ┌─────────────┐   │
+│  │ ⚓ Мостик   │  │ 🗺️ Карта    │   │
+│  │   Задачи   │  │  Календарь  │   │
+│  └─────────────┘  └─────────────┘   │
+│  ┌─────────────┐                    │
+│  │ 🎮 Игровой  │  ← "Скоро"        │
+│  │     зал    │                    │
+│  └─────────────┘                    │
+├─────────────────────────────────────┤
+│  Гости на борту: 3                  │
+│  ● Капитан  ● Штурман  ● Гость     │
+└─────────────────────────────────────┘
 ```
 
-**Результат**:
-- `setMessages` — чистая функция (только вычисление)
-- `put()` вызывается один раз
-- Защита от двойных broadcast в dev и production
+Карточка каюты (`CabinCard`):
+- Тёмный орех фон (`bg-card`)
+- Латунный border при hover
+- Иконка + морское название (крупно)
+- Функциональное название (мелко, muted)
+
+### 1.4 EtherealBottomTabs → YachtDeck
+
+**Обновления:**
+- Фон: `bg-card` (орех)
+- Активный таб: латунный цвет (`text-primary`) + тонкий top-border
+- Иконки: `Wine`, `BookOpen`, `Anchor`, `Map`
+- Двойная подпись: морское название + функция (или только короткое)
+
+### 1.5 EtherealHeader → YachtHeader
+
+**Обновления:**
+- Название: "S/Y Aurora" (или кастомное из комнаты)
+- Статус подключения: "На ходу" (connected) / "В порту" (connecting)
+- Кнопка "Команда" (Users) → "Экипаж"
+- "Покинуть борт" вместо LogOut
+
+### 1.6 EtherealChat → BarLounge
+
+**Стилизация сообщений:**
+- Входящие: кремовая бумага (`bg-[#f5f0e8]` / `text-[#1a1612]`)
+- Исходящие: тёмный орех (`bg-card`) + тонкий латунный border слева
+- Латунь ТОЛЬКО для: кнопки send, активных состояний, иконок
+- Input placeholder: "Шепнуть в бар..."
+- Typing indicator: "Кто-то наливает..."
+
+### 1.7 Заглушка /e/games
+
+Новый файл: `src/pages/ethereal/EtherealGames.tsx`
+- Иконка `Gamepad2`
+- "Игровой зал"
+- "Скоро откроется..."
+- Регистрация route в App.tsx
 
 ---
 
@@ -155,26 +178,48 @@ const seenBroadcastRef = useRef(new Set<string>());
 
 | Файл | Изменения |
 |------|-----------|
-| `supabase/functions/ethereal_messages/index.ts` | Строки 211-218: добавить проверку updateError + каскадный cleanup |
-| `src/hooks/useEtherealRealtime.ts` | Строка 32: добавить seenBroadcastRef; Строки 85-109: рефакторинг broadcast handler |
+| `src/index.css` | Добавить `.ethereal { --background: ...; }` shadcn tokens |
+| `src/components/ethereal/EtherealGate.tsx` | Градиентный overlay |
+| `src/components/ethereal/EtherealHeader.tsx` | Yacht-стиль: название, статус, терминология |
+| `src/components/ethereal/EtherealBottomTabs.tsx` | Новые иконки, двойные подписи, yacht-стили |
+| `src/pages/ethereal/EtherealHome.tsx` | Полный редизайн в YachtSalon с CabinCards |
+| `src/pages/ethereal/EtherealChat.tsx` | Bar-стилизация: бумага/орех bubbles, латунные акценты |
+| `src/pages/ethereal/EtherealChronicles.tsx` | Обновить заголовок "Библиотека / Хроники" |
+| `src/pages/ethereal/EtherealTasks.tsx` | Обновить заголовок "Мостик / Задачи" |
+| `src/pages/ethereal/EtherealCalendar.tsx` | Обновить заголовок "Карта / Календарь" |
+| **Новый:** `src/pages/ethereal/EtherealGames.tsx` | Заглушка игрового зала |
+| `src/App.tsx` | Добавить route `/e/games` |
 
 ---
 
-## Тестирование (5 минут)
+## Фаза 2 (Атмосфера) — Отложено
 
-| Тест | Ожидаемый результат |
-|------|---------------------|
-| Фото-only отправка | `{success:true, imagePath, imageUrl}` |
-| Искусственно сломать update (неверное имя колонки) | response `update_error`, файл удалён, сообщение удалено или помечено `[image upload failed]` |
-| Dev с Strict Mode: отправить 1 сообщение | В Dexie ровно 1 запись по serverId |
-| 2+ быстрых broadcast с одним serverId | В UI и Dexie — только одна запись |
+После одобрения Фазы 1:
+- `YachtPorthole.tsx` — анимированный иллюминатор с водой
+- Hover-эффекты на дверях кают (латунная ручка, свечение)
+- `@media (prefers-reduced-motion: reduce)` → статичная версия
+- Лёгкие текстуры webp с низкой opacity (опционально)
 
 ---
 
 ## Порядок реализации
 
-1. Edge Function: добавить проверку updateError + cleanup
-2. useEtherealRealtime: добавить seenBroadcastRef
-3. useEtherealRealtime: рефакторинг broadcast handler
-4. Deploy Edge Function
-5. Тестирование
+1. CSS: добавить `.ethereal` tokens в index.css
+2. EtherealGate: градиентный overlay
+3. EtherealHeader: yacht-терминология
+4. EtherealBottomTabs: новые иконки + стили
+5. EtherealHome: YachtSalon с карточками кают
+6. EtherealChat: Bar-стилизация
+7. Остальные страницы: обновить заголовки
+8. EtherealGames: заглушка
+9. App.tsx: route /e/games
+
+---
+
+## Результат
+
+Пользователи попадают в **атмосферный салон роскошной яхты**, где:
+- Тёплая палитра ореха и латуни создаёт ощущение эксклюзивности
+- Каждая "каюта" — раздел функционала с понятной навигацией
+- Двойные подписи убирают когнитивный разрыв
+- shadcn-компоненты автоматически работают в новой теме
