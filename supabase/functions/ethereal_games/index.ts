@@ -44,12 +44,12 @@ async function verifyToken(token: string): Promise<{
       ['verify']
     );
 
-    const [payloadB64, signatureHex] = token.split('.');
-    if (!payloadB64 || !signatureHex) return { valid: false };
+    const [payloadB64, signatureB64] = token.split('.');
+    if (!payloadB64 || !signatureB64) return { valid: false };
 
-    const signatureBytes = new Uint8Array(
-      signatureHex.match(/.{2}/g)!.map((b) => parseInt(b, 16))
-    );
+    // Decode base64 signature (not hex!)
+    const signatureBytes = Uint8Array.from(atob(signatureB64), c => c.charCodeAt(0));
+    
     const isValid = await crypto.subtle.verify(
       'HMAC',
       key,
@@ -64,10 +64,11 @@ async function verifyToken(token: string): Promise<{
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // Use sessionId (not sid) - matching ethereal_join token format
     const { data: sessionData } = await supabase
       .from('ethereal_sessions')
       .select('*, member:ethereal_room_members(*)')
-      .eq('id', payload.sid)
+      .eq('id', payload.sessionId)
       .single();
 
     if (!sessionData || new Date(sessionData.expires_at).getTime() < Date.now()) {
@@ -75,7 +76,8 @@ async function verifyToken(token: string): Promise<{
     }
 
     return { valid: true, session: sessionData, member: sessionData.member };
-  } catch {
+  } catch (e) {
+    console.error('Token verification error:', e);
     return { valid: false };
   }
 }
