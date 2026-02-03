@@ -51,10 +51,14 @@ export function BottomNav() {
                 navigator.vibrate(15);
               }
               
-              // Trigger ritual animation event for Today page sigil
-              window.dispatchEvent(new CustomEvent('grimoire-ritual-start'));
+              // On discussions page — create new discussion directly
+              if (location.pathname === '/discussions') {
+                window.dispatchEvent(new CustomEvent('create-new-discussion'));
+                return;
+              }
               
-              // Start hero transition animation
+              // On other pages — navigate to /new
+              window.dispatchEvent(new CustomEvent('grimoire-ritual-start'));
               startTransition(centerButtonRef.current, item.path);
             };
             

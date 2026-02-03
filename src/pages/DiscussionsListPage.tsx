@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Plus, MessageSquare, Loader2 } from 'lucide-react';
-import { getAllDiscussionSessions, toggleDiscussionSessionPin, deleteDiscussionSession, createDiscussionSession, DiscussionSession } from '@/lib/db';
+import { MessageSquare, Loader2 } from 'lucide-react';
+import { getAllDiscussionSessions, toggleDiscussionSessionPin, deleteDiscussionSession, createDiscussionSession } from '@/lib/db';
 import { SessionCard } from '@/components/discussions/SessionCard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
 import { trackUsageEvent } from '@/lib/usageTracker';
-import { GrimoireIcon, SealGlyph } from '@/components/icons/SigilIcon';
+import { SealGlyph } from '@/components/icons/SigilIcon';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +26,16 @@ function DiscussionsListContent() {
   const sessions = useLiveQuery(() => getAllDiscussionSessions(), []);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
+  
+  // Listen for center button event to create new discussion
+  useEffect(() => {
+    const handleCreateDiscussion = () => {
+      handleNewDiscussion();
+    };
+    
+    window.addEventListener('create-new-discussion', handleCreateDiscussion);
+    return () => window.removeEventListener('create-new-discussion', handleCreateDiscussion);
+  }, []);
   
   const handlePin = async (id: number) => {
     await toggleDiscussionSessionPin(id);
@@ -67,32 +76,14 @@ function DiscussionsListContent() {
   return (
     <div className="min-h-screen pb-24 cyber-noise rune-grid">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
-        {/* Brand header */}
-        <div className="flex items-center justify-between">
-          <div className="shrink-0">
-            <Button
-              onClick={handleNewDiscussion}
-              disabled={creating}
-              size="sm"
-              className="gap-1.5 rtl:flex-row-reverse"
-            >
-              {creating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
-              {t('discussions.new')}
-            </Button>
-          </div>
-          <div className="flex-1 text-center min-w-0">
-            <h1 className="text-xl font-serif font-medium text-foreground tracking-wide truncate">
-              {t('discussions.title')}
-            </h1>
-            <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
-              {t('discussions.subtitle')}
-            </p>
-          </div>
-          <div className="shrink-0 w-10" />
+        {/* Centered title only */}
+        <div className="text-center">
+          <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
+            {t('discussions.title')}
+          </h1>
+          <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
+            {t('discussions.subtitle')}
+          </p>
         </div>
         
         {/* Rune divider */}
