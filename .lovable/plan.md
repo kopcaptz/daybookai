@@ -1,108 +1,74 @@
 
-
-# План: Добавить кнопку "Новое обсуждение" на страницу Discussions
+# План: Исправить направление стрелки "назад" для RTL
 
 ## Проблема
 
-После предыдущих изменений кнопка "+New" была полностью убрана из header. Пользователь хочет, чтобы была видимая кнопка для создания нового обсуждения.
+На скриншоте видно, что в режиме иврит (RTL) кнопка "назад" находится **слева** на экране, но стрелка указывает **вправо** (→). Это выглядит неестественно — стрелка должна указывать "наружу", к краю экрана, т.е. **влево** (←).
+
+## Анализ
+
+Текущая логика `isRTL(language) ? ArrowRight : ArrowLeft` была основана на семантике "предыдущий в контенте", но для кнопки "выход/назад" стрелка должна указывать **к краю экрана**, т.е. всегда **наружу**.
+
+Поскольку header использует `rtl:flex-row-reverse` НЕ везде (или flexbox сам переставляет элементы), кнопка остаётся визуально на том же месте (слева), поэтому стрелка должна указывать влево.
 
 ## Решение
 
-Добавить кнопку обратно в header с правильной поддержкой RTL:
-- В LTR (рус/англ): кнопка **справа** от заголовка
-- В RTL (иврит/араб): кнопка **слева** от заголовка (визуально справа в RTL)
-
----
-
-## Изменение: `src/pages/DiscussionsListPage.tsx`
-
-### 1. Добавить импорты
-
-```tsx
-import { Plus, MessageSquare, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { isRTL } from '@/lib/i18n';
-```
-
-### 2. Обновить header (строки 78-93)
-
-Заменить простой centered header на flex-layout с кнопкой:
-
-```tsx
-<header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
-  <div className="flex items-center justify-between">
-    {/* Spacer для баланса (в LTR — слева) */}
-    <div className="w-20" />
-    
-    {/* Centered title */}
-    <div className="text-center flex-1">
-      <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
-        {t('discussions.title')}
-      </h1>
-      <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
-        {t('discussions.subtitle')}
-      </p>
-    </div>
-    
-    {/* New button (справа в LTR, слева в RTL — но визуально всегда справа) */}
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={handleNewDiscussion}
-      disabled={creating}
-      className="gap-1.5"
-    >
-      {creating ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : (
-        <Plus className="h-4 w-4" />
-      )}
-      <span>{t('discussions.new')}</span>
-    </Button>
-  </div>
-  
-  {/* Rune divider */}
-  <div className="mt-4 rune-divider">
-    <span className="sigil-separator">◆</span>
-  </div>
-</header>
-```
-
----
-
-## Как это работает для RTL
-
-Flexbox с `justify-between` автоматически:
-- **LTR**: `[spacer] | [title] | [button]` — кнопка справа ✓
-- **RTL**: `[button] | [title] | [spacer]` — кнопка слева визуально, но это правая сторона RTL ✓
-
-Не нужно `rtl:flex-row-reverse` — flexbox сам адаптируется к `dir="rtl"`.
+**Убрать условную смену иконки** — использовать `ArrowLeft` для всех языков, так как кнопка визуально всегда слева.
 
 ---
 
 ## Файлы для изменения
 
-| Файл | Изменения |
+| Файл | Изменение |
 |------|-----------|
-| `src/pages/DiscussionsListPage.tsx` | Добавить кнопку "+New" в header с правильным RTL layout |
+| `src/pages/NewEntry.tsx` | `ArrowLeft` без условия |
+| `src/pages/DiscussionChatPage.tsx` | `ArrowLeft` без условия |
+| `src/pages/DayView.tsx` | `ArrowLeft` без условия (2 места) |
+| `src/pages/ReceiptReviewPage.tsx` | `ArrowLeft` без условия |
+| `src/pages/ReceiptDetailPage.tsx` | `ArrowLeft` без условия |
+| `src/pages/ReceiptScanPage.tsx` | `ArrowLeft` без условия |
+| `src/pages/ReceiptsPage.tsx` | `ArrowLeft` без условия |
+| `src/pages/ReceiptAnalyticsPage.tsx` | `ArrowLeft` без условия |
+| `src/pages/ReminderDetailPage.tsx` | `ArrowLeft` без условия (2 места) |
+| `src/components/ethereal/ChronicleView.tsx` | `ArrowLeft` без условия, убрать `isRTL` prop |
+
+---
+
+## Пример изменения
+
+**До:**
+```tsx
+const BackIcon = isRTL(language) ? ArrowRight : ArrowLeft;
+<BackIcon className="h-5 w-5" />
+```
+
+**После:**
+```tsx
+<ArrowLeft className="h-5 w-5" />
+```
 
 ---
 
 ## Визуальный результат
 
-**English/Russian (LTR):**
+**LTR (рус/англ):**
 ```
-┌───────────────────────────────────────┐
-│           Discussions        [+ New]  │
-│         Chat with entries             │
-└───────────────────────────────────────┘
-```
-
-**Hebrew/Arabic (RTL):**
-```
-┌───────────────────────────────────────┐
-│  [+ חדש]          דיונים              │
-│              צ'אט עם רשומות           │
-└───────────────────────────────────────┘
+┌────────────────────────────────────┐
+│ [←]  Новая запись           [💾]  │
+└────────────────────────────────────┘
 ```
 
+**RTL (иврит/араб):**
+```
+┌────────────────────────────────────┐
+│ [←]  רשומה חדשה            [💾]  │
+└────────────────────────────────────┘
+```
+
+Стрелка ← указывает "наружу" к левому краю экрана в обоих случаях.
+
+---
+
+## Примечание
+
+Эта логика отличается от навигации по контенту (пред/след месяц в календаре), где иконки **должны** меняться семантически. Кнопка "назад/выход" — это физический жест к краю экрана.
