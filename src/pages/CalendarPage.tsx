@@ -114,7 +114,7 @@ function CalendarContent() {
     return colors[mood - 1] || '';
   };
 
-  const weekDays = [
+  const weekDaysBase = [
     t('calendar.mon'),
     t('calendar.tue'),
     t('calendar.wed'),
@@ -123,6 +123,7 @@ function CalendarContent() {
     t('calendar.sat'),
     t('calendar.sun'),
   ];
+  const weekDays = isRTL(language) ? [...weekDaysBase].reverse() : weekDaysBase;
 
   // Get localized month name
   const getMonthName = (date: Date): string => {
@@ -159,12 +160,12 @@ function CalendarContent() {
           const PrevIcon = isRTL(language) ? ChevronRight : ChevronLeft;
           const NextIcon = isRTL(language) ? ChevronLeft : ChevronRight;
           return (
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between rtl:flex-row-reverse">
               <Button variant="ghost" size="icon" onClick={goToPreviousMonth} className="hover:bg-cyber-glow/10">
                 <PrevIcon className="h-5 w-5" />
               </Button>
               <h2 className="text-lg font-serif font-medium">
-                {getMonthName(currentMonth)} {currentMonth.getFullYear()}
+                {getMonthName(currentMonth)} <span dir="ltr">{currentMonth.getFullYear()}</span>
               </h2>
               <Button variant="ghost" size="icon" onClick={goToNextMonth} className="hover:bg-cyber-glow/10">
                 <NextIcon className="h-5 w-5" />
@@ -181,7 +182,7 @@ function CalendarContent() {
 
       <main className="px-4 pt-4">
         {/* Week day headers - RTL grid direction */}
-        <div className="mb-2 grid grid-cols-7 gap-1 text-center" dir={isRTL(language) ? 'rtl' : 'ltr'}>
+        <div className="mb-2 grid grid-cols-7 gap-1 text-center">
           {weekDays.map((day) => (
             <div key={day} className="py-2 text-xs font-medium text-muted-foreground">
               {day}
@@ -191,7 +192,7 @@ function CalendarContent() {
 
         {/* Calendar grid - RTL grid direction */}
         <div className="panel-glass p-3">
-          <div className="grid grid-cols-7 gap-1" dir={isRTL(language) ? 'rtl' : 'ltr'}>
+          <div className="grid grid-cols-7 gap-1">
             {/* Padding days */}
             {Array.from({ length: paddingDays }).map((_, i) => (
               <div key={`pad-${i}`} className="aspect-square" />
