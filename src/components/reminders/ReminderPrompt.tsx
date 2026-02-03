@@ -1,6 +1,7 @@
 /**
  * ReminderPrompt - Bottom sheet shown after saving an actionable diary entry.
  * Allows quick reminder creation linked to the saved entry.
+ * Supports ru, en, he, ar languages with RTL layout.
  */
 
 import { useState } from 'react';
@@ -15,12 +16,36 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { useI18n } from '@/lib/i18n';
-import { TIME_CHIPS, getTimestampForPreset } from '@/lib/reminderUtils';
+import { TIME_CHIPS, getTimestampForPreset, getLabel } from '@/lib/reminderUtils';
 import { extractActionSnippet, type SuggestedTime } from '@/lib/reminderDetection';
 import { createReminder } from '@/lib/db';
 import { reconcileReminderNotifications } from '@/lib/reminderNotifications';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+
+// ============================================
+// LOCALIZED TEXTS
+// ============================================
+
+const texts = {
+  title: { ru: 'Добавить напоминание?', en: 'Add a reminder?', he: 'להוסיף תזכורת?', ar: 'إضافة تذكير؟' },
+  description: { 
+    ru: 'Похоже, это важное дело. Напомнить позже?', 
+    en: 'This looks like an action item. Set a reminder?', 
+    he: 'נראה כמו משימה חשובה. להזכיר לך?', 
+    ar: 'يبدو أن هذا أمر مهم. تعيين تذكير؟' 
+  },
+  whenToRemind: { ru: 'Когда напомнить?', en: 'When to remind?', he: 'מתי להזכיר?', ar: 'متى تريد التذكير؟' },
+  notNow: { ru: 'Не сейчас', en: 'Not now', he: 'לא עכשיו', ar: 'ليس الآن' },
+  create: { ru: 'Создать', en: 'Create', he: 'צור', ar: 'إنشاء' },
+  creating: { ru: 'Создание...', en: 'Creating...', he: 'יוצר...', ar: 'جاري الإنشاء...' },
+  entryNotFound: { ru: 'Ошибка: запись не найдена', en: 'Error: entry not found', he: 'שגיאה: הרשומה לא נמצאה', ar: 'خطأ: المدخل غير موجود' },
+  invalidTime: { ru: 'Ошибка времени', en: 'Invalid time', he: 'זמן שגוי', ar: 'وقت غير صالح' },
+  created: { ru: 'Напоминание создано', en: 'Reminder created', he: 'התזכורת נוצרה', ar: 'تم إنشاء التذكير' },
+  failed: { ru: 'Ошибка создания', en: 'Creation failed', he: 'היצירה נכשלה', ar: 'فشل الإنشاء' },
+};
+
+type TextKey = keyof typeof texts;
 
 interface ReminderPromptProps {
   open: boolean;
@@ -40,6 +65,10 @@ export function ReminderPrompt({
   const navigate = useNavigate();
   const { language } = useI18n();
   
+  // Helper to get localized text
+  const t = (key: TextKey): string => 
+    texts[key][language as keyof typeof texts[TextKey]] || texts[key].en;
+  
   const [selectedPreset, setSelectedPreset] = useState<SuggestedTime>(suggestedTime);
   const [isCreating, setIsCreating] = useState(false);
   
@@ -48,13 +77,13 @@ export function ReminderPrompt({
   
   const handleCreate = async () => {
     if (!entryId) {
-      toast.error(language === 'ru' ? 'Ошибка: запись не найдена' : 'Error: entry not found');
+      toast.error(t('entryNotFound'));
       return;
     }
     
     const dueAt = getTimestampForPreset(selectedPreset);
     if (!dueAt || dueAt <= Date.now()) {
-      toast.error(language === 'ru' ? 'Ошибка времени' : 'Invalid time');
+      toast.error(t('invalidTime'));
       return;
     }
     
@@ -75,13 +104,13 @@ export function ReminderPrompt({
       // Reconcile notifications
       await reconcileReminderNotifications(language);
       
-      toast.success(language === 'ru' ? 'Напоминание создано' : 'Reminder created');
+      toast.success(t('created'));
       
       onOpenChange(false);
       navigate('/today');
     } catch (error) {
       console.error('Failed to create reminder:', error);
-      toast.error(language === 'ru' ? 'Ошибка создания' : 'Creation failed');
+      toast.error(t('failed'));
     } finally {
       setIsCreating(false);
     }
@@ -94,15 +123,13 @@ export function ReminderPrompt({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="rounded-t-xl">
-        <SheetHeader className="text-left">
-          <SheetTitle className="flex items-center gap-2">
+        <SheetHeader className="text-start">
+          <SheetTitle className="flex items-center gap-2 rtl:flex-row-reverse">
             <Bell className="h-5 w-5 text-cyber-sigil" />
-            {language === 'ru' ? 'Добавить напоминание?' : 'Add a reminder?'}
+            {t('title')}
           </SheetTitle>
           <SheetDescription>
-            {language === 'ru' 
-              ? 'Похоже, это важное дело. Напомнить позже?'
-              : 'This looks like an action item. Set a reminder?'}
+            {t('description')}
           </SheetDescription>
         </SheetHeader>
         
@@ -118,7 +145,7 @@ export function ReminderPrompt({
           <div className="space-y-2">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Clock className="h-3.5 w-3.5" />
-              {language === 'ru' ? 'Когда напомнить?' : 'When to remind?'}
+              {t('whenToRemind')}
             </div>
             <div className="flex flex-wrap gap-2">
               {TIME_CHIPS.map((chip) => (
@@ -134,7 +161,7 @@ export function ReminderPrompt({
                       : "bg-background border-border hover:bg-accent hover:text-accent-foreground"
                   )}
                 >
-                  {language === 'ru' ? chip.labelRu : chip.labelEn}
+                  {getLabel(chip, language)}
                 </button>
               ))}
             </div>
@@ -148,16 +175,14 @@ export function ReminderPrompt({
               disabled={isCreating}
               className="flex-1"
             >
-              {language === 'ru' ? 'Не сейчас' : 'Not now'}
+              {t('notNow')}
             </Button>
             <Button
               onClick={handleCreate}
               disabled={isCreating || !entryId}
               className="flex-1 btn-cyber"
             >
-              {isCreating 
-                ? (language === 'ru' ? 'Создание...' : 'Creating...') 
-                : (language === 'ru' ? 'Создать' : 'Create')}
+              {isCreating ? t('creating') : t('create')}
             </Button>
           </div>
         </div>

@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Bell, Check, Clock, X, Trash2, ChevronDown, CalendarIcon, Save, FileText, ExternalLink, Repeat, SkipForward } from 'lucide-react';
+import { ArrowLeft, Bell, Check, Clock, X, Trash2, ChevronDown, CalendarIcon, Save, FileText, ExternalLink, Repeat, SkipForward } from 'lucide-react';
 import { format, setHours, setMinutes } from 'date-fns';
 import { ru, enUS } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Calendar } from '@/components/ui/calendar';
@@ -28,7 +27,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
-import { useI18n, isRTL } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { toast } from 'sonner';
 import {
   type Reminder,
@@ -52,13 +51,81 @@ import {
   getSnoozeTimestamp,
   REPEAT_OPTIONS,
   computeNextDueAt,
+  getLabel,
 } from '@/lib/reminderUtils';
 import { reconcileReminderNotifications } from '@/lib/reminderNotifications';
+
+// ============================================
+// LOCALIZED TEXTS
+// ============================================
+
+const texts = {
+  // Not found
+  notFound: { ru: 'Напоминание не найдено', en: 'Reminder not found', he: 'התזכורת לא נמצאה', ar: 'التذكير غير موجود' },
+  notFoundHint: { ru: 'Возможно, оно было удалено или выполнено.', en: 'It may have been deleted or completed.', he: 'אולי נמחקה או הושלמה.', ar: 'ربما تم حذفه أو إكماله.' },
+  back: { ru: 'Назад', en: 'Back to Today', he: 'חזרה', ar: 'رجوع' },
+  
+  // Header
+  reminder: { ru: 'Напоминание', en: 'Reminder', he: 'תזכורת', ar: 'تذكير' },
+  
+  // Delete dialog
+  deleteConfirm: { ru: 'Удалить напоминание?', en: 'Delete reminder?', he: 'למחוק תזכורת?', ar: 'حذف التذكير؟' },
+  deleteHint: { ru: 'Это действие нельзя отменить.', en: 'This action cannot be undone.', he: 'לא ניתן לבטל פעולה זו.', ar: 'لا يمكن التراجع عن هذا الإجراء.' },
+  cancel: { ru: 'Отмена', en: 'Cancel', he: 'ביטול', ar: 'إلغاء' },
+  delete: { ru: 'Удалить', en: 'Delete', he: 'מחק', ar: 'حذف' },
+  
+  // Action text
+  whatToDo: { ru: 'Что нужно сделать', en: 'What to do', he: 'מה לעשות', ar: 'ما يجب فعله' },
+  actionPlaceholder: { ru: 'Действие...', en: 'Action...', he: 'פעולה...', ar: 'إجراء...' },
+  save: { ru: 'Сохранить', en: 'Save', he: 'שמור', ar: 'حفظ' },
+  saved: { ru: 'Сохранено', en: 'Saved', he: 'נשמר', ar: 'تم الحفظ' },
+  saveFailed: { ru: 'Ошибка сохранения', en: 'Save failed', he: 'השמירה נכשלה', ar: 'فشل الحفظ' },
+  
+  // When
+  when: { ru: 'Когда', en: 'When', he: 'מתי', ar: 'متى' },
+  reschedule: { ru: 'Изменить время', en: 'Reschedule', he: 'שנה זמן', ar: 'إعادة جدولة' },
+  rescheduled: { ru: 'Время изменено', en: 'Rescheduled', he: 'הזמן שונה', ar: 'تمت إعادة الجدولة' },
+  
+  // Repeat
+  repeat: { ru: 'Повторять', en: 'Repeat', he: 'חזרה', ar: 'تكرار' },
+  skipNext: { ru: 'Пропустить следующее', en: 'Skip next', he: 'דלג על הבא', ar: 'تخطي التالي' },
+  skipNextConfirm: { ru: 'Пропустить следующее?', en: 'Skip next?', he: 'לדלג על הבא?', ar: 'تخطي التالي؟' },
+  skipNextHint: { ru: 'Следующее повторение не будет создано при выполнении.', en: 'The next occurrence will not be created when you complete this reminder.', he: 'ההתרחשות הבאה לא תיווצר כשתסיים את התזכורת.', ar: 'لن يتم إنشاء التكرار التالي عند إكمال هذا التذكير.' },
+  confirm: { ru: 'Подтвердить', en: 'Confirm', he: 'אישור', ar: 'تأكيد' },
+  nextSkipped: { ru: 'Следующее: пропущено', en: 'Next: skipped', he: 'הבא: דילוג', ar: 'التالي: تم التخطي' },
+  next: { ru: 'Следующее: ', en: 'Next: ', he: 'הבא: ', ar: 'التالي: ' },
+  
+  // Source
+  sourceText: { ru: 'Исходный текст', en: 'Source text', he: 'טקסט מקור', ar: 'النص المصدر' },
+  noText: { ru: 'Нет текста', en: 'No text', he: 'אין טקסט', ar: 'لا يوجد نص' },
+  source: { ru: 'Источник', en: 'Source', he: 'מקור', ar: 'المصدر' },
+  sourceNotFound: { ru: 'Источник не найден', en: 'Source not found', he: 'המקור לא נמצא', ar: 'المصدر غير موجود' },
+  openEntry: { ru: 'Открыть запись', en: 'Open entry', he: 'פתח רשומה', ar: 'فتح المدخل' },
+  
+  // Actions
+  done: { ru: 'Готово', en: 'Done', he: 'בוצע', ar: 'تم' },
+  doneSuccess: { ru: 'Выполнено!', en: 'Done!', he: 'בוצע!', ar: 'تم!' },
+  snooze: { ru: 'Отложить', en: 'Snooze', he: 'נודניק', ar: 'تأجيل' },
+  snoozed: { ru: 'Отложено', en: 'Snoozed', he: 'נדחה', ar: 'تم التأجيل' },
+  dismiss: { ru: 'Отклонить', en: 'Dismiss', he: 'התעלם', ar: 'رفض' },
+  dismissed: { ru: 'Отклонено', en: 'Dismissed', he: 'נדחה', ar: 'تم الرفض' },
+  deleted: { ru: 'Удалено', en: 'Deleted', he: 'נמחק', ar: 'تم الحذف' },
+  error: { ru: 'Ошибка', en: 'Failed', he: 'נכשל', ar: 'فشل' },
+};
+
+type TextKey = keyof typeof texts;
 
 export default function ReminderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { language, t } = useI18n();
+  const { language } = useI18n();
+  
+  // Helper to get localized text
+  const t = (key: TextKey): string => 
+    texts[key][language as keyof typeof texts[TextKey]] || texts[key].en;
+  
+  // Get base language for date-fns (he/ar fallback to en)
+  const getDateLocale = () => (language === 'ru' ? ru : enUS);
   
   const [reminder, setReminder] = useState<Reminder | null>(null);
   const [sourceEntry, setSourceEntry] = useState<DiaryEntry | null | undefined>(undefined); // undefined = loading, null = not found
@@ -140,9 +207,9 @@ export default function ReminderDetailPage() {
       await updateReminderText(reminder.id, actionText);
       setReminder(prev => prev ? { ...prev, actionText } : null);
       setHasTextChanges(false);
-      toast.success(language === 'ru' ? 'Сохранено' : 'Saved');
+      toast.success(t('saved'));
     } catch (error) {
-      toast.error(language === 'ru' ? 'Ошибка сохранения' : 'Save failed');
+      toast.error(t('saveFailed'));
     } finally {
       setIsSaving(false);
     }
@@ -161,9 +228,9 @@ export default function ReminderDetailPage() {
       await reconcileReminderNotifications(language);
       setReminder(prev => prev ? { ...prev, dueAt: newDueAt, snoozedUntil: undefined } : null);
       setShowDatePicker(false);
-      toast.success(language === 'ru' ? 'Время изменено' : 'Rescheduled');
+      toast.success(t('rescheduled'));
     } catch (error) {
-      toast.error(language === 'ru' ? 'Ошибка' : 'Failed');
+      toast.error(t('error'));
     } finally {
       setIsSaving(false);
     }
@@ -174,7 +241,7 @@ export default function ReminderDetailPage() {
     if (!reminder?.id) return;
     await completeReminder(reminder.id);
     await reconcileReminderNotifications(language);
-    toast.success(language === 'ru' ? 'Выполнено!' : 'Done!');
+    toast.success(t('doneSuccess'));
     navigate('/');
   };
   
@@ -184,11 +251,11 @@ export default function ReminderDetailPage() {
     try {
       await updateReminderRepeat(reminder.id, newRepeat);
       setReminder(prev => prev ? { ...prev, repeat: newRepeat } : null);
-      toast.success(language === 'ru' ? 'Сохранено' : 'Saved');
+      toast.success(t('saved'));
     } catch (error) {
-      toast.error(language === 'ru' ? 'Ошибка' : 'Failed');
+      toast.error(t('error'));
     } finally {
-    setIsSaving(false);
+      setIsSaving(false);
     }
   };
   
@@ -199,7 +266,7 @@ export default function ReminderDetailPage() {
       await updateReminderSkipNext(reminder.id, skipNext);
       setReminder(prev => prev ? { ...prev, skipNext } : null);
     } catch (error) {
-      toast.error(language === 'ru' ? 'Ошибка' : 'Failed');
+      toast.error(t('error'));
     } finally {
       setIsSaving(false);
     }
@@ -209,7 +276,7 @@ export default function ReminderDetailPage() {
     if (!reminder?.id) return;
     await dismissReminder(reminder.id);
     await reconcileReminderNotifications(language);
-    toast.success(language === 'ru' ? 'Отклонено' : 'Dismissed');
+    toast.success(t('dismissed'));
     navigate('/');
   };
   
@@ -218,7 +285,7 @@ export default function ReminderDetailPage() {
     const snoozedUntil = getSnoozeTimestamp(presetId);
     await snoozeReminder(reminder.id, snoozedUntil);
     await reconcileReminderNotifications(language);
-    toast.success(language === 'ru' ? 'Отложено' : 'Snoozed');
+    toast.success(t('snoozed'));
     navigate('/');
   };
   
@@ -226,7 +293,7 @@ export default function ReminderDetailPage() {
     if (!reminder?.id) return;
     await deleteReminder(reminder.id);
     await reconcileReminderNotifications(language);
-    toast.success(language === 'ru' ? 'Удалено' : 'Deleted');
+    toast.success(t('deleted'));
     navigate('/');
   };
   
@@ -236,16 +303,14 @@ export default function ReminderDetailPage() {
       <div className="min-h-screen flex flex-col items-center justify-center p-6">
         <Bell className="h-16 w-16 text-muted-foreground mb-4 opacity-50" />
         <h2 className="text-xl font-semibold mb-2">
-          {language === 'ru' ? 'Напоминание не найдено' : 'Reminder not found'}
+          {t('notFound')}
         </h2>
         <p className="text-muted-foreground text-center mb-6">
-          {language === 'ru' 
-            ? 'Возможно, оно было удалено или выполнено.'
-            : 'It may have been deleted or completed.'}
+          {t('notFoundHint')}
         </p>
         <Button onClick={() => navigate('/')}>
           <ArrowLeft className="h-4 w-4 me-2" />
-          {language === 'ru' ? 'Назад' : 'Back to Today'}
+          {t('back')}
         </Button>
       </div>
     );
@@ -277,7 +342,7 @@ export default function ReminderDetailPage() {
           </Button>
           
           <h1 className="text-lg font-semibold">
-            {language === 'ru' ? 'Напоминание' : 'Reminder'}
+            {t('reminder')}
           </h1>
           
           <AlertDialog>
@@ -289,20 +354,18 @@ export default function ReminderDetailPage() {
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>
-                  {language === 'ru' ? 'Удалить напоминание?' : 'Delete reminder?'}
+                  {t('deleteConfirm')}
                 </AlertDialogTitle>
                 <AlertDialogDescription>
-                  {language === 'ru' 
-                    ? 'Это действие нельзя отменить.'
-                    : 'This action cannot be undone.'}
+                  {t('deleteHint')}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>
-                  {language === 'ru' ? 'Отмена' : 'Cancel'}
+                  {t('cancel')}
                 </AlertDialogCancel>
                 <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
-                  {language === 'ru' ? 'Удалить' : 'Delete'}
+                  {t('delete')}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -334,14 +397,14 @@ export default function ReminderDetailPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Bell className="h-4 w-4" />
-              {language === 'ru' ? 'Что нужно сделать' : 'What to do'}
+              {t('whatToDo')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <Input
               value={actionText}
               onChange={(e) => handleTextChange(e.target.value)}
-              placeholder={language === 'ru' ? 'Действие...' : 'Action...'}
+              placeholder={t('actionPlaceholder')}
               className="text-base"
             />
             {hasTextChanges && (
@@ -351,8 +414,8 @@ export default function ReminderDetailPage() {
                 disabled={isSaving}
                 className="w-full"
               >
-                <Save className="h-4 w-4 mr-2" />
-                {language === 'ru' ? 'Сохранить' : 'Save'}
+                <Save className="h-4 w-4 me-2" />
+                {t('save')}
               </Button>
             )}
           </CardContent>
@@ -363,7 +426,7 @@ export default function ReminderDetailPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <CalendarIcon className="h-4 w-4" />
-              {language === 'ru' ? 'Когда' : 'When'}
+              {t('when')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -373,10 +436,10 @@ export default function ReminderDetailPage() {
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="flex-1 justify-start text-left font-normal"
+                    className="flex-1 justify-start text-start font-normal"
                   >
-                    <CalendarIcon className="h-4 w-4 mr-2" />
-                    {selectedDate ? format(selectedDate, 'dd.MM.yyyy') : '—'}
+                    <CalendarIcon className="h-4 w-4 me-2" />
+                    {selectedDate ? <span dir="ltr">{format(selectedDate, 'dd.MM.yyyy')}</span> : '—'}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -398,6 +461,7 @@ export default function ReminderDetailPage() {
                 value={selectedTime}
                 onChange={(e) => setSelectedTime(e.target.value)}
                 className="w-28"
+                dir="ltr"
               />
             </div>
             
@@ -406,8 +470,8 @@ export default function ReminderDetailPage() {
               disabled={isSaving || !selectedDate}
               className="w-full"
             >
-              <Clock className="h-4 w-4 mr-2" />
-              {language === 'ru' ? 'Изменить время' : 'Reschedule'}
+              <Clock className="h-4 w-4 me-2" />
+              {t('reschedule')}
             </Button>
           </CardContent>
         </Card>
@@ -417,7 +481,7 @@ export default function ReminderDetailPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Repeat className="h-4 w-4" />
-              {language === 'ru' ? 'Повторять' : 'Repeat'}
+              {t('repeat')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0 space-y-3">
@@ -435,7 +499,7 @@ export default function ReminderDetailPage() {
                       : "bg-background border-border hover:bg-accent hover:text-accent-foreground"
                   )}
                 >
-                  {language === 'ru' ? option.labelRu : option.labelEn}
+                  {getLabel(option, language)}
                 </button>
               ))}
             </div>
@@ -463,7 +527,7 @@ export default function ReminderDetailPage() {
                   )}
                 >
                   <SkipForward className="h-4 w-4" />
-                  {language === 'ru' ? 'Пропустить следующее' : 'Skip next'}
+                  {t('skipNext')}
                 </button>
                 
                 {/* Skip next confirmation dialog */}
@@ -471,17 +535,15 @@ export default function ReminderDetailPage() {
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>
-                        {language === 'ru' ? 'Пропустить следующее?' : 'Skip next?'}
+                        {t('skipNextConfirm')}
                       </AlertDialogTitle>
                       <AlertDialogDescription>
-                        {language === 'ru' 
-                          ? 'Следующее повторение не будет создано при выполнении.'
-                          : 'The next occurrence will not be created when you complete this reminder.'}
+                        {t('skipNextHint')}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>
-                        {language === 'ru' ? 'Отмена' : 'Cancel'}
+                        {t('cancel')}
                       </AlertDialogCancel>
                       <AlertDialogAction 
                         onClick={() => {
@@ -489,7 +551,7 @@ export default function ReminderDetailPage() {
                           setShowSkipConfirm(false);
                         }}
                       >
-                        {language === 'ru' ? 'Подтвердить' : 'Confirm'}
+                        {t('confirm')}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -503,7 +565,7 @@ export default function ReminderDetailPage() {
               if (reminder.skipNext) {
                 return (
                   <p className="text-sm text-amber-600 dark:text-amber-400">
-                    {language === 'ru' ? 'Следующее: пропущено' : 'Next: skipped'}
+                    {t('nextSkipped')}
                   </p>
                 );
               }
@@ -511,11 +573,11 @@ export default function ReminderDetailPage() {
               const nextDue = computeNextDueAt(reminder.dueAt, reminder.repeat);
               if (!nextDue) return null;
               const nextDate = new Date(nextDue);
-              const nextLabel = format(nextDate, 'd MMM, HH:mm', { locale: language === 'ru' ? ru : enUS });
+              const nextLabel = format(nextDate, 'd MMM, HH:mm', { locale: getDateLocale() });
               return (
                 <p className="text-sm text-muted-foreground">
-                  {language === 'ru' ? 'Следующее: ' : 'Next: '}
-                  <span className="text-foreground">{nextLabel}</span>
+                  {t('next')}
+                  <span className="text-foreground" dir="ltr">{nextLabel}</span>
                 </p>
               );
             })()}
@@ -528,7 +590,7 @@ export default function ReminderDetailPage() {
             <CollapsibleTrigger asChild>
               <CardHeader className="cursor-pointer pb-2">
                 <CardTitle className="text-base flex items-center justify-between">
-                  <span>{language === 'ru' ? 'Исходный текст' : 'Source text'}</span>
+                  <span>{t('sourceText')}</span>
                   <ChevronDown 
                     className={cn(
                       'h-4 w-4 transition-transform',
@@ -541,7 +603,7 @@ export default function ReminderDetailPage() {
             <CollapsibleContent>
               <CardContent className="pt-0">
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                  {reminder.sourceText || (language === 'ru' ? 'Нет текста' : 'No text')}
+                  {reminder.sourceText || t('noText')}
                 </p>
               </CardContent>
             </CollapsibleContent>
@@ -553,7 +615,7 @@ export default function ReminderDetailPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              {language === 'ru' ? 'Источник' : 'Source'}
+              {t('source')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
@@ -561,12 +623,12 @@ export default function ReminderDetailPage() {
               <div className="h-12 animate-pulse rounded bg-muted" />
             ) : sourceEntry === null ? (
               <p className="text-sm text-muted-foreground italic">
-                {language === 'ru' ? 'Источник не найден' : 'Source not found'}
+                {t('sourceNotFound')}
               </p>
             ) : (
               <div className="space-y-3">
-                <p className="text-xs text-muted-foreground">
-                  {format(new Date(sourceEntry.date), 'd MMMM yyyy', { locale: language === 'ru' ? ru : enUS })}
+                <p className="text-xs text-muted-foreground" dir="ltr">
+                  {format(new Date(sourceEntry.date), 'd MMMM yyyy', { locale: getDateLocale() })}
                 </p>
                 <p className="text-sm text-foreground/90 whitespace-pre-wrap">
                   {sourceEntry.text.length > 150 
@@ -579,8 +641,8 @@ export default function ReminderDetailPage() {
                   onClick={() => navigate(`/entry/${sourceEntry.id}`)}
                   className="w-full"
                 >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  {language === 'ru' ? 'Открыть запись' : 'Open entry'}
+                  <ExternalLink className="h-4 w-4 me-2" />
+                  {t('openEntry')}
                 </Button>
               </div>
             )}
@@ -595,7 +657,7 @@ export default function ReminderDetailPage() {
             className="flex-col h-auto py-3 bg-green-600 hover:bg-green-700 text-white"
           >
             <Check className="h-5 w-5 mb-1" />
-            <span className="text-xs">{language === 'ru' ? 'Готово' : 'Done'}</span>
+            <span className="text-xs">{t('done')}</span>
           </Button>
           
           {/* Snooze dropdown */}
@@ -606,7 +668,7 @@ export default function ReminderDetailPage() {
                 className="flex-col h-auto py-3 border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
               >
                 <Clock className="h-5 w-5 mb-1" />
-                <span className="text-xs">{language === 'ru' ? 'Отложить' : 'Snooze'}</span>
+                <span className="text-xs">{t('snooze')}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="center" className="min-w-[160px]">
@@ -615,7 +677,7 @@ export default function ReminderDetailPage() {
                   key={preset.id}
                   onClick={() => handleSnooze(preset.id)}
                 >
-                  {language === 'ru' ? preset.labelRu : preset.labelEn}
+                  {getLabel(preset, language)}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -628,7 +690,7 @@ export default function ReminderDetailPage() {
             className="flex-col h-auto py-3 border-destructive/50 text-destructive hover:bg-destructive/10"
           >
             <X className="h-5 w-5 mb-1" />
-            <span className="text-xs">{language === 'ru' ? 'Отклонить' : 'Dismiss'}</span>
+            <span className="text-xs">{t('dismiss')}</span>
           </Button>
         </div>
       </main>

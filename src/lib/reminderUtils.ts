@@ -14,6 +14,8 @@ export interface TimeChip {
   id: SuggestedTime;
   labelRu: string;
   labelEn: string;
+  labelHe: string;
+  labelAr: string;
   getTimestamp: () => number;
 }
 
@@ -24,7 +26,24 @@ export interface SnoozePreset {
   id: string;
   labelRu: string;
   labelEn: string;
+  labelHe: string;
+  labelAr: string;
   getTimestamp: () => number;
+}
+
+/**
+ * Get localized label from multi-language object
+ */
+export function getLabel(
+  labels: { labelRu: string; labelEn: string; labelHe: string; labelAr: string },
+  language: string
+): string {
+  switch (language) {
+    case 'ru': return labels.labelRu;
+    case 'he': return labels.labelHe;
+    case 'ar': return labels.labelAr;
+    default: return labels.labelEn;
+  }
 }
 
 // ============================================
@@ -90,24 +109,32 @@ export const TIME_CHIPS: TimeChip[] = [
     id: 'later_today',
     labelRu: 'Сегодня позже',
     labelEn: 'Later today',
+    labelHe: 'מאוחר יותר היום',
+    labelAr: 'لاحقاً اليوم',
     getTimestamp: getLaterTodayTimestamp,
   },
   {
     id: 'tomorrow_morning',
     labelRu: 'Завтра утром',
     labelEn: 'Tomorrow morning',
+    labelHe: 'מחר בבוקר',
+    labelAr: 'صباح الغد',
     getTimestamp: getTomorrowMorningTimestamp,
   },
   {
     id: 'weekend',
     labelRu: 'В выходные',
     labelEn: 'Weekend',
+    labelHe: 'סוף השבוע',
+    labelAr: 'نهاية الأسبوع',
     getTimestamp: getWeekendTimestamp,
   },
   {
     id: 'next_week',
     labelRu: 'На неделе',
     labelEn: 'Next week',
+    labelHe: 'השבוע הבא',
+    labelAr: 'الأسبوع القادم',
     getTimestamp: getNextWeekTimestamp,
   },
 ];
@@ -139,18 +166,24 @@ export const SNOOZE_PRESETS: SnoozePreset[] = [
     id: '1h',
     labelRu: 'Через 1 час',
     labelEn: 'In 1 hour',
+    labelHe: 'בעוד שעה',
+    labelAr: 'بعد ساعة',
     getTimestamp: getOneHourTimestamp,
   },
   {
     id: 'later_today',
     labelRu: 'Позже сегодня',
     labelEn: 'Later today',
+    labelHe: 'מאוחר יותר היום',
+    labelAr: 'لاحقاً اليوم',
     getTimestamp: getLaterTodayTimestamp,
   },
   {
     id: 'tomorrow_9am',
     labelRu: 'Завтра в 9:00',
     labelEn: 'Tomorrow 9am',
+    labelHe: 'מחר ב-9:00',
+    labelAr: 'غداً الساعة 9:00',
     getTimestamp: getTomorrowMorningTimestamp,
   },
 ];
@@ -187,30 +220,43 @@ export function isDueToday(dueAt: number): boolean {
 
 /**
  * Format due date for display.
- * Accepts Language type from i18n, falls back to 'en' for non-ru languages
+ * Supports ru, en, he, ar languages.
  */
 export function formatDueDate(dueAt: number, language: string): string {
   const date = new Date(dueAt);
   const now = new Date();
-  const baseLang = language === 'ru' ? 'ru' : 'en';
+  
+  // Labels for all 4 languages
+  const overdueLabels = { ru: 'Просрочено', en: 'Overdue', he: 'באיחור', ar: 'متأخر' };
+  const todayLabels = { ru: 'Сегодня', en: 'Today', he: 'היום', ar: 'اليوم' };
+  const tomorrowLabels = { ru: 'Завтра', en: 'Tomorrow', he: 'מחר', ar: 'غداً' };
+  
+  const getLocalizedLabel = (labels: Record<string, string>) => 
+    labels[language as keyof typeof labels] || labels.en;
   
   if (isOverdue(dueAt)) {
-    return baseLang === 'ru' ? 'Просрочено' : 'Overdue';
+    return getLocalizedLabel(overdueLabels);
   }
   
+  const timeStr = format(date, 'HH:mm');
+  
   if (isDueToday(dueAt)) {
-    const timeStr = format(date, 'HH:mm');
-    return baseLang === 'ru' ? `Сегодня, ${timeStr}` : `Today, ${timeStr}`;
+    const label = getLocalizedLabel(todayLabels);
+    // For RTL languages, use proper separator
+    const separator = language === 'ar' ? '، ' : ', ';
+    return `${label}${separator}${timeStr}`;
   }
   
   // Tomorrow
   const tomorrow = addDays(startOfDay(now), 1);
   if (date >= tomorrow && date < addDays(tomorrow, 1)) {
-    const timeStr = format(date, 'HH:mm');
-    return baseLang === 'ru' ? `Завтра, ${timeStr}` : `Tomorrow, ${timeStr}`;
+    const label = getLocalizedLabel(tomorrowLabels);
+    const separator = language === 'ar' ? '، ' : ', ';
+    return `${label}${separator}${timeStr}`;
   }
   
-  // Further out
+  // Further out - use baseLang for date-fns formatting
+  const baseLang = language === 'ru' ? 'ru' : 'en';
   const dateStr = format(date, baseLang === 'ru' ? 'd MMM, HH:mm' : 'MMM d, HH:mm');
   return dateStr;
 }
@@ -279,9 +325,15 @@ export function computeNextDueAt(currentDueAt: number, repeat: ReminderRepeat): 
 /**
  * Repeat option labels for UI.
  */
-export const REPEAT_OPTIONS: { value: ReminderRepeat; labelRu: string; labelEn: string }[] = [
-  { value: 'none', labelRu: 'Не повторять', labelEn: 'No repeat' },
-  { value: 'daily', labelRu: 'Ежедневно', labelEn: 'Daily' },
-  { value: 'weekly', labelRu: 'Еженедельно', labelEn: 'Weekly' },
-  { value: 'monthly', labelRu: 'Ежемесячно', labelEn: 'Monthly' },
+export const REPEAT_OPTIONS: { 
+  value: ReminderRepeat; 
+  labelRu: string; 
+  labelEn: string;
+  labelHe: string;
+  labelAr: string;
+}[] = [
+  { value: 'none', labelRu: 'Не повторять', labelEn: 'No repeat', labelHe: 'ללא חזרה', labelAr: 'بدون تكرار' },
+  { value: 'daily', labelRu: 'Ежедневно', labelEn: 'Daily', labelHe: 'יומי', labelAr: 'يومياً' },
+  { value: 'weekly', labelRu: 'Еженедельно', labelEn: 'Weekly', labelHe: 'שבועי', labelAr: 'أسبوعياً' },
+  { value: 'monthly', labelRu: 'Ежемесячно', labelEn: 'Monthly', labelHe: 'חודשי', labelAr: 'شهرياً' },
 ];
