@@ -218,7 +218,7 @@ function DiscussionChatContent() {
             onClick={() => navigate('/discussions')}
             className="shrink-0"
           >
-            {isRTL(language) ? <ArrowRight className="h-5 w-5" /> : <ArrowLeft className="h-5 w-5" />}
+            <ArrowLeft className="h-5 w-5" />
           </Button>
           
           <div className="flex-1 min-w-0">

@@ -151,7 +151,7 @@ function ReceiptAnalyticsContent() {
             onClick={() => navigate("/receipts")}
             className="shrink-0"
           >
-            {isRTL(language) ? <ArrowRight className="h-5 w-5" /> : <ArrowLeft className="h-5 w-5" />}
+            <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
             <h1 className="text-lg font-serif font-medium text-foreground">

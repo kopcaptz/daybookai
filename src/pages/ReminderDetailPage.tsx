@@ -244,7 +244,7 @@ export default function ReminderDetailPage() {
             : 'It may have been deleted or completed.'}
         </p>
         <Button onClick={() => navigate('/')}>
-          {isRTL(language) ? <ArrowRight className="h-4 w-4 me-2" /> : <ArrowLeft className="h-4 w-4 me-2" />}
+          <ArrowLeft className="h-4 w-4 me-2" />
           {language === 'ru' ? 'Назад' : 'Back to Today'}
         </Button>
       </div>
@@ -273,7 +273,7 @@ export default function ReminderDetailPage() {
             size="icon"
             onClick={() => navigate('/')}
           >
-            {isRTL(language) ? <ArrowRight className="h-5 w-5" /> : <ArrowLeft className="h-5 w-5" />}
+            <ArrowLeft className="h-5 w-5" />
           </Button>
           
           <h1 className="text-lg font-semibold">
