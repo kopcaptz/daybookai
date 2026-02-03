@@ -63,9 +63,7 @@ export function BiographyDisplay({
         </CardHeader>
         <CardContent className="pt-4 text-center">
           <p className="mb-4 text-sm text-muted-foreground">
-            {language === 'ru' 
-              ? 'Сигил создаст хронику вашего дня'
-              : 'Sigil will create a chronicle of your day'}
+            {t('bio.createPrompt')}
           </p>
           <Button
             onClick={handleGenerate}
@@ -123,7 +121,7 @@ export function BiographyDisplay({
             ) : (
               <>
                 <RefreshCw className="h-4 w-4" />
-                {language === 'ru' ? 'Повторить' : 'Retry'}
+                {t('bio.retry')}
               </>
             )}
           </Button>

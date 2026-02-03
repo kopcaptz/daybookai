@@ -48,7 +48,7 @@ function scrollToReminders() {
 }
 
 export function WeeklyInsightsWidget() {
-  const { language } = useI18n();
+  const { t, language } = useI18n();
   const navigate = useNavigate();
   const aiSettings = loadAISettings();
   const { hasValidToken, showPinDialog, openPinDialog, closePinDialog, verifyPin, isVerifying } = useAIAccess(language);
@@ -72,21 +72,21 @@ export function WeeklyInsightsWidget() {
   }
   
   const labels = {
-    title: language === 'ru' ? 'Неделя' : 'This week',
-    entries: language === 'ru' ? 'Записей' : 'Entries',
-    mood: language === 'ru' ? 'Настроение' : 'Mood',
-    reminders: language === 'ru' ? 'Напоминаний' : 'Reminders',
-    streak: language === 'ru' ? 'Серия' : 'Streak',
-    weekSummary: language === 'ru' ? 'Обзор недели' : 'Week Summary',
-    sheetTitle: language === 'ru' ? '✨ Резонанс недели' : '✨ Week Resonance',
-    themes: language === 'ru' ? 'Доминирующие контуры' : 'Dominant Themes',
-    moodPatternLabel: language === 'ru' ? 'Паттерн настроения' : 'Mood Pattern',
-    insightLabel: language === 'ru' ? '💡 Инсайт' : '💡 Insight',
-    suggestionLabel: language === 'ru' ? '🎯 Рекомендация' : '🎯 Suggestion',
-    generating: language === 'ru' ? 'Генерация...' : 'Generating...',
-    refreshButton: language === 'ru' ? 'Обновить' : 'Refresh',
-    refreshing: language === 'ru' ? 'Обновление...' : 'Refreshing...',
-    refreshed: language === 'ru' ? 'Обновлено' : 'Refreshed',
+    title: t('weekly.title'),
+    entries: t('weekly.entries'),
+    mood: t('weekly.mood'),
+    reminders: t('weekly.reminders'),
+    streak: t('weekly.streak'),
+    weekSummary: t('weekly.summary'),
+    sheetTitle: t('weekly.sheetTitle'),
+    themes: t('weekly.themes'),
+    moodPatternLabel: t('weekly.moodPattern'),
+    insightLabel: t('weekly.insight'),
+    suggestionLabel: t('weekly.suggestion'),
+    generating: t('weekly.generating'),
+    refreshButton: t('weekly.refresh'),
+    refreshing: t('weekly.refreshing'),
+    refreshed: t('weekly.refreshed'),
   };
   
   // Show AI button only if AI is enabled and we have at least 3 entries
@@ -120,11 +120,11 @@ export function WeeklyInsightsWidget() {
         if (errorCode === 'token_invalid') {
           openPinDialog();
         } else if (errorCode === 'rate_limit_exceeded') {
-          toast.error(language === 'ru' ? 'Слишком много запросов. Подождите немного.' : 'Too many requests. Please wait.');
+          toast.error(t('weekly.tooManyRequests'));
         } else if (errorCode === 'not_enough_entries') {
-          toast.error(language === 'ru' ? 'Недостаточно записей для анализа' : 'Not enough entries for analysis');
+          toast.error(t('weekly.notEnoughEntries'));
         } else {
-          toast.error(language === 'ru' ? 'Ошибка генерации' : 'Generation failed');
+          toast.error(t('weekly.generationFailed'));
         }
       }
     } finally {
@@ -150,9 +150,9 @@ export function WeeklyInsightsWidget() {
         if (errorCode === 'token_invalid') {
           openPinDialog();
         } else if (errorCode === 'rate_limit_exceeded') {
-          toast.error(language === 'ru' ? 'Слишком много запросов. Подождите немного.' : 'Too many requests. Please wait.');
+          toast.error(t('weekly.tooManyRequests'));
         } else {
-          toast.error(language === 'ru' ? 'Ошибка обновления' : 'Refresh failed');
+          toast.error(t('weekly.refreshFailed'));
         }
       }
     } finally {
@@ -359,9 +359,7 @@ export function WeeklyInsightsWidget() {
               
               {/* Meta info */}
               <p className="text-[10px] text-muted-foreground text-center">
-                {language === 'ru' 
-                  ? `Сгенерировано: ${formatRelativeTime(insight.generatedAt, language)} • ${insight.sourceEntryCount} записей` 
-                  : `Generated: ${formatRelativeTime(insight.generatedAt, language)} • ${insight.sourceEntryCount} entries`}
+                {t('weekly.generated')}: {formatRelativeTime(insight.generatedAt, language)} • {insight.sourceEntryCount} {t('weekly.entriesCount')}
               </p>
               
               {/* Refresh button */}
