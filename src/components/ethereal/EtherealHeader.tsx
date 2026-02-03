@@ -4,6 +4,12 @@ import { LogOut, Users, Anchor, Circle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { EtherealMembersSheet } from './EtherealMembersSheet';
 import { useState } from 'react';
+import { useI18n, getBaseLanguage } from '@/lib/i18n';
+
+const texts = {
+  atSea: { ru: 'На ходу', en: 'At sea' },
+  inPort: { ru: 'В порту...', en: 'In port...' },
+} as const;
 
 interface EtherealHeaderProps {
   title: string;
@@ -15,6 +21,9 @@ export function EtherealHeader({ title, subtitle, isConnected }: EtherealHeaderP
   const [showMembers, setShowMembers] = useState(false);
   const navigate = useNavigate();
   const session = getEtherealSession();
+  const { language } = useI18n();
+  const lang = getBaseLanguage(language);
+  const t = (key: keyof typeof texts) => texts[key][lang];
 
   const handleLeave = () => {
     clearEtherealSession();
@@ -49,7 +58,7 @@ export function EtherealHeader({ title, subtitle, isConnected }: EtherealHeaderP
                   : 'fill-muted text-muted animate-pulse'
               }`}
             />
-            <span>{isConnected ? 'На ходу' : 'В порту...'}</span>
+            <span>{isConnected ? t('atSea') : t('inPort')}</span>
           </div>
 
           {/* Right: Actions */}

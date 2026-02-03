@@ -5,8 +5,26 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { TaskCard } from './TaskCard';
 import { TaskEditor } from './TaskEditor';
 import { useToast } from '@/hooks/use-toast';
+import { useI18n, getBaseLanguage } from '@/lib/i18n';
 import type { EtherealTask } from '@/lib/etherealDb';
 import type { TaskInput } from '@/hooks/useEtherealTasks';
+
+const texts = {
+  newTask: { ru: 'Новая задача', en: 'New task' },
+  loading: { ru: 'Загрузка...', en: 'Loading...' },
+  seaCalm: { ru: 'Море спокойно', en: 'Sea is calm' },
+  noTasksOnBridge: { ru: 'Дел на мостике нет', en: 'No tasks on the bridge' },
+  onBridge: { ru: 'На мостике', en: 'On the bridge' },
+  tasks: { ru: 'Задачи', en: 'Tasks' },
+  completed: { ru: 'Выполнено', en: 'Completed' },
+  error: { ru: 'Ошибка', en: 'Error' },
+  updateFailed: { ru: 'Не удалось обновить задачу', en: 'Failed to update task' },
+  createFailed: { ru: 'Не удалось создать задачу', en: 'Failed to create task' },
+  deleteFailed: { ru: 'Не удалось удалить задачу', en: 'Failed to delete task' },
+  deleted: { ru: 'Задача удалена', en: 'Task deleted' },
+  undo: { ru: 'Отмена', en: 'Undo' },
+  undoHint: { ru: 'Нажмите "Отмена" чтобы восстановить', en: 'Click "Undo" to restore' },
+} as const;
 
 interface TasksListProps {
   groupedTasks: {
@@ -40,6 +58,9 @@ export function TasksList({
   const [editingTask, setEditingTask] = useState<EtherealTask | undefined>();
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { language } = useI18n();
+  const lang = getBaseLanguage(language);
+  const t = (key: keyof typeof texts) => texts[key][lang];
 
   const { urgent, active, done } = groupedTasks;
   const hasTasks = urgent.length > 0 || active.length > 0 || done.length > 0;
@@ -48,8 +69,8 @@ export function TasksList({
     const result = await onToggle(taskId);
     if (!result.success) {
       toast({
-        title: 'Ошибка',
-        description: 'Не удалось обновить задачу',
+        title: t('error'),
+        description: t('updateFailed'),
         variant: 'destructive',
       });
     }
@@ -60,8 +81,8 @@ export function TasksList({
 
     // Show undo toast
     const toastResult = toast({
-      title: 'Задача удалена',
-      description: 'Нажмите "Отмена" чтобы восстановить',
+      title: t('deleted'),
+      description: t('undoHint'),
       action: (
         <Button 
           variant="outline" 
@@ -71,7 +92,7 @@ export function TasksList({
             toastResult.dismiss();
           }}
         >
-          Отмена
+          {t('undo')}
         </Button>
       ),
       duration: 10000,
@@ -83,8 +104,8 @@ export function TasksList({
         const result = await onDelete(taskId);
         if (!result.success) {
           toast({
-            title: 'Ошибка',
-            description: 'Не удалось удалить задачу',
+            title: t('error'),
+            description: t('deleteFailed'),
             variant: 'destructive',
           });
         }
@@ -98,8 +119,8 @@ export function TasksList({
       const result = await onUpdate(editingTask.serverId, input);
       if (!result.success) {
         toast({
-          title: 'Ошибка',
-          description: 'Не удалось обновить задачу',
+          title: t('error'),
+          description: t('updateFailed'),
           variant: 'destructive',
         });
       }
@@ -107,8 +128,8 @@ export function TasksList({
       const result = await onCreate(input);
       if (!result.success) {
         toast({
-          title: 'Ошибка',
-          description: 'Не удалось создать задачу',
+          title: t('error'),
+          description: t('createFailed'),
           variant: 'destructive',
         });
       }
@@ -129,7 +150,7 @@ export function TasksList({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-pulse text-muted-foreground">Загрузка...</div>
+        <div className="animate-pulse text-muted-foreground">{t('loading')}</div>
       </div>
     );
   }
@@ -152,7 +173,7 @@ export function TasksList({
           variant="outline"
         >
           <Plus className="w-4 h-4 mr-2" />
-          Новая задача
+          {t('newTask')}
         </Button>
       </div>
 
@@ -163,8 +184,8 @@ export function TasksList({
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
               <Anchor className="w-8 h-8 text-muted-foreground" />
             </div>
-            <h3 className="text-lg font-medium mb-2">Море спокойно</h3>
-            <p className="text-sm text-muted-foreground">Дел на мостике нет</p>
+            <h3 className="text-lg font-medium mb-2">{t('seaCalm')}</h3>
+            <p className="text-sm text-muted-foreground">{t('noTasksOnBridge')}</p>
           </div>
         ) : (
           <>
@@ -172,7 +193,7 @@ export function TasksList({
             {urgent.length > 0 && (
               <section>
                 <h3 className="text-sm font-semibold text-destructive mb-2 px-1">
-                  На мостике ({urgent.length})
+                  {t('onBridge')} ({urgent.length})
                 </h3>
                 <div className="space-y-2">
                   {urgent
@@ -194,7 +215,7 @@ export function TasksList({
             {active.length > 0 && (
               <section>
                 <h3 className="text-sm font-semibold text-foreground mb-2 px-1">
-                  Задачи ({active.length})
+                  {t('tasks')} ({active.length})
                 </h3>
                 <div className="space-y-2">
                   {active
@@ -221,7 +242,7 @@ export function TasksList({
                   ) : (
                     <ChevronDown className="w-4 h-4" />
                   )}
-                  Выполнено ({done.length})
+                  {t('completed')} ({done.length})
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <div className="space-y-2 pt-2">

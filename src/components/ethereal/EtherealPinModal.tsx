@@ -13,8 +13,25 @@ import { Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { setEtherealSession } from '@/lib/etherealTokenService';
 import { getOrCreateDeviceId } from '@/lib/etherealDeviceId';
+import { useI18n, getBaseLanguage } from '@/lib/i18n';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
+const texts = {
+  title: { ru: 'Войти в каюту', en: 'Enter the Chamber' },
+  description: { ru: 'Введите общий PIN для входа в приватное пространство.', en: 'Enter a shared PIN to join or create a private space.' },
+  yourName: { ru: 'Ваше имя', en: 'Your Name' },
+  namePlaceholder: { ru: 'Как вас будут видеть другие', en: 'How others will see you' },
+  sharedPin: { ru: 'Общий PIN', en: 'Shared PIN' },
+  pinPlaceholder: { ru: 'Минимум 4 символа', en: 'At least 4 characters' },
+  pinHint: { ru: 'Один PIN = одна комната. Делитесь только с доверенными людьми.', en: 'Same PIN = same room. Share it only with trusted people.' },
+  enter: { ru: 'Войти', en: 'Enter' },
+  joining: { ru: 'Вход...', en: 'Joining...' },
+  roomFull: { ru: 'Комната заполнена. Максимум 5 участников.', en: 'Room is full. Maximum 5 members allowed.' },
+  pinTooShort: { ru: 'PIN должен быть минимум 4 символа.', en: 'PIN must be at least 4 characters.' },
+  joinFailed: { ru: 'Не удалось войти. Попробуйте снова.', en: 'Failed to join. Please try again.' },
+  networkError: { ru: 'Ошибка сети. Попробуйте снова.', en: 'Network error. Please try again.' },
+} as const;
 
 interface EtherealPinModalProps {
   open: boolean;
@@ -27,6 +44,9 @@ export function EtherealPinModal({ open, onOpenChange }: EtherealPinModalProps) 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { language } = useI18n();
+  const lang = getBaseLanguage(language);
+  const t = (key: keyof typeof texts) => texts[key][lang];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,11 +72,11 @@ export function EtherealPinModal({ open, onOpenChange }: EtherealPinModalProps) 
 
       if (!data.success) {
         if (data.error === 'room_full') {
-          setError('Room is full. Maximum 5 members allowed.');
+          setError(t('roomFull'));
         } else if (data.error === 'pin_too_short') {
-          setError('PIN must be at least 4 characters.');
+          setError(t('pinTooShort'));
         } else {
-          setError('Failed to join. Please try again.');
+          setError(t('joinFailed'));
         }
         return;
       }
@@ -76,7 +96,7 @@ export function EtherealPinModal({ open, onOpenChange }: EtherealPinModalProps) 
       onOpenChange(false);
       navigate('/e/home');
     } catch (err) {
-      setError('Network error. Please try again.');
+      setError(t('networkError'));
     } finally {
       setIsLoading(false);
     }
@@ -86,18 +106,18 @@ export function EtherealPinModal({ open, onOpenChange }: EtherealPinModalProps) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
-          <DialogTitle className="font-serif">Enter the Chamber</DialogTitle>
+          <DialogTitle className="font-serif">{t('title')}</DialogTitle>
           <DialogDescription>
-            Enter a shared PIN to join or create a private space.
+            {t('description')}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div className="space-y-2">
-            <Label htmlFor="displayName">Your Name</Label>
+            <Label htmlFor="displayName">{t('yourName')}</Label>
             <Input
               id="displayName"
-              placeholder="How others will see you"
+              placeholder={t('namePlaceholder')}
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               maxLength={30}
@@ -105,17 +125,17 @@ export function EtherealPinModal({ open, onOpenChange }: EtherealPinModalProps) 
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="pin">Shared PIN</Label>
+            <Label htmlFor="pin">{t('sharedPin')}</Label>
             <Input
               id="pin"
               type="password"
-              placeholder="At least 4 characters"
+              placeholder={t('pinPlaceholder')}
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               minLength={4}
             />
             <p className="text-xs text-muted-foreground">
-              Same PIN = same room. Share it only with trusted people.
+              {t('pinHint')}
             </p>
           </div>
 
@@ -127,10 +147,10 @@ export function EtherealPinModal({ open, onOpenChange }: EtherealPinModalProps) 
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Joining...
+                {t('joining')}
               </>
             ) : (
-              'Enter'
+              t('enter')
             )}
           </Button>
         </form>

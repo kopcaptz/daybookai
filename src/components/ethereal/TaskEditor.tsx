@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { format, addDays, startOfToday } from 'date-fns';
-import { Calendar, User, Zap, X } from 'lucide-react';
+import { Calendar, User, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,8 +17,30 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { useI18n, getBaseLanguage } from '@/lib/i18n';
 import type { EtherealTask } from '@/lib/etherealDb';
 import type { TaskInput } from '@/hooks/useEtherealTasks';
+
+const texts = {
+  editTask: { ru: 'Редактировать задачу', en: 'Edit task' },
+  newTask: { ru: 'Новая задача', en: 'New task' },
+  whatToDo: { ru: 'Что нужно сделать?', en: 'What needs to be done?' },
+  detailsOptional: { ru: 'Подробности (опционально)', en: 'Details (optional)' },
+  assignTo: { ru: 'Кому поручить?', en: 'Assign to' },
+  everyone: { ru: 'Всем', en: 'Everyone' },
+  me: { ru: 'Мне', en: 'Me' },
+  whenToDo: { ru: 'Когда сделать?', en: 'When to do?' },
+  noDueDate: { ru: 'Без срока', en: 'No due date' },
+  today: { ru: 'Сегодня', en: 'Today' },
+  tomorrow: { ru: 'Завтра', en: 'Tomorrow' },
+  date: { ru: 'Дата', en: 'Date' },
+  priority: { ru: 'Приоритет', en: 'Priority' },
+  normal: { ru: 'Обычный', en: 'Normal' },
+  urgent: { ru: 'Срочно', en: 'Urgent' },
+  cancel: { ru: 'Отмена', en: 'Cancel' },
+  save: { ru: 'Сохранить', en: 'Save' },
+  saving: { ru: 'Сохранение...', en: 'Saving...' },
+} as const;
 
 interface TaskEditorProps {
   open: boolean;
@@ -47,6 +69,10 @@ export function TaskEditor({
   const [priority, setPriority] = useState<'normal' | 'urgent'>('normal');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+
+  const { language } = useI18n();
+  const lang = getBaseLanguage(language);
+  const t = (key: keyof typeof texts) => texts[key][lang];
 
   const isEditing = !!task;
 
@@ -103,14 +129,14 @@ export function TaskEditor({
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="bottom" className="h-auto max-h-[90vh] yacht-gradient">
         <SheetHeader className="pb-4">
-          <SheetTitle>{isEditing ? 'Редактировать задачу' : 'Новая задача'}</SheetTitle>
+          <SheetTitle>{isEditing ? t('editTask') : t('newTask')}</SheetTitle>
         </SheetHeader>
 
         <div className="space-y-4">
           {/* Title */}
           <div>
             <Input
-              placeholder="Что нужно сделать?"
+              placeholder={t('whatToDo')}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="text-base"
@@ -121,7 +147,7 @@ export function TaskEditor({
           {/* Description */}
           <div>
             <Textarea
-              placeholder="Подробности (опционально)"
+              placeholder={t('detailsOptional')}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="min-h-[60px] resize-none"
@@ -132,7 +158,7 @@ export function TaskEditor({
           <div className="space-y-2">
             <label className="text-sm font-medium flex items-center gap-1.5">
               <User className="w-4 h-4" />
-              Кому поручить?
+              {t('assignTo')}
             </label>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -141,7 +167,7 @@ export function TaskEditor({
                 size="sm"
                 onClick={() => setAssigneeId(undefined)}
               >
-                Всем
+                {t('everyone')}
               </Button>
               {currentMemberId && (
                 <Button
@@ -150,7 +176,7 @@ export function TaskEditor({
                   size="sm"
                   onClick={() => setAssigneeId(currentMemberId)}
                 >
-                  Мне
+                  {t('me')}
                 </Button>
               )}
               {members
@@ -173,7 +199,7 @@ export function TaskEditor({
           <div className="space-y-2">
             <label className="text-sm font-medium flex items-center gap-1.5">
               <Calendar className="w-4 h-4" />
-              Когда сделать?
+              {t('whenToDo')}
             </label>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -182,7 +208,7 @@ export function TaskEditor({
                 size="sm"
                 onClick={() => handleQuickDate('none')}
               >
-                Без срока
+                {t('noDueDate')}
               </Button>
               <Button
                 type="button"
@@ -190,7 +216,7 @@ export function TaskEditor({
                 size="sm"
                 onClick={() => handleQuickDate('today')}
               >
-                Сегодня
+                {t('today')}
               </Button>
               <Button
                 type="button"
@@ -198,7 +224,7 @@ export function TaskEditor({
                 size="sm"
                 onClick={() => handleQuickDate('tomorrow')}
               >
-                Завтра
+                {t('tomorrow')}
               </Button>
               <Popover open={showCalendar} onOpenChange={setShowCalendar}>
                 <PopoverTrigger asChild>
@@ -213,7 +239,7 @@ export function TaskEditor({
                   >
                     {quickDate === 'custom' && dueDate
                       ? format(dueDate, 'd MMM')
-                      : 'Дата'}
+                      : t('date')}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -235,7 +261,7 @@ export function TaskEditor({
           <div className="space-y-2">
             <label className="text-sm font-medium flex items-center gap-1.5">
               <Zap className="w-4 h-4" />
-              Приоритет
+              {t('priority')}
             </label>
             <div className="flex gap-2">
               <Button
@@ -244,7 +270,7 @@ export function TaskEditor({
                 size="sm"
                 onClick={() => setPriority('normal')}
               >
-                Обычный
+                {t('normal')}
               </Button>
               <Button
                 type="button"
@@ -255,7 +281,7 @@ export function TaskEditor({
                   priority === 'urgent' && "bg-destructive hover:bg-destructive/90"
                 )}
               >
-                Срочно
+                {t('urgent')}
               </Button>
             </div>
           </div>
@@ -268,14 +294,14 @@ export function TaskEditor({
               onClick={onClose}
               disabled={isSubmitting}
             >
-              Отмена
+              {t('cancel')}
             </Button>
             <Button
               className="flex-1"
               onClick={handleSubmit}
               disabled={!title.trim() || isSubmitting}
             >
-              {isSubmitting ? 'Сохранение...' : 'Сохранить'}
+              {isSubmitting ? t('saving') : t('save')}
             </Button>
           </div>
         </div>

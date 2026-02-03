@@ -6,6 +6,22 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { EtherealChronicle } from '@/lib/etherealDb';
 import { cn } from '@/lib/utils';
+import { useI18n, getBaseLanguage } from '@/lib/i18n';
+
+const texts = {
+  newEntry: { ru: 'Новая запись', en: 'New entry' },
+  editing: { ru: 'Редактирование', en: 'Editing' },
+  cancel: { ru: 'Отмена', en: 'Cancel' },
+  save: { ru: 'Сохранить', en: 'Save' },
+  saving: { ru: 'Сохранение...', en: 'Saving...' },
+  titlePlaceholder: { ru: 'Заголовок записи', en: 'Entry title' },
+  addTag: { ru: 'Добавить тег', en: 'Add tag' },
+  tagPlaceholder: { ru: 'Введите тег...', en: 'Enter tag...' },
+  contentPlaceholder: { ru: 'Содержимое записи...', en: 'Entry content...' },
+  unsavedChanges: { ru: 'Есть несохранённые изменения', en: 'You have unsaved changes' },
+  lockWarning: { ru: 'взял запись в редактирование. Ваши изменения могут быть потеряны.', en: 'is editing this entry. Your changes may be lost.' },
+  otherUser: { ru: 'Другой пользователь', en: 'Another user' },
+} as const;
 
 interface ChronicleEditorProps {
   chronicle?: EtherealChronicle | null;
@@ -32,6 +48,9 @@ export function ChronicleEditor({
   const [showTagInput, setShowTagInput] = useState(false);
 
   const lockIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const { language } = useI18n();
+  const lang = getBaseLanguage(language);
+  const t = (key: keyof typeof texts) => texts[key][lang];
 
   // Lock refresh every 30 seconds
   useEffect(() => {
@@ -98,11 +117,11 @@ export function ChronicleEditor({
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <h2 className="font-medium flex-1">
-          {isNew ? 'Новая запись' : 'Редактирование'}
+          {isNew ? t('newEntry') : t('editing')}
         </h2>
         <Button variant="ghost" size="sm" onClick={onCancel} className="gap-1">
           <X className="w-4 h-4" />
-          Отмена
+          {t('cancel')}
         </Button>
         <Button
           onClick={handleSave}
@@ -110,15 +129,14 @@ export function ChronicleEditor({
           className="gap-1"
         >
           <Save className="w-4 h-4" />
-          {saving ? 'Сохранение...' : 'Сохранить'}
+          {saving ? t('saving') : t('save')}
         </Button>
       </div>
 
       {/* Locked warning */}
       {isLocked && (
         <div className="mx-4 mt-4 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-sm">
-          ⚠️ <strong>{lockedByName || 'Другой пользователь'}</strong> взял запись в редактирование. 
-          Ваши изменения могут быть потеряны.
+          ⚠️ <strong>{lockedByName || t('otherUser')}</strong> {t('lockWarning')}
         </div>
       )}
 
@@ -127,7 +145,7 @@ export function ChronicleEditor({
         {/* Title */}
         <div>
           <Input
-            placeholder="Заголовок записи"
+            placeholder={t('titlePlaceholder')}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="text-lg font-medium"
@@ -156,14 +174,14 @@ export function ChronicleEditor({
                 className="h-6 px-2 text-xs gap-1"
               >
                 <Tag className="w-3 h-3" />
-                Добавить тег
+                {t('addTag')}
               </Button>
             )}
           </div>
           {showTagInput && (
             <div className="flex gap-2">
               <Input
-                placeholder="Введите тег..."
+                placeholder={t('tagPlaceholder')}
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={handleTagKeyDown}
@@ -178,7 +196,7 @@ export function ChronicleEditor({
         {/* Content */}
         <div className="flex-1">
           <Textarea
-            placeholder="Содержимое записи..."
+            placeholder={t('contentPlaceholder')}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             className={cn(
@@ -192,7 +210,7 @@ export function ChronicleEditor({
         {/* Unsaved changes indicator */}
         {hasChanges && !isNew && (
           <p className="text-xs text-muted-foreground">
-            Есть несохранённые изменения
+            {t('unsavedChanges')}
           </p>
         )}
       </div>

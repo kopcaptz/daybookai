@@ -1,10 +1,20 @@
 import { format } from 'date-fns';
-import { ru } from 'date-fns/locale';
-import { ArrowLeft, ArrowRight, Pin, Edit, User, Clock, Share2 } from 'lucide-react';
+import { ru, enUS } from 'date-fns/locale';
+import { ArrowLeft, Pin, Edit, User, Clock, Share2 } from 'lucide-react';
 import { EtherealChronicle } from '@/lib/etherealDb';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useI18n, getBaseLanguage } from '@/lib/i18n';
+
+const texts = {
+  edit: { ru: 'Редактировать', en: 'Edit' },
+  noTitle: { ru: 'Без названия', en: 'Untitled' },
+  noContent: { ru: 'Нет содержимого', en: 'No content' },
+  editingNow: { ru: 'сейчас редактирует эту запись', en: 'is currently editing this entry' },
+  someone: { ru: 'Кто-то', en: 'Someone' },
+  edited: { ru: 'ред.', en: 'ed.' },
+} as const;
 
 interface ChronicleViewProps {
   chronicle: EtherealChronicle;
@@ -14,6 +24,11 @@ interface ChronicleViewProps {
 }
 
 export function ChronicleView({ chronicle, onBack, onEdit, onTogglePin }: ChronicleViewProps) {
+  const { language } = useI18n();
+  const lang = getBaseLanguage(language);
+  const t = (key: keyof typeof texts) => texts[key][lang];
+  const dateLocale = lang === 'ru' ? ru : enUS;
+
   const isLocked = chronicle.editingBy && chronicle.editingExpiresAt && chronicle.editingExpiresAt > Date.now();
 
   // Render content with media placeholders
@@ -77,7 +92,7 @@ export function ChronicleView({ chronicle, onBack, onEdit, onTogglePin }: Chroni
           className="gap-1"
         >
           <Edit className="w-4 h-4" />
-          Редактировать
+          {t('edit')}
         </Button>
       </div>
 
@@ -86,7 +101,7 @@ export function ChronicleView({ chronicle, onBack, onEdit, onTogglePin }: Chroni
         <div className="mx-4 mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-2 text-sm">
           <span className="text-amber-600">✏️</span>
           <span>
-            <strong>{chronicle.editingByName || 'Кто-то'}</strong> сейчас редактирует эту запись
+            <strong>{chronicle.editingByName || t('someone')}</strong> {t('editingNow')}
           </span>
         </div>
       )}
@@ -104,7 +119,7 @@ export function ChronicleView({ chronicle, onBack, onEdit, onTogglePin }: Chroni
         >
           {/* Title */}
           <h1 className="text-2xl font-semibold mb-4 text-amber-950 dark:text-amber-100">
-            {chronicle.title || 'Без названия'}
+            {chronicle.title || t('noTitle')}
           </h1>
 
           {/* Meta */}
@@ -115,11 +130,11 @@ export function ChronicleView({ chronicle, onBack, onEdit, onTogglePin }: Chroni
             </span>
             <span className="flex items-center gap-1">
               <Clock className="w-4 h-4" />
-              {format(new Date(chronicle.createdAtMs), 'd MMMM yyyy, HH:mm', { locale: ru })}
+              {format(new Date(chronicle.createdAtMs), 'd MMMM yyyy, HH:mm', { locale: dateLocale })}
             </span>
             {chronicle.updatedByName && chronicle.updatedAtMs !== chronicle.createdAtMs && (
               <span className="text-xs opacity-70">
-                (ред. {chronicle.updatedByName}, {format(new Date(chronicle.updatedAtMs), 'd MMM HH:mm', { locale: ru })})
+                ({t('edited')} {chronicle.updatedByName}, {format(new Date(chronicle.updatedAtMs), 'd MMM HH:mm', { locale: dateLocale })})
               </span>
             )}
           </div>
@@ -142,7 +157,7 @@ export function ChronicleView({ chronicle, onBack, onEdit, onTogglePin }: Chroni
 
           {/* Empty content */}
           {!chronicle.content.trim() && (
-            <p className="text-muted-foreground italic">Нет содержимого</p>
+            <p className="text-muted-foreground italic">{t('noContent')}</p>
           )}
         </div>
       </div>

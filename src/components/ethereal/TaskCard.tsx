@@ -1,10 +1,19 @@
 import { useState } from 'react';
 import { format, isToday, isTomorrow, isPast } from 'date-fns';
-import { ru } from 'date-fns/locale';
+import { ru, enUS } from 'date-fns/locale';
 import { Check, AlertTriangle, Calendar, User, Trash2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
+import { useI18n, getBaseLanguage } from '@/lib/i18n';
 import type { EtherealTask } from '@/lib/etherealDb';
+
+const texts = {
+  today: { ru: 'сегодня', en: 'today' },
+  tomorrow: { ru: 'завтра', en: 'tomorrow' },
+  due: { ru: 'до', en: 'due' },
+  onBridge: { ru: 'На мостике!', en: 'On the bridge!' },
+  completedBy: { ru: 'Завершил:', en: 'Completed by:' },
+} as const;
 
 interface TaskCardProps {
   task: EtherealTask;
@@ -18,6 +27,11 @@ export function TaskCard({ task, onToggle, onTap, onDelete }: TaskCardProps) {
   const [touchStartX, setTouchStartX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
 
+  const { language } = useI18n();
+  const lang = getBaseLanguage(language);
+  const t = (key: keyof typeof texts) => texts[key][lang];
+  const dateLocale = lang === 'ru' ? ru : enUS;
+
   const isDone = task.status === 'done';
   const isUrgent = task.priority === 'urgent';
   const isOverdue = task.dueAtMs && isPast(task.dueAtMs) && !isDone;
@@ -26,9 +40,9 @@ export function TaskCard({ task, onToggle, onTap, onDelete }: TaskCardProps) {
   const formatDueDate = () => {
     if (!task.dueAtMs) return null;
     const date = new Date(task.dueAtMs);
-    if (isToday(date)) return 'сегодня';
-    if (isTomorrow(date)) return 'завтра';
-    return format(date, 'd MMM', { locale: ru });
+    if (isToday(date)) return t('today');
+    if (isTomorrow(date)) return t('tomorrow');
+    return format(date, 'd MMM', { locale: dateLocale });
   };
 
   const dueText = formatDueDate();
@@ -134,14 +148,14 @@ export function TaskCard({ task, onToggle, onTap, onDelete }: TaskCardProps) {
                   isOverdue && "text-destructive font-medium"
                 )}>
                   <Calendar className="w-3 h-3" />
-                  до {dueText}
+                  {t('due')} {dueText}
                 </span>
               )}
 
               {/* Urgent badge */}
               {isUrgent && !isDone && (
                 <span className="px-1.5 py-0.5 rounded bg-destructive/10 text-destructive text-[10px] font-medium">
-                  На мостике!
+                  {t('onBridge')}
                 </span>
               )}
             </div>
@@ -150,7 +164,7 @@ export function TaskCard({ task, onToggle, onTap, onDelete }: TaskCardProps) {
             {isDone && task.completedByName && (
               <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
                 <Check className="w-3 h-3" />
-                Завершил: {task.completedByName}
+                {t('completedBy')} {task.completedByName}
               </div>
             )}
           </div>

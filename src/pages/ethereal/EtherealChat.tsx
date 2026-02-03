@@ -10,9 +10,25 @@ import { Send, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { useI18n, getBaseLanguage } from '@/lib/i18n';
+
+const texts = {
+  bar: { ru: 'Бар', en: 'Bar' },
+  chat: { ru: 'Чат', en: 'Chat' },
+  emptyChat: { ru: 'Ещё никто ничего не сказал. Начните разговор!', en: 'No messages yet. Start the conversation!' },
+  typingOne: { ru: 'Кто-то наливает...', en: 'Someone is typing...' },
+  typingMany: { ru: ' человек наливают...', en: ' people are typing...' },
+  placeholder: { ru: 'Шепнуть в бар...', en: 'Whisper to the bar...' },
+  inPort: { ru: 'В порту...', en: 'In port...' },
+  kicked: { ru: 'Вас удалили из комнаты', en: 'You have been removed from the room' },
+  sessionExpired: { ru: 'Сессия истекла', en: 'Session expired' },
+} as const;
 
 export default function EtherealChat() {
   const navigate = useNavigate();
+  const { language } = useI18n();
+  const lang = getBaseLanguage(language);
+  const t = (key: keyof typeof texts) => texts[key][lang];
 
   // 1. ALL HOOKS MUST BE CALLED FIRST - before any conditional returns
   const { messages, typingMembers, sendTyping, sendMessage, isConnected } = useEtherealRealtime();
@@ -27,12 +43,12 @@ export default function EtherealChat() {
   // Handle kicked/expired events
   useEffect(() => {
     const handleKicked = () => {
-      toast.error('Вас удалили из комнаты');
+      toast.error(t('kicked'));
       navigate('/');
     };
 
     const handleExpired = () => {
-      toast.error('Сессия истекла');
+      toast.error(t('sessionExpired'));
       navigate('/');
     };
 
@@ -43,7 +59,7 @@ export default function EtherealChat() {
       window.removeEventListener('ethereal-kicked', handleKicked);
       window.removeEventListener('ethereal-session-expired', handleExpired);
     };
-  }, [navigate]);
+  }, [navigate, lang]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -99,13 +115,13 @@ export default function EtherealChat() {
 
   return (
     <div className="flex flex-col h-screen yacht-gradient">
-      <EtherealHeader title="Бар" subtitle="Чат" isConnected={isConnected} />
+      <EtherealHeader title={t('bar')} subtitle={t('chat')} isConnected={isConnected} />
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 ? (
           <div className="text-center text-muted-foreground py-12">
-            <p>Ещё никто ничего не сказал. Начните разговор!</p>
+            <p>{t('emptyChat')}</p>
           </div>
         ) : (
           messages.map((msg) => {
@@ -152,8 +168,8 @@ export default function EtherealChat() {
         {typingMembers.length > 0 && (
           <div className="text-xs text-muted-foreground animate-pulse">
             {typingMembers.length === 1
-              ? 'Кто-то наливает...'
-              : `${typingMembers.length} человек наливают...`}
+              ? t('typingOne')
+              : `${typingMembers.length}${t('typingMany')}`}
           </div>
         )}
 
@@ -188,7 +204,7 @@ export default function EtherealChat() {
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={isConnected ? 'Шепнуть в бар...' : 'В порту...'}
+            placeholder={isConnected ? t('placeholder') : t('inPort')}
             disabled={!isConnected || isSending}
             className="flex-1"
           />

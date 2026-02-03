@@ -5,12 +5,23 @@ import { EtherealPinModal } from './EtherealPinModal';
 import { EtherealBottomTabs } from './EtherealBottomTabs';
 import { Button } from '@/components/ui/button';
 import { Lock } from 'lucide-react';
+import { useI18n, getBaseLanguage } from '@/lib/i18n';
+
+const texts = {
+  title: { ru: 'Приватное пространство', en: 'Private Space' },
+  description: { ru: 'Для доступа требуется общий PIN.', en: 'This area requires a shared PIN to access.' },
+  enterPin: { ru: 'Ввести PIN', en: 'Enter PIN' },
+  returnHome: { ru: 'На главную', en: 'Return Home' },
+} as const;
 
 export function EtherealGate() {
   const [sessionValid, setSessionValid] = useState(() => isEtherealSessionValid());
   const [showPin, setShowPin] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { language } = useI18n();
+  const lang = getBaseLanguage(language);
+  const t = (key: keyof typeof texts) => texts[key][lang];
 
   // Listen for session expiration events
   useEffect(() => {
@@ -41,17 +52,17 @@ export function EtherealGate() {
             <Lock className="w-10 h-10 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-serif font-medium mb-2">Private Space</h1>
+            <h1 className="text-2xl font-serif font-medium mb-2">{t('title')}</h1>
             <p className="text-muted-foreground">
-              This area requires a shared PIN to access.
+              {t('description')}
             </p>
           </div>
           <div className="flex flex-col gap-3">
             <Button onClick={() => setShowPin(true)} size="lg">
-              Enter PIN
+              {t('enterPin')}
             </Button>
             <Button variant="ghost" onClick={handleLeave}>
-              Return Home
+              {t('returnHome')}
             </Button>
           </div>
         </div>
