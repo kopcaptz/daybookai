@@ -1,73 +1,96 @@
 
 
-# План: Исправить порядок элементов header в RTL на странице обсуждения
+# План: Удалять пустые обсуждения при выходе
 
 ## Проблема
 
-На скриншотах в режиме иврит и арабский видно:
-- Кнопка "назад" (←) находится **справа** 
-- Кнопка "Контекст" находится **слева**
-- Заголовок в центре
+Когда пользователь:
+1. Создает новое обсуждение (кнопкой "+New")
+2. Не отправляет ни одного сообщения
+3. Нажимает "назад"
 
-Это неправильно! В RTL режиме:
-- Кнопка "назад" должна быть **слева** (указывает наружу к краю экрана)
-- Кнопка "Контекст" должна быть **справа** (действие)
-
-## Анализ
-
-Flexbox в RTL автоматически меняет порядок элементов (`flex-direction: row` становится визуально reversed). Чтобы сохранить **физическое** расположение элементов (back=left, action=right), нужно использовать `rtl:flex-row-reverse`.
+...пустая сессия сохраняется в списке обсуждений. Это засоряет список.
 
 ## Решение
 
-В файле `src/pages/DiscussionChatPage.tsx`, строка 214 — добавить `rtl:flex-row-reverse` к header flex-контейнеру:
-
-```tsx
-// До
-<div className="flex items-center gap-3 px-4 py-3">
-
-// После  
-<div className="flex items-center gap-3 px-4 py-3 rtl:flex-row-reverse">
-```
-
-## Почему это работает
-
-**LTR (English/Russian):**
-- Flex order: `[Back] [Title] [Context]`
-- Visual: `[←] Title [Context →]` ✓
-
-**RTL (Hebrew/Arabic) без fix:**
-- Flex order reversed by browser: `[Context] [Title] [Back]`
-- Visual: `[Context] Title [→]` ✗ (неправильно)
-
-**RTL с `rtl:flex-row-reverse`:**
-- Flex order: reverse of reversed = original
-- Visual: `[←] Title [Context]` ✓ (кнопка назад слева!)
+Добавить `useEffect` с cleanup-функцией в `DiscussionChatPage.tsx`, которая при размонтировании компонента:
+1. Проверяет количество сообщений в сессии
+2. Если сообщений 0 — удаляет сессию
 
 ---
 
-## Файл для изменения
+## Изменение: `src/pages/DiscussionChatPage.tsx`
+
+### 1. Добавить импорт `deleteDiscussionSession`
+
+```tsx
+import { 
+  getDiscussionSessionById, 
+  getMessagesBySessionId, 
+  addDiscussionMessage,
+  updateDiscussionSession,
+  deleteDiscussionSession,  // ← добавить
+  DiscussionSession,
+  DiscussionMessage,
+  DiscussionMode
+} from '@/lib/db';
+```
+
+### 2. Добавить useEffect для cleanup пустых сессий
+
+После существующих useEffect (примерно после строки 103):
+
+```tsx
+// Cleanup empty session on unmount
+useEffect(() => {
+  return () => {
+    // Use async IIFE for cleanup
+    (async () => {
+      try {
+        const msgs = await getMessagesBySessionId(sessionId);
+        if (msgs.length === 0) {
+          await deleteDiscussionSession(sessionId);
+          console.log('[DiscussionChat] Deleted empty session:', sessionId);
+        }
+      } catch (error) {
+        console.error('[DiscussionChat] Failed to cleanup empty session:', error);
+      }
+    })();
+  };
+}, [sessionId]);
+```
+
+---
+
+## Как это работает
+
+```text
+Пользователь создает сессию → открывается DiscussionChatPage
+                                      ↓
+                          Пользователь нажимает "←"
+                                      ↓
+                          useEffect cleanup выполняется
+                                      ↓
+                          Проверка: messages.length === 0?
+                                   /          \
+                                 Да           Нет
+                                 ↓             ↓
+                          deleteSession   (ничего)
+```
+
+---
+
+## Файлы для изменения
 
 | Файл | Изменение |
 |------|-----------|
-| `src/pages/DiscussionChatPage.tsx` | Добавить `rtl:flex-row-reverse` к header div (строка 214) |
+| `src/pages/DiscussionChatPage.tsx` | Добавить импорт `deleteDiscussionSession` и useEffect для cleanup |
 
 ---
 
-## Визуальный результат
+## Edge cases
 
-**LTR:**
-```
-┌─────────────────────────────────────┐
-│ [←]  דיון חדש / entries 0  [הקשר]  │
-└─────────────────────────────────────┘
-```
-
-**RTL (после исправления):**
-```
-┌─────────────────────────────────────┐
-│ [←]  דיון חדש / entries 0  [הקשר]  │
-└─────────────────────────────────────┘
-```
-
-Кнопка ← остаётся слева на экране, указывая "наружу" к краю.
+1. **Пользователь отправил сообщение и вышел** — сессия сохранится (messages.length > 0)
+2. **Ошибка при удалении** — логируется, не влияет на навигацию
+3. **Быстрый переход между сессиями** — каждый cleanup работает со своим sessionId
 
