@@ -557,15 +557,9 @@ function EntryEditorContent() {
         "animate-page-materialize"
       )}>
       <header className="sticky top-0 z-40 flex items-center justify-between rtl:flex-row-reverse bg-background/80 backdrop-blur-xl px-4 py-4 border-b border-border/50">
-        {/* Back arrow swaps direction for RTL */}
-        {(() => {
-          const BackIcon = isRTL(language) ? ArrowRight : ArrowLeft;
-          return (
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="hover:bg-cyber-glow/10">
-              <BackIcon className="h-5 w-5" />
-            </Button>
-          );
-        })()}
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="hover:bg-cyber-glow/10">
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
         <div className="flex items-center gap-2">
           <QuillSigilIcon className="h-5 w-5 text-cyber-sigil" />
           <h1 className="text-lg font-serif font-medium">

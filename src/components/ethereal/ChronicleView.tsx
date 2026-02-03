@@ -11,12 +11,10 @@ interface ChronicleViewProps {
   onBack: () => void;
   onEdit: () => void;
   onTogglePin: () => void;
-  isRTL?: boolean;
 }
 
-export function ChronicleView({ chronicle, onBack, onEdit, onTogglePin, isRTL: isRTLMode = false }: ChronicleViewProps) {
+export function ChronicleView({ chronicle, onBack, onEdit, onTogglePin }: ChronicleViewProps) {
   const isLocked = chronicle.editingBy && chronicle.editingExpiresAt && chronicle.editingExpiresAt > Date.now();
-  const BackIcon = isRTLMode ? ArrowRight : ArrowLeft;
 
   // Render content with media placeholders
   const renderContent = (content: string) => {
@@ -57,7 +55,7 @@ export function ChronicleView({ chronicle, onBack, onEdit, onTogglePin, isRTL: i
       {/* Header */}
       <div className="p-4 border-b flex items-center gap-2">
         <Button variant="ghost" size="icon" onClick={onBack}>
-          <BackIcon className="w-5 h-5" />
+          <ArrowLeft className="w-5 h-5" />
         </Button>
         <div className="flex-1" />
         <Button

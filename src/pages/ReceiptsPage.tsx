@@ -118,7 +118,7 @@ function ReceiptsContent() {
             onClick={() => navigate("/settings")}
             className="shrink-0"
           >
-            {isRTL(language) ? <ArrowRight className="h-5 w-5" /> : <ArrowLeft className="h-5 w-5" />}
+            <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1 text-center min-w-0">
             <h1 className="text-xl font-serif font-medium text-foreground tracking-wide truncate">
