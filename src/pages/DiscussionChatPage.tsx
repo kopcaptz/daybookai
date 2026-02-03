@@ -211,7 +211,7 @@ function DiscussionChatContent() {
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border/50">
-        <div className="flex items-center gap-3 px-4 py-3">
+        <div className="flex items-center gap-3 px-4 py-3 rtl:flex-row-reverse">
           <Button
             variant="ghost"
             size="icon"
