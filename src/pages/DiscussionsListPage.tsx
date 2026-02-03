@@ -43,7 +43,7 @@ function DiscussionsListContent() {
     setCreating(true);
     try {
       const id = await createDiscussionSession({
-        title: language === 'ru' ? 'Новое обсуждение' : 'New discussion',
+        title: t('discussions.newTitle'),
         scope: { entryIds: [], docIds: [] },
         modeDefault: 'discuss',
       });
@@ -75,7 +75,7 @@ function DiscussionsListContent() {
               {t('discussions.title')}
             </h1>
             <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
-              {language === 'ru' ? 'Чат с записями' : 'Chat with entries'}
+              {t('discussions.subtitle')}
             </p>
           </div>
           <div className="shrink-0">
@@ -107,10 +107,10 @@ function DiscussionsListContent() {
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="mb-6 p-8 panel-glass relative">
               <MessageSquare className="h-12 w-12 text-muted-foreground" />
-              <div className="absolute top-3 right-3 text-cyber-sigil/40">
+              <div className="absolute top-3 end-3 text-cyber-sigil/40">
                 <SealGlyph size={12} />
               </div>
-              <div className="absolute bottom-3 left-3 text-cyber-rune/30">
+              <div className="absolute bottom-3 start-3 text-cyber-rune/30">
                 <SealGlyph size={12} />
               </div>
             </div>
@@ -149,9 +149,7 @@ function DiscussionsListContent() {
           <AlertDialogHeader>
             <AlertDialogTitle>{t('discussions.deleteConfirm')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {language === 'ru' 
-                ? 'Это действие нельзя отменить. Все сообщения будут удалены.'
-                : 'This action cannot be undone. All messages will be deleted.'}
+              {t('discussions.deleteDesc')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
