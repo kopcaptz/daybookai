@@ -1,183 +1,114 @@
 
 
-# План: RTL-фикс для названия "Magic Notebook" + аудит мест использования
+# План: Исправление RLS политик Ethereal Layer
 
 ## Проблема
 
-1. **Bidi-проблема**: При установке `app.name` = "Magic Notebook" для всех языков, в RTL-режиме (иврит/арабский) латинское название может "прыгать" или отображаться некорректно из-за смешивания направлений текста.
+В миграции `20260201192557` политики RLS для 7 таблиц были созданы **без ключевого слова `AS RESTRICTIVE`**:
 
-2. **Переполнение**: "Magic Notebook" длиннее чем "מחברת קסומה" (иврит) и "دفتر سحري" (арабский), что может вызвать переполнение в узких контейнерах.
-
----
-
-## Места использования `app.name`
-
-| Файл | Строка | Контекст | Риск |
-|------|--------|----------|------|
-| `src/lib/i18n.tsx` | 17 | Определение ключа | - |
-| `src/pages/Today.tsx` | 148 | Header h1 (с `truncate`) | ✅ Защищён `truncate` |
-| `src/pages/CalendarPage.tsx` | 149 | Header h1 | Нужен `dir="ltr"` |
-| `src/pages/SearchPage.tsx` | 68 | Header h1 | Нужен `dir="ltr"` |
-| `src/pages/ChatPage.tsx` | 390, 439, 485 | Header h1 (3 места) | Нужен `dir="ltr"` |
-| `src/pages/SettingsPage.tsx` | 182 | Header h1 | Нужен `dir="ltr"` |
-| `src/pages/SettingsPage.tsx` | 492 | App Info карточка | Нужен `dir="ltr"` |
-| `index.html` | 23, 27, 29, 37 | PWA meta, SEO, title | Статично на русском — не затрагивает |
-| `src/pages/OnboardingPage.tsx` | 21, 39, 57, 75 | Slide body text | Текст в контексте, dir от контейнера |
-
----
-
-## Изменения
-
-### 1. `src/lib/i18n.tsx` — строка 17
-
-**Изменить название на единое "Magic Notebook":**
-
-```tsx
-// Было:
-'app.name': { ru: 'Магический блокнот', en: 'Magic Notebook', he: 'מחברת קסומה', ar: 'دفتر سحري' },
-
-// Станет:
-'app.name': { ru: 'Magic Notebook', en: 'Magic Notebook', he: 'Magic Notebook', ar: 'Magic Notebook' },
+```sql
+-- ПРОБЛЕМНЫЙ КОД (текущий):
+CREATE POLICY "Deny all direct access" ON ethereal_messages 
+  FOR ALL USING (false) WITH CHECK (false);
+-- По умолчанию создаётся PERMISSIVE политика!
 ```
 
+| Таблица | Текущий тип | Правильный тип |
+|---------|-------------|----------------|
+| ethereal_messages | PERMISSIVE | RESTRICTIVE |
+| ethereal_rooms | PERMISSIVE | RESTRICTIVE |
+| ethereal_room_members | PERMISSIVE | RESTRICTIVE |
+| ethereal_sessions | PERMISSIVE | RESTRICTIVE |
+| ethereal_chronicles | PERMISSIVE | RESTRICTIVE |
+| ethereal_tasks | PERMISSIVE | RESTRICTIVE |
+| ethereal_calendar_events | PERMISSIVE | RESTRICTIVE |
+
+Правильно защищены (не требуют изменений):
+- ethereal_game_sessions (RESTRICTIVE)
+- ethereal_game_rounds (RESTRICTIVE)
+- ethereal_chronicle_revisions (RESTRICTIVE)
+
 ---
 
-### 2. `src/pages/Today.tsx` — строка 148
+## Почему это важно
 
-**Добавить `dir="ltr"` и сохранить `truncate`:**
+**PERMISSIVE vs RESTRICTIVE в PostgreSQL:**
 
-```tsx
-// Было:
-<h1 className="text-xl font-serif font-medium text-foreground tracking-wide truncate">
-  {t('app.name')}
-</h1>
+| Тип | Поведение |
+|-----|-----------|
+| PERMISSIVE + USING(false) | Блокирует доступ, НО если добавить другую PERMISSIVE политику с USING(true), доступ откроется |
+| RESTRICTIVE + USING(false) | ВСЕГДА блокирует доступ, независимо от других политик |
 
-// Станет:
-<h1 className="text-xl font-serif font-medium text-foreground tracking-wide truncate" dir="ltr">
-  {t('app.name')}
-</h1>
+**Текущий риск: НИЗКИЙ**, но это плохая практика для архитектуры "Deny all direct access".
+
+---
+
+## Решение
+
+Создать миграцию, которая:
+1. Удалит старые PERMISSIVE политики
+2. Создаст новые RESTRICTIVE политики с тем же именем
+
+```sql
+-- Миграция: fix_ethereal_restrictive_policies
+
+-- 1. Удаляем старые PERMISSIVE политики
+DROP POLICY IF EXISTS "Deny all direct access" ON ethereal_messages;
+DROP POLICY IF EXISTS "Deny all direct access" ON ethereal_rooms;
+DROP POLICY IF EXISTS "Deny all direct access" ON ethereal_room_members;
+DROP POLICY IF EXISTS "Deny all direct access" ON ethereal_sessions;
+DROP POLICY IF EXISTS "Deny all direct access" ON ethereal_chronicles;
+DROP POLICY IF EXISTS "Deny all direct access" ON ethereal_tasks;
+DROP POLICY IF EXISTS "Deny all direct access" ON ethereal_calendar_events;
+
+-- 2. Создаём RESTRICTIVE политики
+CREATE POLICY "Deny all direct access" ON ethereal_messages
+  AS RESTRICTIVE FOR ALL TO public
+  USING (false) WITH CHECK (false);
+
+CREATE POLICY "Deny all direct access" ON ethereal_rooms
+  AS RESTRICTIVE FOR ALL TO public
+  USING (false) WITH CHECK (false);
+
+CREATE POLICY "Deny all direct access" ON ethereal_room_members
+  AS RESTRICTIVE FOR ALL TO public
+  USING (false) WITH CHECK (false);
+
+CREATE POLICY "Deny all direct access" ON ethereal_sessions
+  AS RESTRICTIVE FOR ALL TO public
+  USING (false) WITH CHECK (false);
+
+CREATE POLICY "Deny all direct access" ON ethereal_chronicles
+  AS RESTRICTIVE FOR ALL TO public
+  USING (false) WITH CHECK (false);
+
+CREATE POLICY "Deny all direct access" ON ethereal_tasks
+  AS RESTRICTIVE FOR ALL TO public
+  USING (false) WITH CHECK (false);
+
+CREATE POLICY "Deny all direct access" ON ethereal_calendar_events
+  AS RESTRICTIVE FOR ALL TO public
+  USING (false) WITH CHECK (false);
 ```
-
----
-
-### 3. `src/pages/CalendarPage.tsx` — строка 149
-
-```tsx
-// Было:
-<h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
-  {t('app.name')}
-</h1>
-
-// Станет:
-<h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
-  {t('app.name')}
-</h1>
-```
-
----
-
-### 4. `src/pages/SearchPage.tsx` — строка 68
-
-```tsx
-// Было:
-<h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
-  {t('app.name')}
-</h1>
-
-// Станет:
-<h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
-  {t('app.name')}
-</h1>
-```
-
----
-
-### 5. `src/pages/ChatPage.tsx` — строки 389-390, 438-439, 484-485
-
-**Три места с одинаковой структурой:**
-
-```tsx
-// Было:
-<h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
-  {t('app.name')}
-</h1>
-
-// Станет:
-<h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
-  {t('app.name')}
-</h1>
-```
-
----
-
-### 6. `src/pages/SettingsPage.tsx` — строка 182
-
-```tsx
-// Было:
-<h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
-  {t('app.name')}
-</h1>
-
-// Станет:
-<h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
-  {t('app.name')}
-</h1>
-```
-
----
-
-### 7. `src/pages/SettingsPage.tsx` — строки 490-492
-
-**Карточка App Info — обернуть в span с dir="ltr":**
-
-```tsx
-// Было:
-<div className="flex items-center gap-2">
-  <GrimoireIcon className="h-5 w-5 text-cyber-sigil" />
-  {t('app.name')}
-</div>
-
-// Станет:
-<div className="flex items-center gap-2">
-  <GrimoireIcon className="h-5 w-5 text-cyber-sigil" />
-  <span dir="ltr">{t('app.name')}</span>
-</div>
-```
-
----
-
-### 8. Onboarding — НЕ ТРОГАЕМ
-
-В `OnboardingPage.tsx` название используется внутри body текста слайдов:
-- "Magic Notebook — дневник..." (ru)
-- "Magic Notebook is a journal..." (en)
-- "Magic Notebook הוא יומן..." (he)
-- "دفتر الملاحظات السحري هو يوميات..." (ar)
-
-Здесь название является частью предложения, и браузер корректно обрабатывает bidi-переходы внутри текста. Добавлять `dir` не нужно.
-
----
-
-## Сводка изменений
-
-| Файл | Строка | Изменение |
-|------|--------|-----------|
-| `src/lib/i18n.tsx` | 17 | Единое название "Magic Notebook" |
-| `src/pages/Today.tsx` | 147-148 | `dir="ltr"` на h1 |
-| `src/pages/CalendarPage.tsx` | 148-149 | `dir="ltr"` на h1 |
-| `src/pages/SearchPage.tsx` | 67-68 | `dir="ltr"` на h1 |
-| `src/pages/ChatPage.tsx` | 389, 438, 484 | `dir="ltr"` на h1 (3 места) |
-| `src/pages/SettingsPage.tsx` | 181 | `dir="ltr"` на h1 |
-| `src/pages/SettingsPage.tsx` | 492 | `<span dir="ltr">` вокруг названия |
-
-**Всего: 8 файлов, 9 точечных правок**
 
 ---
 
 ## Ожидаемый результат
 
-- Название "Magic Notebook" отображается корректно во всех языках
-- В RTL-режиме латинское название не "прыгает" и не переворачивается
-- Подзаголовки остаются локализованными ("Записи • Медиа • Хроника дня" и т.д.)
-- `truncate` на Today защищает от переполнения на узких экранах
+После миграции все 10 таблиц Ethereal Layer будут иметь **RESTRICTIVE** политики:
+
+```
+ethereal_messages          → RESTRICTIVE ✅
+ethereal_rooms             → RESTRICTIVE ✅
+ethereal_room_members      → RESTRICTIVE ✅
+ethereal_sessions          → RESTRICTIVE ✅
+ethereal_chronicles        → RESTRICTIVE ✅
+ethereal_tasks             → RESTRICTIVE ✅
+ethereal_calendar_events   → RESTRICTIVE ✅
+ethereal_game_sessions     → RESTRICTIVE ✅ (уже правильно)
+ethereal_game_rounds       → RESTRICTIVE ✅ (уже правильно)
+ethereal_chronicle_revisions → RESTRICTIVE ✅ (уже правильно)
+```
+
+Это обеспечит надёжную защиту архитектуры "Edge Function Proxy" и предотвратит случайное открытие доступа при добавлении новых политик в будущем.
 
