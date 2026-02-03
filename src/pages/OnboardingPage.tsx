@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, BookOpen, LayoutDashboard, PenLine, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, getBaseLanguage } from '@/lib/i18n';
 import { setOnboarded } from '@/lib/onboarding';
 import { cn } from '@/lib/utils';
 import { useTheme, type ThemeMode } from '@/hooks/useTheme';
@@ -51,6 +51,42 @@ const slides = {
       body: 'Your data stays local. Language and theme are in Settings.',
     },
   ],
+  he: [
+    {
+      title: 'ברוכים הבאים',
+      body: 'Magic Notebook הוא יומן עם הנחיות AI עדינות לכל יום.',
+    },
+    {
+      title: 'היום הוא המרכז שלך',
+      body: 'בהיום תראו את הרשומות והתזכורות שלכם.',
+    },
+    {
+      title: 'רשומות ולוח שנה',
+      body: 'צרו רשומות במהירות, ולוח השנה עוזר לראות את הקצב והמצב רוח.',
+    },
+    {
+      title: 'פרטיות ושליטה',
+      body: 'הנתונים שלכם נשמרים מקומית. שפה וערכת נושא בהגדרות.',
+    },
+  ],
+  ar: [
+    {
+      title: 'مرحباً',
+      body: 'دفتر الملاحظات السحري هو يوميات مع تلميحات ذكاء اصطناعي لكل يوم.',
+    },
+    {
+      title: 'اليوم هو مركزك',
+      body: 'في اليوم سترى مدخلاتك والتذكيرات.',
+    },
+    {
+      title: 'المدخلات والتقويم',
+      body: 'أنشئ مدخلات بسرعة، والتقويم يساعدك على رؤية إيقاعك ومزاجك.',
+    },
+    {
+      title: 'الخصوصية والتحكم',
+      body: 'بياناتك تبقى محلية. اللغة والمظهر في الإعدادات.',
+    },
+  ],
 };
 
 const labels = {
@@ -69,6 +105,22 @@ const labels = {
     start: 'Start',
     openSettings: 'Open settings',
     themeTitle: 'Theme',
+  },
+  he: {
+    skip: 'דלג',
+    next: 'הבא',
+    back: 'חזרה',
+    start: 'התחל',
+    openSettings: 'פתח הגדרות',
+    themeTitle: 'ערכת נושא',
+  },
+  ar: {
+    skip: 'تخطي',
+    next: 'التالي',
+    back: 'رجوع',
+    start: 'ابدأ',
+    openSettings: 'فتح الإعدادات',
+    themeTitle: 'المظهر',
   },
 };
 
@@ -355,7 +407,7 @@ export default function OnboardingPage() {
                         : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
                     )}
                   >
-                    {language === 'ru' ? opt.labelRu : opt.labelEn}
+                    {getBaseLanguage(language) === 'ru' ? opt.labelRu : opt.labelEn}
                   </button>
                 ))}
               </div>
@@ -385,7 +437,7 @@ export default function OnboardingPage() {
               key={index}
               type="button"
               onClick={() => goToSlide(index)}
-              aria-label={language === 'ru' ? `Перейти к слайду ${index + 1}` : `Go to slide ${index + 1}`}
+              aria-label={getBaseLanguage(language) === 'ru' ? `Перейти к слайду ${index + 1}` : `Go to slide ${index + 1}`}
               className={cn(
                 'w-2.5 h-2.5 rounded-full transition-colors duration-200 cursor-pointer',
                 'hover:scale-110 active:scale-95 transition-transform',
