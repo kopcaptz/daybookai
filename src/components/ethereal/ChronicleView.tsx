@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { ArrowLeft, Pin, Edit, User, Clock, Share2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Pin, Edit, User, Clock, Share2 } from 'lucide-react';
 import { EtherealChronicle } from '@/lib/etherealDb';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,10 +11,12 @@ interface ChronicleViewProps {
   onBack: () => void;
   onEdit: () => void;
   onTogglePin: () => void;
+  isRTL?: boolean;
 }
 
-export function ChronicleView({ chronicle, onBack, onEdit, onTogglePin }: ChronicleViewProps) {
+export function ChronicleView({ chronicle, onBack, onEdit, onTogglePin, isRTL: isRTLMode = false }: ChronicleViewProps) {
   const isLocked = chronicle.editingBy && chronicle.editingExpiresAt && chronicle.editingExpiresAt > Date.now();
+  const BackIcon = isRTLMode ? ArrowRight : ArrowLeft;
 
   // Render content with media placeholders
   const renderContent = (content: string) => {
@@ -55,7 +57,7 @@ export function ChronicleView({ chronicle, onBack, onEdit, onTogglePin }: Chroni
       {/* Header */}
       <div className="p-4 border-b flex items-center gap-2">
         <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft className="w-5 h-5" />
+          <BackIcon className="w-5 h-5" />
         </Button>
         <div className="flex-1" />
         <Button

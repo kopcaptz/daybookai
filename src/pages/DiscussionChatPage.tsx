@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, FolderOpen, Send, Search, Loader2, User, Bot, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, FolderOpen, Send, Search, Loader2, User, Bot, AlertCircle } from 'lucide-react';
 import { 
   getDiscussionSessionById, 
   getMessagesBySessionId, 
@@ -26,7 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Toggle } from '@/components/ui/toggle';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, isRTL } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -218,7 +218,7 @@ function DiscussionChatContent() {
             onClick={() => navigate('/discussions')}
             className="shrink-0"
           >
-            <ArrowLeft className="h-5 w-5" />
+            {isRTL(language) ? <ArrowRight className="h-5 w-5" /> : <ArrowLeft className="h-5 w-5" />}
           </Button>
           
           <div className="flex-1 min-w-0">

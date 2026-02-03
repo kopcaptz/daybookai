@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Camera, ImageIcon, Loader2, AlertTriangle, RotateCcw, Zap, Target } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, ImageIcon, Loader2, AlertTriangle, RotateCcw, Zap, Target } from "lucide-react";
 import { toast } from "sonner";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, isRTL } from "@/lib/i18n";
 import { 
   compressReceiptImage, 
   scanReceipt, 
@@ -283,7 +283,7 @@ function ReceiptScanContent() {
             onClick={() => navigate("/receipts")}
             className="shrink-0"
           >
-            <ArrowLeft className="h-5 w-5" />
+            {isRTL(language) ? <ArrowRight className="h-5 w-5" /> : <ArrowLeft className="h-5 w-5" />}
           </Button>
           <h1 className="text-lg font-serif font-medium text-foreground">
             {language === "ru" ? "Сканировать чек" : "Scan Receipt"}

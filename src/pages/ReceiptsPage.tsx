@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Receipt, ScanLine, ChevronRight, Calendar, Store, Shield, TrendingUp, ArrowLeft, Download, FileJson } from "lucide-react";
+import { Receipt, ScanLine, ChevronRight, Calendar, Store, Shield, TrendingUp, ArrowLeft, ArrowRight, Download, FileJson } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { toast } from "sonner";
 import { db, type Receipt as ReceiptType } from "@/lib/db";
 import { isReceiptScanningAvailable } from "@/lib/receiptService";
 import { exportAllReceiptsCsv, exportAllReceiptItemsCsv } from "@/lib/receiptExportService";
 import { downloadDiagnostics } from "@/lib/scanDiagnostics";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, isRTL } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -118,7 +118,7 @@ function ReceiptsContent() {
             onClick={() => navigate("/settings")}
             className="shrink-0"
           >
-            <ArrowLeft className="h-5 w-5" />
+            {isRTL(language) ? <ArrowRight className="h-5 w-5" /> : <ArrowLeft className="h-5 w-5" />}
           </Button>
           <div className="flex-1 text-center min-w-0">
             <h1 className="text-xl font-serif font-medium text-foreground tracking-wide truncate">

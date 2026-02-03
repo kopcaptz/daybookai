@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { ru, enUS } from 'date-fns/locale';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { getEntriesByDate } from '@/lib/db';
 import { Button } from '@/components/ui/button';
 import { EntryCard } from '@/components/EntryCard';
@@ -11,7 +11,7 @@ import { BiographyDisplay } from '@/components/BiographyDisplay';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { getBiography, StoredBiography } from '@/lib/biographyService';
 import { loadAISettings } from '@/lib/aiConfig';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, isRTL } from '@/lib/i18n';
 import { GrimoireIcon } from '@/components/icons/SigilIcon';
 
 function DayViewContent() {
@@ -52,7 +52,7 @@ function DayViewContent() {
       <div className="min-h-screen cyber-noise rune-grid">
         <header className="sticky top-0 z-40 flex items-center gap-3 bg-background/80 backdrop-blur-xl px-4 py-4 border-b border-border/50">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-            <ArrowLeft className="h-5 w-5" />
+            {isRTL(language) ? <ArrowRight className="h-5 w-5" /> : <ArrowLeft className="h-5 w-5" />}
           </Button>
           <div className="h-6 w-48 animate-pulse rounded bg-muted" />
         </header>
@@ -69,7 +69,7 @@ function DayViewContent() {
     <div className="min-h-screen pb-24 cyber-noise rune-grid">
       <header className="sticky top-0 z-40 flex items-center gap-3 bg-background/80 backdrop-blur-xl px-4 py-4 border-b border-border/50">
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="hover:bg-cyber-glow/10">
-          <ArrowLeft className="h-5 w-5" />
+          {isRTL(language) ? <ArrowRight className="h-5 w-5" /> : <ArrowLeft className="h-5 w-5" />}
         </Button>
         <div className="flex-1">
           <h1 className="text-lg font-serif font-medium capitalize">{dateFormatted}</h1>
