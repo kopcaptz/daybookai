@@ -176,11 +176,8 @@ function SettingsContent() {
     <div className="min-h-screen pb-24 cyber-noise rune-grid">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
         {/* Brand header */}
-        <div className="flex items-center justify-between rtl:flex-row-reverse">
-          <div className="relative shrink-0 w-8">
-            <GrimoireIcon className="h-6 w-6 text-cyber-sigil" />
-          </div>
-          <div className="flex-1 text-center">
+        <div className="flex items-center justify-center">
+          <div className="text-center">
             <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
               {t('app.name')}
             </h1>
@@ -188,7 +185,6 @@ function SettingsContent() {
               {t('app.subtitle')}
             </p>
           </div>
-          <div className="shrink-0 w-8" />
         </div>
         
         {/* Rune divider */}

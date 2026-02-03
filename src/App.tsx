@@ -136,8 +136,7 @@ function AppContent() {
     location.pathname === '/new' ||
     location.pathname.startsWith('/entry/') ||
     location.pathname.startsWith('/discussions/') ||
-    location.pathname.startsWith('/e/') ||
-    location.pathname === '/settings';
+    location.pathname.startsWith('/e/');
 
   return (
     <HeroTransitionProvider>
