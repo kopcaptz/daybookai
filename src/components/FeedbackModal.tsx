@@ -17,6 +17,7 @@ import { getScanStats } from '@/lib/scanDiagnostics';
 import { loadAISettings } from '@/lib/aiConfig';
 import { trackUsageEvent } from '@/lib/usageTracker';
 import { useSecretLongPressSwipe } from '@/hooks/useSecretLongPressSwipe';
+import { useI18n } from '@/lib/i18n';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -25,6 +26,7 @@ interface FeedbackModalProps {
 }
 
 export function FeedbackModal({ onSecretUnlock }: FeedbackModalProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -45,8 +47,8 @@ export function FeedbackModal({ onSecretUnlock }: FeedbackModalProps) {
       // Check file size
       if (file.size > MAX_IMAGE_SIZE) {
         toast({
-          title: "Файл слишком большой",
-          description: "Максимальный размер изображения — 5 МБ",
+          title: t('feedback.fileTooLargeTitle'),
+          description: t('feedback.fileTooLargeDesc'),
           variant: "destructive",
         });
         return;
@@ -130,8 +132,8 @@ export function FeedbackModal({ onSecretUnlock }: FeedbackModalProps) {
       trackUsageEvent('feedbackSubmitted');
 
       toast({
-        title: "Сообщение отправлено в архив",
-        description: "Мастер получит ваше послание",
+        title: t('feedback.successTitle'),
+        description: t('feedback.successDesc'),
       });
 
       // Reset form
@@ -141,8 +143,8 @@ export function FeedbackModal({ onSecretUnlock }: FeedbackModalProps) {
     } catch (error) {
       console.error('Feedback submit error:', error);
       toast({
-        title: "Ошибка отправки",
-        description: "Не удалось отправить сообщение. Попробуйте позже.",
+        title: t('feedback.errorTitle'),
+        description: t('feedback.errorDesc'),
         variant: "destructive",
       });
     } finally {
@@ -169,7 +171,7 @@ export function FeedbackModal({ onSecretUnlock }: FeedbackModalProps) {
       <button
         {...handlers}
         className={cn(
-          "fixed top-4 left-4 z-50",
+          "fixed top-4 start-4 z-50",
           "p-2 rounded-lg",
           "bg-card/80 backdrop-blur-sm",
           "border border-border/50",
@@ -181,7 +183,7 @@ export function FeedbackModal({ onSecretUnlock }: FeedbackModalProps) {
           "group touch-none select-none",
           phase !== 'idle' && "scale-110"
         )}
-        aria-label="Связь с Мастером"
+        aria-label={t('feedback.title')}
       >
         <div className="relative">
           <GrimoireIcon className="h-6 w-6" />
@@ -237,7 +239,7 @@ export function FeedbackModal({ onSecretUnlock }: FeedbackModalProps) {
         <DialogHeader>
           <DialogTitle className="text-xl font-serif text-foreground flex items-center gap-2">
             <span className="text-cyber-sigil">◆</span>
-            Связь с Мастером
+            {t('feedback.title')}
             <span className="text-cyber-sigil">◆</span>
           </DialogTitle>
         </DialogHeader>
@@ -247,7 +249,7 @@ export function FeedbackModal({ onSecretUnlock }: FeedbackModalProps) {
           <Textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Изложите вашу мысль..."
+            placeholder={t('feedback.placeholder')}
             className={cn(
               "min-h-[120px] resize-none",
               "bg-background/50 border-border/50",
@@ -279,14 +281,14 @@ export function FeedbackModal({ onSecretUnlock }: FeedbackModalProps) {
                 "gap-2 text-sm",
                 "border-dashed border-border/70",
                 "hover:border-cyber-sigil/50 hover:text-cyber-sigil",
-                "transition-colors"
-              )}
-            >
-              <Paperclip className="h-4 w-4" />
-              Прикрепить артефакт
-            </Button>
+              "transition-colors"
+            )}
+          >
+            <Paperclip className="h-4 w-4" />
+            {t('feedback.attachArtifact')}
+          </Button>
 
-            {/* File preview */}
+          {/* File preview */}
             {previewUrl && selectedFile && (
               <div className="relative inline-block">
                 <div className={cn(
@@ -312,7 +314,7 @@ export function FeedbackModal({ onSecretUnlock }: FeedbackModalProps) {
                     "transition-colors",
                     "shadow-sm"
                   )}
-                  aria-label="Удалить файл"
+                  aria-label={t('feedback.removeFile')}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -343,7 +345,7 @@ export function FeedbackModal({ onSecretUnlock }: FeedbackModalProps) {
             ) : (
               <Send className="h-4 w-4" />
             )}
-            {isSubmitting ? "Отправка..." : "Отправить в эфир"}
+            {isSubmitting ? t('feedback.submitting') : t('feedback.submit')}
           </Button>
         </div>
       </DialogContent>

@@ -31,6 +31,20 @@ export const translations = {
   'common.restore': { ru: 'Восстановить', en: 'Restore', he: 'שחזר', ar: 'استعادة' },
   'common.discard': { ru: 'Отменить', en: 'Discard', he: 'בטל', ar: 'تجاهل' },
   
+  // Feedback Modal
+  'feedback.title': { ru: 'Связь с Мастером', en: 'Contact the Master', he: 'קשר עם המאסטר', ar: 'تواصل مع المعلم' },
+  'feedback.placeholder': { ru: 'Изложите вашу мысль...', en: 'Share your thoughts...', he: 'שתפו את מחשבותיכם...', ar: 'شاركنا أفكارك...' },
+  'feedback.attachArtifact': { ru: 'Прикрепить артефакт', en: 'Attach artifact', he: 'צרף קובץ', ar: 'إرفاق ملف' },
+  'feedback.submit': { ru: 'Отправить в эфир', en: 'Send to ether', he: 'שלח', ar: 'إرسال' },
+  'feedback.submitting': { ru: 'Отправка...', en: 'Sending...', he: 'שולח...', ar: 'جاري الإرسال...' },
+  'feedback.successTitle': { ru: 'Сообщение отправлено в архив', en: 'Message sent to archive', he: 'ההודעה נשלחה', ar: 'تم إرسال الرسالة' },
+  'feedback.successDesc': { ru: 'Мастер получит ваше послание', en: 'The Master will receive your message', he: 'המאסטר יקבל את הודעתך', ar: 'سيستلم المعلم رسالتك' },
+  'feedback.errorTitle': { ru: 'Ошибка отправки', en: 'Send error', he: 'שגיאה בשליחה', ar: 'خطأ في الإرسال' },
+  'feedback.errorDesc': { ru: 'Не удалось отправить сообщение. Попробуйте позже.', en: 'Failed to send message. Try again later.', he: 'לא ניתן לשלוח את ההודעה. נסו שוב מאוחר יותר.', ar: 'فشل إرسال الرسالة. حاول مرة أخرى لاحقاً.' },
+  'feedback.fileTooLargeTitle': { ru: 'Файл слишком большой', en: 'File too large', he: 'הקובץ גדול מדי', ar: 'الملف كبير جداً' },
+  'feedback.fileTooLargeDesc': { ru: 'Максимальный размер изображения — 5 МБ', en: 'Maximum image size is 5 MB', he: 'גודל תמונה מקסימלי 5 מ"ב', ar: 'الحد الأقصى لحجم الصورة 5 ميجابايت' },
+  'feedback.removeFile': { ru: 'Удалить файл', en: 'Remove file', he: 'הסר קובץ', ar: 'إزالة الملف' },
+  
   // Navigation
   'nav.today': { ru: 'Сегодня', en: 'Today', he: 'היום', ar: 'اليوم' },
   'nav.calendar': { ru: 'Календарь', en: 'Calendar', he: 'לוח שנה', ar: 'التقويم' },
