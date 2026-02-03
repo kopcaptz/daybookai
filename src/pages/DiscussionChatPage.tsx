@@ -7,6 +7,7 @@ import {
   getMessagesBySessionId, 
   addDiscussionMessage,
   updateDiscussionSession,
+  deleteDiscussionSession,
   DiscussionSession,
   DiscussionMessage,
   DiscussionMode
@@ -101,6 +102,23 @@ function DiscussionChatContent() {
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
     }
   }, [inputText]);
+  
+  // Cleanup empty session on unmount
+  useEffect(() => {
+    return () => {
+      (async () => {
+        try {
+          const msgs = await getMessagesBySessionId(sessionId);
+          if (msgs.length === 0) {
+            await deleteDiscussionSession(sessionId);
+            console.log('[DiscussionChat] Deleted empty session:', sessionId);
+          }
+        } catch (error) {
+          console.error('[DiscussionChat] Failed to cleanup empty session:', error);
+        }
+      })();
+    };
+  }, [sessionId]);
   
   const handleSend = async () => {
     if (!inputText.trim() || sending || !session) return;
