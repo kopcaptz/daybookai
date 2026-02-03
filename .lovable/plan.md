@@ -1,114 +1,136 @@
 
-# План: Центральная кнопка создаёт обсуждение на /discussions
+# План: Исправить направление стрелок "назад" для RTL-языков
 
-## Идея
+## Проблема
 
-Убрать кнопку "+חדש" из header страницы Discussions. Вместо этого центральная кнопка в BottomNav будет:
-- На `/discussions` → создавать новое обсуждение
-- На других страницах → переходить на `/new` (как сейчас)
+На скриншоте видно, что в режиме RTL (иврит) стрелка назад указывает влево (←), но для RTL-языков "назад" должно указывать вправо (→), так как направление чтения — справа налево.
 
-## Текущая архитектура
+## Текущая ситуация
 
-```
-BottomNav.tsx:
-├── Центральная кнопка → всегда /new (новая запись)
-├── handleCenterClick() → startTransition(path='/new')
+**Правильно реализовано:**
+- `NewEntry.tsx` — использует `isRTL(language) ? ArrowRight : ArrowLeft`
+- `CalendarPage.tsx` — использует условную замену иконок для навигации
 
-DiscussionsListPage.tsx:
-├── Header содержит кнопку "+חדש"  
-├── handleNewDiscussion() → createDiscussionSession()
-```
+**Требует исправления (10 мест):**
+1. `DiscussionChatPage.tsx` — строка 221
+2. `DayView.tsx` — строки 55, 72
+3. `ReceiptReviewPage.tsx` — строка 175
+4. `ReceiptDetailPage.tsx` — строка 180
+5. `ReceiptScanPage.tsx` — строка 286
+6. `ReceiptsPage.tsx` — строка 121
+7. `ReceiptAnalyticsPage.tsx` — строка 154
+8. `ReminderDetailPage.tsx` — строки 247, 276
+9. `ChronicleView.tsx` — строка 58
+
+---
 
 ## Решение
 
-### Изменение 1: `src/components/BottomNav.tsx`
-
-Добавить логику определения текущего route:
+Для каждой страницы применить паттерн из `NewEntry.tsx`:
 
 ```tsx
-const handleCenterClick = (e: React.MouseEvent) => {
-  e.preventDefault();
-  
-  if (navigator.vibrate) {
-    navigator.vibrate(15);
-  }
-  
-  // На странице обсуждений — создаём новое обсуждение напрямую
-  if (location.pathname === '/discussions') {
-    // Dispatch custom event для DiscussionsListPage
-    window.dispatchEvent(new CustomEvent('create-new-discussion'));
-    return;
-  }
-  
-  // На других страницах — переход на /new
-  window.dispatchEvent(new CustomEvent('grimoire-ritual-start'));
-  startTransition(centerButtonRef.current, item.path);
-};
-```
+// Импорт
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { useI18n, isRTL } from '@/lib/i18n';
 
-### Изменение 2: `src/pages/DiscussionsListPage.tsx`
+// В компоненте — определить иконку
+const BackIcon = isRTL(language) ? ArrowRight : ArrowLeft;
 
-1. Убрать кнопку "+חדש" из header
-2. Добавить listener на event `create-new-discussion`:
-
-```tsx
-useEffect(() => {
-  const handleCreateDiscussion = () => {
-    handleNewDiscussion();
-  };
-  
-  window.addEventListener('create-new-discussion', handleCreateDiscussion);
-  return () => window.removeEventListener('create-new-discussion', handleCreateDiscussion);
-}, []);
-```
-
-3. Упростить header (только заголовок по центру):
-
-```tsx
-<header className="sticky top-0 z-40 ...">
-  <div className="text-center">
-    <h1 className="text-xl font-serif ...">{t('discussions.title')}</h1>
-    <p className="text-xs text-cyber-sigil/60 ...">{t('discussions.subtitle')}</p>
-  </div>
-  <div className="mt-4 rune-divider">...</div>
-</header>
+// Использование
+<Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+  <BackIcon className="h-5 w-5" />
+</Button>
 ```
 
 ---
 
-## Визуальный результат
+## Детальный план изменений
 
-**До:**
-```
-┌──────────────────────────────────────┐
-│  [+חדש]  │  דיונים  │  [пусто]       │
-└──────────────────────────────────────┘
-         [Центральная кнопка] → /new
-```
+### 1. `src/pages/DiscussionChatPage.tsx`
 
-**После:**
-```
-┌──────────────────────────────────────┐
-│           דיונים                     │
-│       צ'אט עם רשומות                 │
-└──────────────────────────────────────┘
-         [Центральная кнопка] → новое обсуждение
-```
+- Добавить импорт `ArrowRight` и `isRTL`
+- Определить `BackIcon` внутри компонента
+- Заменить `<ArrowLeft ...>` на `<BackIcon ...>`
+
+### 2. `src/pages/DayView.tsx`
+
+- Добавить импорт `ArrowRight` и `isRTL`
+- Определить `BackIcon` перед return
+- Обновить оба места использования (loading state и main view)
+
+### 3. `src/pages/ReceiptReviewPage.tsx`
+
+- Добавить импорт `ArrowRight` и `isRTL`
+- Определить `BackIcon` внутри компонента
+- Заменить `<ArrowLeft ...>` на `<BackIcon ...>`
+
+### 4. `src/pages/ReceiptDetailPage.tsx`
+
+- Добавить импорт `ArrowRight` и `isRTL`
+- Определить `BackIcon` внутри компонента
+- Заменить `<ArrowLeft ...>` на `<BackIcon ...>`
+
+### 5. `src/pages/ReceiptScanPage.tsx`
+
+- Добавить импорт `ArrowRight` и `isRTL`
+- Определить `BackIcon` внутри компонента
+- Заменить `<ArrowLeft ...>` на `<BackIcon ...>`
+
+### 6. `src/pages/ReceiptsPage.tsx`
+
+- Добавить импорт `ArrowRight` и `isRTL`
+- Определить `BackIcon` внутри компонента
+- Заменить `<ArrowLeft ...>` на `<BackIcon ...>`
+
+### 7. `src/pages/ReceiptAnalyticsPage.tsx`
+
+- Добавить импорт `ArrowRight` и `isRTL`
+- Определить `BackIcon` внутри компонента
+- Заменить `<ArrowLeft ...>` на `<BackIcon ...>`
+
+### 8. `src/pages/ReminderDetailPage.tsx`
+
+- Добавить импорт `ArrowRight` и `isRTL`
+- Определить `BackIcon` внутри компонента
+- Обновить оба места использования (not found и main view)
+
+### 9. `src/components/ethereal/ChronicleView.tsx`
+
+- Добавить импорт `ArrowRight` 
+- Принимать `language` как prop или использовать i18n hook
+- Определить `BackIcon` условно
 
 ---
 
 ## Файлы для изменения
 
-| Файл | Изменения |
-|------|-----------|
-| `src/components/BottomNav.tsx` | Добавить логику route-aware для центральной кнопки |
-| `src/pages/DiscussionsListPage.tsx` | Убрать кнопку из header, добавить event listener |
+| Файл | Мест изменений |
+|------|----------------|
+| `src/pages/DiscussionChatPage.tsx` | 1 |
+| `src/pages/DayView.tsx` | 2 |
+| `src/pages/ReceiptReviewPage.tsx` | 1 |
+| `src/pages/ReceiptDetailPage.tsx` | 1 |
+| `src/pages/ReceiptScanPage.tsx` | 1 |
+| `src/pages/ReceiptsPage.tsx` | 1 |
+| `src/pages/ReceiptAnalyticsPage.tsx` | 1 |
+| `src/pages/ReminderDetailPage.tsx` | 2 |
+| `src/components/ethereal/ChronicleView.tsx` | 1 |
+| **Всего** | **11** |
 
 ---
 
-## Преимущества
+## Визуальный результат
 
-1. **Чистый header** — только заголовок, без лишних элементов
-2. **Консистентный UX** — центральная кнопка всегда "создаёт что-то новое" в контексте текущей страницы
-3. **Больше места** — FeedbackModal не конфликтует с кнопкой "+חדש"
-4. **Интуитивно** — пользователи привыкнут, что большая кнопка = главное действие
+**До (неправильно в RTL):**
+```
+┌────────────────────────────┐
+│ [←]  דיון חדש              │  ← Стрелка влево
+└────────────────────────────┘
+```
+
+**После (правильно в RTL):**
+```
+┌────────────────────────────┐
+│              דיון חדש  [→] │  → Стрелка вправо (назад = справа)
+└────────────────────────────┘
+```
