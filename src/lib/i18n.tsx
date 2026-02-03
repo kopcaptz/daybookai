@@ -14,7 +14,7 @@ export const getBaseLanguage = (lang: Language): 'ru' | 'en' =>
 // Translation keys - single source of truth for all UI strings
 export const translations = {
   // Common
-  'app.name': { ru: 'Магический блокнот', en: 'Magic Notebook', he: 'מחברת קסומה', ar: 'دفتر سحري' },
+  'app.name': { ru: 'Magic Notebook', en: 'Magic Notebook', he: 'Magic Notebook', ar: 'Magic Notebook' },
   'app.subtitle': { ru: 'Записи • Медиа • Хроника дня', en: 'Entries • Media • Day Chronicle', he: 'רשומות • מדיה • כרוניקת היום', ar: 'مدخلات • وسائط • سجل اليوم' },
   'app.tagline': { ru: 'Записи • Медиа • Хроника дня', en: 'Entries • Media • Day Chronicle', he: 'רשומות • מדיה • כרוניקת היום', ar: 'مدخلات • وسائط • سجل اليوم' },
   'common.save': { ru: 'Сохранить', en: 'Save', he: 'שמור', ar: 'حفظ' },

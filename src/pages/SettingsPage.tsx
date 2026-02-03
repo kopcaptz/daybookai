@@ -178,7 +178,7 @@ function SettingsContent() {
         {/* Brand header */}
         <div className="flex items-center justify-center">
           <div className="text-center">
-            <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
+            <h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
               {t('app.name')}
             </h1>
             <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
@@ -489,7 +489,7 @@ function SettingsContent() {
             <CardTitle className="flex items-center justify-between text-lg">
               <div className="flex items-center gap-2">
                 <GrimoireIcon className="h-5 w-5 text-cyber-sigil" />
-                {t('app.name')}
+                <span dir="ltr">{t('app.name')}</span>
               </div>
               {/* Rabbit hole - secret admin entry (long press 2.5s) */}
               <button

@@ -144,7 +144,7 @@ function TodayContent() {
         {/* Brand header */}
         <div className="flex items-center justify-center">
           <div className="text-center min-w-0 relative select-none">
-            <h1 className="text-xl font-serif font-medium text-foreground tracking-wide truncate">
+            <h1 className="text-xl font-serif font-medium text-foreground tracking-wide truncate" dir="ltr">
               {t('app.name')}
             </h1>
             <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
