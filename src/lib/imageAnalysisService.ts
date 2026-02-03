@@ -34,8 +34,10 @@ export interface AnalysisCallbacks {
 }
 
 // System prompt for image analysis (privacy-focused)
-const getSystemPrompt = (language: 'ru' | 'en'): string => {
-  if (language === 'ru') {
+// Accepts Language type from i18n
+const getSystemPrompt = (language: string): string => {
+  const baseLang = language === 'ru' ? 'ru' : 'en';
+  if (baseLang === 'ru') {
     return `Ты Сигил — ассистент дневника «Магический блокнот». 
 Анализируй фото в контексте личного дневника.
 СТРОГИЕ ПРАВИЛА:
@@ -53,8 +55,9 @@ STRICT RULES:
 - Keep responses brief and respectful`;
 };
 
-const getAnalysisPrompt = (language: 'ru' | 'en'): string => {
-  if (language === 'ru') {
+const getAnalysisPrompt = (language: string): string => {
+  const baseLang = language === 'ru' ? 'ru' : 'en';
+  if (baseLang === 'ru') {
     return `Проанализируй это фото для дневника. Ответь в формате:
 
 ОПИСАНИЕ: (1-2 предложения о том, что на фото)
@@ -74,10 +77,11 @@ REFLECTION: (one reflection question about this moment)
 Be brief. Do not identify people.`;
 };
 
-function parseAnalysisResponse(text: string, language: 'ru' | 'en'): ImageAnalysisResult {
+function parseAnalysisResponse(text: string, language: string): ImageAnalysisResult {
+  const baseLang = language === 'ru' ? 'ru' : 'en';
   const lines = text.split('\n').filter(l => l.trim());
   
-  const descKey = language === 'ru' ? 'ОПИСАНИЕ' : 'DESCRIPTION';
+  const descKey = baseLang === 'ru' ? 'ОПИСАНИЕ' : 'DESCRIPTION';
   const emotKey = language === 'ru' ? 'ЭМОЦИИ' : 'EMOTIONS';
   const tagsKey = language === 'ru' ? 'ТЕГИ' : 'TAGS';
   const reflKey = language === 'ru' ? 'РЕФЛЕКСИЯ' : 'REFLECTION';
@@ -116,7 +120,7 @@ function parseAnalysisResponse(text: string, language: 'ru' | 'en'): ImageAnalys
 export async function analyzeImage(
   imageBlob: Blob,
   attachmentId: number,
-  language: 'ru' | 'en',
+  language: string,
   callbacks: AnalysisCallbacks,
   _isRetry: boolean = false
 ): Promise<void> {

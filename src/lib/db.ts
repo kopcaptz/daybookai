@@ -203,7 +203,7 @@ export interface AnalysisQueueItem {
   id?: number;
   entryId: number;
   userSetMood: boolean;
-  language: 'ru' | 'en';
+  language: string;  // Accepts Language type from i18n
   createdAt: number;
   lastAttempt?: number;
   attempts: number;

@@ -1,11 +1,20 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-export type Language = 'ru' | 'en';
+export type Language = 'ru' | 'en' | 'he' | 'ar';
+
+// RTL support
+export const RTL_LANGUAGES = ['he', 'ar'] as const;
+export const isRTL = (lang: Language): boolean => 
+  RTL_LANGUAGES.includes(lang as 'he' | 'ar');
+
+// Helper to get base language for services that only support ru/en
+export const getBaseLanguage = (lang: Language): 'ru' | 'en' => 
+  lang === 'ru' ? 'ru' : 'en';
 
 // Translation keys - single source of truth for all UI strings
 export const translations = {
   // Common
-  'app.name': { ru: 'Магический блокнот', en: 'Magic Notebook' },
+  'app.name': { ru: 'Магический блокнот', en: 'Magic Notebook', he: '...', ar: '...' },
   'app.subtitle': { ru: 'Записи • Медиа • Хроника дня', en: 'Entries • Media • Day Chronicle' },
   'app.tagline': { ru: 'Записи • Медиа • Хроника дня', en: 'Entries • Media • Day Chronicle' },
   'common.save': { ru: 'Сохранить', en: 'Save' },
@@ -371,10 +380,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved === 'ru' || saved === 'en') return saved;
+      if (saved === 'ru' || saved === 'en' || saved === 'he' || saved === 'ar') return saved;
       // Auto-detect from browser
       const browserLang = navigator.language.slice(0, 2);
-      return browserLang === 'ru' ? 'ru' : 'en';
+      if (browserLang === 'ru') return 'ru';
+      if (browserLang === 'he') return 'he';
+      if (browserLang === 'ar') return 'ar';
+      return 'en';
     }
     return 'ru';
   });
@@ -390,11 +402,18 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       console.warn(`Missing translation for key: ${key}`);
       return key;
     }
-    return translation[language];
+    // Fallback to English if translation not available for RTL languages
+    const text = translation[language];
+    if (text === '...' || text === undefined) {
+      return translation['en'] || translation['ru'] || key;
+    }
+    return text;
   };
 
+  // Set document direction and language for RTL support
   useEffect(() => {
     document.documentElement.lang = language;
+    document.documentElement.dir = isRTL(language) ? 'rtl' : 'ltr';
   }, [language]);
 
   return (

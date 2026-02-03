@@ -32,7 +32,7 @@ export interface UseAIAccessReturn {
   requireAccess: () => boolean;
 }
 
-export function useAIAccess(language: 'ru' | 'en' = 'ru'): UseAIAccessReturn {
+export function useAIAccess(language: string = 'ru'): UseAIAccessReturn {
   const [hasValidToken, setHasValidToken] = useState(() => isAITokenValid());
   const [showPinDialog, setShowPinDialog] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);

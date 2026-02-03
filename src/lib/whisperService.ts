@@ -92,8 +92,10 @@ function cacheWhisper(date: string, whisper: string): void {
 }
 
 // Get a deterministic fallback based on date
-export function getFallbackWhisper(language: 'ru' | 'en', date: string): string {
-  const whispers = FALLBACK_WHISPERS[language];
+// Accepts Language type from i18n, falls back to 'en' for non-ru languages
+export function getFallbackWhisper(language: string, date: string): string {
+  const baseLang = language === 'ru' ? 'ru' : 'en';
+  const whispers = FALLBACK_WHISPERS[baseLang];
   
   // Use date string to get a deterministic index
   const dateHash = date.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
@@ -124,7 +126,8 @@ function getSeason(): 'spring' | 'summer' | 'autumn' | 'winter' {
 }
 
 // Fetch whisper from AI (with fallback)
-export async function fetchWhisper(language: 'ru' | 'en'): Promise<string> {
+// Accepts Language type from i18n
+export async function fetchWhisper(language: string): Promise<string> {
   const today = format(new Date(), 'yyyy-MM-dd');
   
   // Check cache first

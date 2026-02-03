@@ -10,6 +10,11 @@ import {
   AIAuthRetryError,
 } from './aiAuthRecovery';
 import { toast } from 'sonner';
+import type { Language } from './i18n';
+
+// Helper to get base language for AI services (ru/en only)
+const getBaseLanguage = (lang: Language): 'ru' | 'en' => 
+  lang === 'ru' ? 'ru' : 'en';
 
 // Re-export StoredBiography for components
 export type { StoredBiography } from './db';
@@ -75,11 +80,12 @@ function extractThemes(text: string): string[] {
 }
 
 // Convert timestamp to time label
-function getTimeLabel(timestamp: number, language: 'ru' | 'en'): string {
+function getTimeLabel(timestamp: number, language: Language): string {
   const date = new Date(timestamp);
   const hour = date.getHours();
+  const baseLang = getBaseLanguage(language);
   
-  if (language === 'ru') {
+  if (baseLang === 'ru') {
     if (hour >= 5 && hour < 12) return 'утро';
     if (hour >= 12 && hour < 17) return 'день';
     if (hour >= 17 && hour < 21) return 'вечер';
@@ -95,7 +101,7 @@ function getTimeLabel(timestamp: number, language: 'ru' | 'en'): string {
 // Prepare batch summaries from entries (local, no AI)
 async function prepareEntrySummaries(
   date: string,
-  language: 'ru' | 'en'
+  language: Language
 ): Promise<{ summaries: EntrySummary[]; entryIds: number[] }> {
   const entries = await db.entries
     .where('date')
@@ -135,7 +141,8 @@ async function prepareEntrySummaries(
 }
 
 // Parse AI error with localization
-function parseAIError(status: number, language: 'ru' | 'en'): string {
+function parseAIError(status: number, language: Language): string {
+  const baseLang = getBaseLanguage(language);
   const messages: Record<number, { ru: string; en: string }> = {
     401: { ru: 'Ошибка авторизации сервиса', en: 'Service authorization error' },
     402: { ru: 'Требуется оплата сервиса', en: 'Payment required' },
@@ -146,15 +153,15 @@ function parseAIError(status: number, language: 'ru' | 'en'): string {
     503: { ru: 'Сервер временно недоступен', en: 'Server temporarily unavailable' },
   };
   
-  return messages[status]?.[language] || 
-    (language === 'ru' ? `Ошибка: ${status}` : `Error: ${status}`);
+  return messages[status]?.[baseLang] || 
+    (baseLang === 'ru' ? `Ошибка: ${status}` : `Error: ${status}`);
 }
 
 // Generate biography via dedicated edge function (non-streaming, with auto-PIN retry)
 export async function generateBiography(
   date: string,
   profile: AIProfile = 'biography',
-  language: 'ru' | 'en' = 'ru',
+  language: Language = 'ru',
   _isRetry: boolean = false
 ): Promise<GenerationResult> {
   // Check token before making request (only on first attempt)
