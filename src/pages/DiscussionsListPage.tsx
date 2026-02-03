@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { MessageSquare, Loader2 } from 'lucide-react';
+import { MessageSquare, Loader2, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { getAllDiscussionSessions, toggleDiscussionSessionPin, deleteDiscussionSession, createDiscussionSession } from '@/lib/db';
 import { SessionCard } from '@/components/discussions/SessionCard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -76,14 +77,35 @@ function DiscussionsListContent() {
   return (
     <div className="min-h-screen pb-24 cyber-noise rune-grid">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
-        {/* Centered title only */}
-        <div className="text-center">
-          <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
-            {t('discussions.title')}
-          </h1>
-          <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
-            {t('discussions.subtitle')}
-          </p>
+        <div className="flex items-center justify-between">
+          {/* Spacer for balance */}
+          <div className="w-20" />
+          
+          {/* Centered title */}
+          <div className="text-center flex-1">
+            <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
+              {t('discussions.title')}
+            </h1>
+            <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
+              {t('discussions.subtitle')}
+            </p>
+          </div>
+          
+          {/* New button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleNewDiscussion}
+            disabled={creating}
+            className="gap-1.5 w-20 justify-end"
+          >
+            {creating ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            <span>{t('discussions.new')}</span>
+          </Button>
         </div>
         
         {/* Rune divider */}
