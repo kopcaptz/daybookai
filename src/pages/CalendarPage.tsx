@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { db, isBackfillDone, backfillAttachmentCounts, type AttachmentCounts } from '@/lib/db';
 import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, isRTL } from '@/lib/i18n';
 
 // Day info for calendar cells
 interface DayInfo {
@@ -139,7 +139,7 @@ function CalendarContent() {
     <div className="min-h-screen pb-24 cyber-noise rune-grid">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
         {/* Brand header */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between rtl:flex-row-reverse mb-4">
           <div className="relative shrink-0 w-8">
             <Calendar className="h-6 w-6 text-cyber-sigil" />
           </div>
@@ -154,18 +154,24 @@ function CalendarContent() {
           <div className="shrink-0 w-8" />
         </div>
 
-        {/* Month navigation */}
-        <div className="flex items-center justify-between">
-          <Button variant="ghost" size="icon" onClick={goToPreviousMonth} className="hover:bg-cyber-glow/10">
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          <h2 className="text-lg font-serif font-medium">
-            {getMonthName(currentMonth)} {currentMonth.getFullYear()}
-          </h2>
-          <Button variant="ghost" size="icon" onClick={goToNextMonth} className="hover:bg-cyber-glow/10">
-            <ChevronRight className="h-5 w-5" />
-          </Button>
-        </div>
+        {/* Month navigation - icon swap for RTL */}
+        {(() => {
+          const PrevIcon = isRTL(language) ? ChevronRight : ChevronLeft;
+          const NextIcon = isRTL(language) ? ChevronLeft : ChevronRight;
+          return (
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" size="icon" onClick={goToPreviousMonth} className="hover:bg-cyber-glow/10">
+                <PrevIcon className="h-5 w-5" />
+              </Button>
+              <h2 className="text-lg font-serif font-medium">
+                {getMonthName(currentMonth)} {currentMonth.getFullYear()}
+              </h2>
+              <Button variant="ghost" size="icon" onClick={goToNextMonth} className="hover:bg-cyber-glow/10">
+                <NextIcon className="h-5 w-5" />
+              </Button>
+            </div>
+          );
+        })()}
 
         {/* Rune divider */}
         <div className="mt-4 rune-divider">
@@ -174,8 +180,8 @@ function CalendarContent() {
       </header>
 
       <main className="px-4 pt-4">
-        {/* Week day headers */}
-        <div className="mb-2 grid grid-cols-7 gap-1 text-center">
+        {/* Week day headers - RTL grid direction */}
+        <div className="mb-2 grid grid-cols-7 gap-1 text-center" dir={isRTL(language) ? 'rtl' : 'ltr'}>
           {weekDays.map((day) => (
             <div key={day} className="py-2 text-xs font-medium text-muted-foreground">
               {day}
@@ -183,9 +189,9 @@ function CalendarContent() {
           ))}
         </div>
 
-        {/* Calendar grid */}
+        {/* Calendar grid - RTL grid direction */}
         <div className="panel-glass p-3">
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-1" dir={isRTL(language) ? 'rtl' : 'ltr'}>
             {/* Padding days */}
             {Array.from({ length: paddingDays }).map((_, i) => (
               <div key={`pad-${i}`} className="aspect-square" />

@@ -169,7 +169,7 @@ function TodayContent() {
         )}
 
         {/* Date, entry count, and quick reminder button */}
-        <div className="mt-3 flex items-center justify-between">
+        <div className="mt-3 flex items-center justify-between rtl:flex-row-reverse">
           <div>
             <p className="text-sm capitalize text-muted-foreground">
               {todayFormatted}
@@ -184,7 +184,7 @@ function TodayContent() {
             variant="outline"
             size="sm"
             onClick={() => setQuickReminderOpen(true)}
-            className="text-xs gap-1"
+            className="text-xs gap-1 rtl:flex-row-reverse"
           >
             <Plus className="h-3.5 w-3.5" />
             {language === 'ru' ? 'Напоминание' : 'Reminder'}
@@ -289,7 +289,7 @@ function TodayContent() {
       {/* Selection mode floating action bar */}
       {selectionMode && (
         <div className="fixed bottom-20 left-4 right-4 z-50 flex items-center justify-center">
-          <div className="flex items-center gap-2 px-4 py-3 bg-card/95 backdrop-blur-xl border border-border/50 rounded-lg shadow-xl grimoire-shadow">
+          <div className="flex items-center gap-2 px-4 py-3 bg-card/95 backdrop-blur-xl border border-border/50 rounded-lg shadow-xl grimoire-shadow rtl:flex-row-reverse">
             <Button
               variant="ghost"
               size="sm"
