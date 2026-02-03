@@ -176,7 +176,7 @@ function SettingsContent() {
     <div className="min-h-screen pb-24 cyber-noise rune-grid">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
         {/* Brand header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between rtl:flex-row-reverse">
           <div className="relative shrink-0 w-8">
             <GrimoireIcon className="h-6 w-6 text-cyber-sigil" />
           </div>
