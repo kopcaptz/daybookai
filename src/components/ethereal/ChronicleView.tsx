@@ -130,11 +130,11 @@ export function ChronicleView({ chronicle, onBack, onEdit, onTogglePin }: Chroni
             </span>
             <span className="flex items-center gap-1">
               <Clock className="w-4 h-4" />
-              {format(new Date(chronicle.createdAtMs), 'd MMMM yyyy, HH:mm', { locale: dateLocale })}
+              <span dir="ltr">{format(new Date(chronicle.createdAtMs), 'd MMMM yyyy, HH:mm', { locale: dateLocale })}</span>
             </span>
             {chronicle.updatedByName && chronicle.updatedAtMs !== chronicle.createdAtMs && (
               <span className="text-xs opacity-70">
-                ({t('edited')} {chronicle.updatedByName}, {format(new Date(chronicle.updatedAtMs), 'd MMM HH:mm', { locale: dateLocale })})
+                ({t('edited')} {chronicle.updatedByName}, <span dir="ltr">{format(new Date(chronicle.updatedAtMs), 'd MMM HH:mm', { locale: dateLocale })}</span>)
               </span>
             )}
           </div>

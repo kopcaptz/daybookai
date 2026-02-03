@@ -78,7 +78,7 @@ export function ChronicleCard({ chronicle, onClick }: ChronicleCardProps) {
         </span>
         <span className="flex items-center gap-1">
           <Clock className="w-3 h-3" />
-          {format(new Date(chronicle.updatedAtMs), 'd MMM HH:mm', { locale: dateLocale })}
+          <span dir="ltr">{format(new Date(chronicle.updatedAtMs), 'd MMM HH:mm', { locale: dateLocale })}</span>
         </span>
       </div>
 

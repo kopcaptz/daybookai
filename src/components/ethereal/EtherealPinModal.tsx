@@ -133,6 +133,8 @@ export function EtherealPinModal({ open, onOpenChange }: EtherealPinModalProps) 
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               minLength={4}
+              dir="ltr"
+              className="text-left"
             />
             <p className="text-xs text-muted-foreground">
               {t('pinHint')}

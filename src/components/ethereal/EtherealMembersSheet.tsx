@@ -130,7 +130,7 @@ export function EtherealMembersSheet({
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {t('lastSeen')} {formatDistanceToNow(new Date(member.lastSeenAt), { locale: dateLocale })} {t('ago')}
+                    {t('lastSeen')} <span dir="ltr">{formatDistanceToNow(new Date(member.lastSeenAt), { locale: dateLocale })}</span> {t('ago')}
                   </p>
                 </div>
 
