@@ -1,226 +1,183 @@
 
-# План: Точечные RTL-фиксы для Ethereal Layer
+
+# План: RTL-фикс для названия "Magic Notebook" + аудит мест использования
 
 ## Проблема
 
-При RTL-языках (иврит, арабский) интерфейс Ethereal Layer зеркально отражён — табы идут справа налево, кнопки ввода перевёрнуты.
+1. **Bidi-проблема**: При установке `app.name` = "Magic Notebook" для всех языков, в RTL-режиме (иврит/арабский) латинское название может "прыгать" или отображаться некорректно из-за смешивания направлений текста.
 
-## Решение
-
-Точечные RTL-фиксы:
-1. `rtl:flex-row-reverse` на flex-контейнерах навигации и ввода
-2. `dir="ltr"` только на внутренних span с датами/временем/кодами
+2. **Переполнение**: "Magic Notebook" длиннее чем "מחברת קסומה" (иврит) и "دفتر سحري" (арабский), что может вызвать переполнение в узких контейнерах.
 
 ---
 
-## Изменения по файлам
+## Места использования `app.name`
 
-### 1. `EtherealBottomTabs.tsx` — строка 30
-
-**Проблема:** Табы идут в обратном порядке при RTL.
-
-**Массив tabs уже в логическом порядке (Bar→Games) — не трогаем!**
-
-**Изменение:** Добавить `rtl:flex-row-reverse` на контейнер табов.
-
-```tsx
-// Строка 30 — было:
-<div className="flex justify-around items-center h-16 max-w-lg mx-auto">
-
-// Станет:
-<div className="flex rtl:flex-row-reverse justify-around items-center h-16 max-w-lg mx-auto">
-```
+| Файл | Строка | Контекст | Риск |
+|------|--------|----------|------|
+| `src/lib/i18n.tsx` | 17 | Определение ключа | - |
+| `src/pages/Today.tsx` | 148 | Header h1 (с `truncate`) | ✅ Защищён `truncate` |
+| `src/pages/CalendarPage.tsx` | 149 | Header h1 | Нужен `dir="ltr"` |
+| `src/pages/SearchPage.tsx` | 68 | Header h1 | Нужен `dir="ltr"` |
+| `src/pages/ChatPage.tsx` | 390, 439, 485 | Header h1 (3 места) | Нужен `dir="ltr"` |
+| `src/pages/SettingsPage.tsx` | 182 | Header h1 | Нужен `dir="ltr"` |
+| `src/pages/SettingsPage.tsx` | 492 | App Info карточка | Нужен `dir="ltr"` |
+| `index.html` | 23, 27, 29, 37 | PWA meta, SEO, title | Статично на русском — не затрагивает |
+| `src/pages/OnboardingPage.tsx` | 21, 39, 57, 75 | Slide body text | Текст в контексте, dir от контейнера |
 
 ---
 
-### 2. `EtherealChat.tsx` — строка 198
+## Изменения
 
-**Проблема:** Поле ввода с кнопками перевёрнуто (Send слева, Media справа).
+### 1. `src/lib/i18n.tsx` — строка 17
 
-**Изменение:** Добавить `rtl:flex-row-reverse` на контейнер ввода.
-
-```tsx
-// Строка 198 — было:
-<div className="flex gap-2">
-
-// Станет:
-<div className="flex rtl:flex-row-reverse gap-2">
-```
-
----
-
-### 3. `EtherealChat.tsx` — строки 159-161
-
-**Проблема:** Время `HH:mm` может отображаться как `54:32` вместо `23:45`.
-
-**Изменение:** Обернуть время во внутренний `<span dir="ltr">`.
+**Изменить название на единое "Magic Notebook":**
 
 ```tsx
 // Было:
-<span className="text-[10px] text-muted-foreground mt-1">
-  {format(new Date(msg.createdAtMs), 'HH:mm')}
-</span>
+'app.name': { ru: 'Магический блокнот', en: 'Magic Notebook', he: 'מחברת קסומה', ar: 'دفتر سحري' },
 
 // Станет:
-<span className="text-[10px] text-muted-foreground mt-1">
-  <span dir="ltr">{format(new Date(msg.createdAtMs), 'HH:mm')}</span>
-</span>
+'app.name': { ru: 'Magic Notebook', en: 'Magic Notebook', he: 'Magic Notebook', ar: 'Magic Notebook' },
 ```
 
 ---
 
-### 4. `EtherealPinModal.tsx` — строки 129-136
+### 2. `src/pages/Today.tsx` — строка 148
 
-**Проблема:** PIN — это код, должен вводиться LTR.
-
-**Изменение:** Добавить `dir="ltr"` и `className="text-left"` на Input для PIN.
-
-```tsx
-// Было (строки 129-136):
-<Input
-  id="pin"
-  type="password"
-  placeholder={t('pinPlaceholder')}
-  value={pin}
-  onChange={(e) => setPin(e.target.value)}
-  minLength={4}
-/>
-
-// Станет:
-<Input
-  id="pin"
-  type="password"
-  placeholder={t('pinPlaceholder')}
-  value={pin}
-  onChange={(e) => setPin(e.target.value)}
-  minLength={4}
-  dir="ltr"
-  className="text-left"
-/>
-```
-
----
-
-### 5. `ChronicleView.tsx` — строка 133
-
-**Проблема:** Дата `d MMMM yyyy, HH:mm` может переворачиваться.
-
-**Изменение:** Обернуть дату во внутренний `<span dir="ltr">`.
+**Добавить `dir="ltr"` и сохранить `truncate`:**
 
 ```tsx
 // Было:
-<span className="flex items-center gap-1">
-  <Clock className="w-4 h-4" />
-  {format(new Date(chronicle.createdAtMs), 'd MMMM yyyy, HH:mm', { locale: dateLocale })}
-</span>
+<h1 className="text-xl font-serif font-medium text-foreground tracking-wide truncate">
+  {t('app.name')}
+</h1>
 
 // Станет:
-<span className="flex items-center gap-1">
-  <Clock className="w-4 h-4" />
-  <span dir="ltr">{format(new Date(chronicle.createdAtMs), 'd MMMM yyyy, HH:mm', { locale: dateLocale })}</span>
-</span>
+<h1 className="text-xl font-serif font-medium text-foreground tracking-wide truncate" dir="ltr">
+  {t('app.name')}
+</h1>
 ```
 
 ---
 
-### 6. `ChronicleView.tsx` — строка 137
-
-**Проблема:** Дата редактирования `d MMM HH:mm` может переворачиваться.
-
-**Изменение:** Обернуть дату во внутренний `<span dir="ltr">`.
+### 3. `src/pages/CalendarPage.tsx` — строка 149
 
 ```tsx
 // Было:
-<span className="text-xs opacity-70">
-  ({t('edited')} {chronicle.updatedByName}, {format(new Date(chronicle.updatedAtMs), 'd MMM HH:mm', { locale: dateLocale })})
-</span>
+<h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
+  {t('app.name')}
+</h1>
 
 // Станет:
-<span className="text-xs opacity-70">
-  ({t('edited')} {chronicle.updatedByName}, <span dir="ltr">{format(new Date(chronicle.updatedAtMs), 'd MMM HH:mm', { locale: dateLocale })}</span>)
-</span>
+<h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
+  {t('app.name')}
+</h1>
 ```
 
 ---
 
-### 7. `ChronicleCard.tsx` — строка 81
-
-**Проблема:** Дата `d MMM HH:mm` может переворачиваться.
-
-**Изменение:** Обернуть дату во внутренний `<span dir="ltr">`.
+### 4. `src/pages/SearchPage.tsx` — строка 68
 
 ```tsx
 // Было:
-<span className="flex items-center gap-1">
-  <Clock className="w-3 h-3" />
-  {format(new Date(chronicle.updatedAtMs), 'd MMM HH:mm', { locale: dateLocale })}
-</span>
+<h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
+  {t('app.name')}
+</h1>
 
 // Станет:
-<span className="flex items-center gap-1">
-  <Clock className="w-3 h-3" />
-  <span dir="ltr">{format(new Date(chronicle.updatedAtMs), 'd MMM HH:mm', { locale: dateLocale })}</span>
-</span>
+<h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
+  {t('app.name')}
+</h1>
 ```
 
 ---
 
-### 8. `TaskCard.tsx` — строка 151
+### 5. `src/pages/ChatPage.tsx` — строки 389-390, 438-439, 484-485
 
-**Проблема:** Дата `dueText` может переворачиваться.
-
-**Изменение:** Обернуть dueText во внутренний `<span dir="ltr">`.
+**Три места с одинаковой структурой:**
 
 ```tsx
 // Было:
-{t('due')} {dueText}
+<h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
+  {t('app.name')}
+</h1>
 
 // Станет:
-{t('due')} <span dir="ltr">{dueText}</span>
+<h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
+  {t('app.name')}
+</h1>
 ```
 
 ---
 
-### 9. `EtherealMembersSheet.tsx` — строка 133
-
-**Проблема:** Время `formatDistanceToNow` может отображаться некорректно.
-
-**Изменение:** Обернуть время во внутренний `<span dir="ltr">`.
+### 6. `src/pages/SettingsPage.tsx` — строка 182
 
 ```tsx
 // Было:
-<p className="text-xs text-muted-foreground">
-  {t('lastSeen')} {formatDistanceToNow(new Date(member.lastSeenAt), { locale: dateLocale })} {t('ago')}
-</p>
+<h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
+  {t('app.name')}
+</h1>
 
 // Станет:
-<p className="text-xs text-muted-foreground">
-  {t('lastSeen')} <span dir="ltr">{formatDistanceToNow(new Date(member.lastSeenAt), { locale: dateLocale })}</span> {t('ago')}
-</p>
+<h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
+  {t('app.name')}
+</h1>
 ```
+
+---
+
+### 7. `src/pages/SettingsPage.tsx` — строки 490-492
+
+**Карточка App Info — обернуть в span с dir="ltr":**
+
+```tsx
+// Было:
+<div className="flex items-center gap-2">
+  <GrimoireIcon className="h-5 w-5 text-cyber-sigil" />
+  {t('app.name')}
+</div>
+
+// Станет:
+<div className="flex items-center gap-2">
+  <GrimoireIcon className="h-5 w-5 text-cyber-sigil" />
+  <span dir="ltr">{t('app.name')}</span>
+</div>
+```
+
+---
+
+### 8. Onboarding — НЕ ТРОГАЕМ
+
+В `OnboardingPage.tsx` название используется внутри body текста слайдов:
+- "Magic Notebook — дневник..." (ru)
+- "Magic Notebook is a journal..." (en)
+- "Magic Notebook הוא יומן..." (he)
+- "دفتر الملاحظات السحري هو يوميات..." (ar)
+
+Здесь название является частью предложения, и браузер корректно обрабатывает bidi-переходы внутри текста. Добавлять `dir` не нужно.
 
 ---
 
 ## Сводка изменений
 
-| Файл | Изменение | Строка |
-|------|-----------|--------|
-| `EtherealBottomTabs.tsx` | `rtl:flex-row-reverse` на контейнер табов | 30 |
-| `EtherealChat.tsx` | `rtl:flex-row-reverse` на composer | 198 |
-| `EtherealChat.tsx` | `<span dir="ltr">` на время сообщения | 159-161 |
-| `EtherealPinModal.tsx` | `dir="ltr" className="text-left"` на PIN input | 129-136 |
-| `ChronicleView.tsx` | `<span dir="ltr">` на основную дату | 133 |
-| `ChronicleView.tsx` | `<span dir="ltr">` на дату редактирования | 137 |
-| `ChronicleCard.tsx` | `<span dir="ltr">` на дату | 81 |
-| `TaskCard.tsx` | `<span dir="ltr">` на dueText | 151 |
-| `EtherealMembersSheet.tsx` | `<span dir="ltr">` на "last seen" | 133 |
+| Файл | Строка | Изменение |
+|------|--------|-----------|
+| `src/lib/i18n.tsx` | 17 | Единое название "Magic Notebook" |
+| `src/pages/Today.tsx` | 147-148 | `dir="ltr"` на h1 |
+| `src/pages/CalendarPage.tsx` | 148-149 | `dir="ltr"` на h1 |
+| `src/pages/SearchPage.tsx` | 67-68 | `dir="ltr"` на h1 |
+| `src/pages/ChatPage.tsx` | 389, 438, 484 | `dir="ltr"` на h1 (3 места) |
+| `src/pages/SettingsPage.tsx` | 181 | `dir="ltr"` на h1 |
+| `src/pages/SettingsPage.tsx` | 492 | `<span dir="ltr">` вокруг названия |
+
+**Всего: 8 файлов, 9 точечных правок**
 
 ---
 
 ## Ожидаемый результат
 
-- Табы навигации в правильном порядке: Bar → Library → Bridge → Map → Games
-- Composer чата: Media слева, Input по центру, Send справа
-- Все числа, даты и время отображаются корректно (LTR) внутри RTL-окружения
-- PIN вводится как код (LTR)
-- Окружающий RTL-текст не ломается
+- Название "Magic Notebook" отображается корректно во всех языках
+- В RTL-режиме латинское название не "прыгает" и не переворачивается
+- Подзаголовки остаются локализованными ("Записи • Медиа • Хроника дня" и т.д.)
+- `truncate` на Today защищает от переполнения на узких экранах
+
