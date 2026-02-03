@@ -88,24 +88,27 @@ export function getTokenRemainingTime(): number {
 
 /**
  * Format remaining time as human-readable string
+ * Accepts Language type from i18n, falls back to 'en' for non-ru/en languages
  */
-export function formatTokenExpiry(language: 'ru' | 'en'): string {
+export function formatTokenExpiry(language: string): string {
   const remaining = getTokenRemainingTime();
+  const baseLang = language === 'ru' ? 'ru' : 'en';
+  
   if (remaining <= 0) {
-    return language === 'ru' ? 'Истёк' : 'Expired';
+    return baseLang === 'ru' ? 'Истёк' : 'Expired';
   }
   
   const days = Math.floor(remaining / (24 * 60 * 60 * 1000));
   const hours = Math.floor((remaining % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
   
   if (days > 0) {
-    return language === 'ru' 
+    return baseLang === 'ru' 
       ? `${days} д. ${hours} ч.` 
       : `${days}d ${hours}h`;
   }
   
   const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
-  return language === 'ru' 
+  return baseLang === 'ru' 
     ? `${hours} ч. ${minutes} мин.` 
     : `${hours}h ${minutes}m`;
 }

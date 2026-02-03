@@ -16,7 +16,7 @@ interface AIPinDialogProps {
   onOpenChange: (open: boolean) => void;
   onVerify: (pin: string) => Promise<{ success: boolean; error?: string; retryAfter?: number }>;
   isVerifying: boolean;
-  language: 'ru' | 'en';
+  language: string;  // Accepts Language type from i18n
 }
 
 const PIN_LENGTH = 4;
@@ -155,18 +155,19 @@ export function AIPinDialog({
     }
   };
   
-  const getErrorMessage = (error: string | undefined, lang: 'ru' | 'en'): string => {
+  const getErrorMessage = (error: string | undefined, lang: string): string => {
+    const baseLang = lang === 'ru' ? 'ru' : 'en';
     switch (error) {
       case 'invalid_pin':
-        return lang === 'ru' ? 'Неверный PIN-код' : 'Invalid PIN';
+        return baseLang === 'ru' ? 'Неверный PIN-код' : 'Invalid PIN';
       case 'network_error':
-        return lang === 'ru' ? 'Ошибка сети' : 'Network error';
+        return baseLang === 'ru' ? 'Ошибка сети' : 'Network error';
       case 'service_not_configured':
-        return lang === 'ru' ? 'Сервис не настроен' : 'Service not configured';
+        return baseLang === 'ru' ? 'Сервис не настроен' : 'Service not configured';
       case 'rate_limited':
-        return lang === 'ru' ? 'Слишком много попыток' : 'Too many attempts';
+        return baseLang === 'ru' ? 'Слишком много попыток' : 'Too many attempts';
       default:
-        return lang === 'ru' ? 'Ошибка проверки' : 'Verification error';
+        return baseLang === 'ru' ? 'Ошибка проверки' : 'Verification error';
     }
   };
   

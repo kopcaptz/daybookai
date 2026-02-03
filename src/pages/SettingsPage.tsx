@@ -165,6 +165,8 @@ function SettingsContent() {
   const languageOptions: { value: Language; label: string }[] = [
     { value: 'ru', label: 'Русский' },
     { value: 'en', label: 'English' },
+    { value: 'he', label: 'עברית' },
+    { value: 'ar', label: 'العربية' },
   ];
 
   // Storage percentage for progress bar

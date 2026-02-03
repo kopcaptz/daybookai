@@ -194,15 +194,17 @@ export async function scheduleTestNotification(): Promise<boolean> {
 }
 
 // Show biography ready notification
+// Accepts Language type from i18n
 export async function showBiographyNotification(
   date: string,
   title?: string,
-  language: 'ru' | 'en' = 'ru'
+  language: string = 'ru'
 ): Promise<void> {
+  const baseLang = language === 'ru' ? 'ru' : 'en';
   const notificationTitle = title || 
-    (language === 'ru' ? 'Биография дня готова' : 'Day biography ready');
+    (baseLang === 'ru' ? 'Биография дня готова' : 'Day biography ready');
   
-  const body = language === 'ru'
+  const body = baseLang === 'ru'
     ? 'Нажмите, чтобы просмотреть историю дня'
     : 'Tap to view your day story';
   
@@ -269,7 +271,7 @@ async function showCapacitorNotification(
 // Schedule daily reminder notification (Capacitor only)
 export async function scheduleDailyReminder(
   bioTime: string,
-  language: 'ru' | 'en' = 'ru'
+  language: string = 'ru'
 ): Promise<boolean> {
   if (!isCapacitorNative()) {
     return false;

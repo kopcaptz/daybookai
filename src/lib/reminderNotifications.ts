@@ -68,8 +68,9 @@ function extractReminderId(notificationId: number): number {
  * - Cancel notifications for reminders no longer pending
  * - Schedule new notifications for pending TODAY+OVERDUE reminders
  * - Respects snoozedUntil: only schedule if snoozedUntil == null || snoozedUntil <= now
+ * Accepts Language type from i18n
  */
-export async function reconcileReminderNotifications(language: 'ru' | 'en'): Promise<void> {
+export async function reconcileReminderNotifications(language: string): Promise<void> {
   // Skip if not Capacitor native
   if (!isCapacitorNative()) {
     return;
@@ -137,7 +138,7 @@ export async function reconcileReminderNotifications(language: 'ru' | 'en'): Pro
 /**
  * Build notification payload for a reminder.
  */
-function buildReminderNotification(reminder: Reminder, language: 'ru' | 'en') {
+function buildReminderNotification(reminder: Reminder, language: string) {
   const now = Date.now();
   // If dueAt is in the past, schedule for immediate (now + 100ms)
   const scheduleAt = new Date(Math.max(reminder.dueAt, now + 100));

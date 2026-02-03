@@ -27,7 +27,7 @@ interface AnalysisResult {
 async function callAnalyzeEdgeFunction(
   text: string,
   tags: string[],
-  language: 'ru' | 'en'
+  language: string
 ): Promise<AnalysisResult> {
   const { data, error } = await supabase.functions.invoke('ai-entry-analyze', {
     body: { text, tags, language },
@@ -54,7 +54,7 @@ async function callAnalyzeEdgeFunction(
 export async function addToAnalysisQueue(
   entryId: number,
   userSetMood: boolean,
-  language: 'ru' | 'en'
+  language: string
 ): Promise<void> {
   try {
     // Check if already queued
@@ -260,7 +260,7 @@ export async function analyzeEntryInBackground(
   text: string,
   tags: string[],
   userSetMood: boolean,
-  language: 'ru' | 'en'
+  language: string
 ): Promise<void> {
   // Early exit for empty or very short entries
   if (!text || text.trim().length < 10) {
@@ -333,7 +333,7 @@ export async function analyzeEntryInBackground(
  */
 export async function reanalyzeEntry(
   entryId: number,
-  language: 'ru' | 'en'
+  language: string
 ): Promise<boolean> {
   try {
     const entry = await db.entries.get(entryId);

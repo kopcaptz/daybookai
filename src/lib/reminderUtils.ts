@@ -187,29 +187,31 @@ export function isDueToday(dueAt: number): boolean {
 
 /**
  * Format due date for display.
+ * Accepts Language type from i18n, falls back to 'en' for non-ru languages
  */
-export function formatDueDate(dueAt: number, language: 'ru' | 'en'): string {
+export function formatDueDate(dueAt: number, language: string): string {
   const date = new Date(dueAt);
   const now = new Date();
+  const baseLang = language === 'ru' ? 'ru' : 'en';
   
   if (isOverdue(dueAt)) {
-    return language === 'ru' ? 'Просрочено' : 'Overdue';
+    return baseLang === 'ru' ? 'Просрочено' : 'Overdue';
   }
   
   if (isDueToday(dueAt)) {
     const timeStr = format(date, 'HH:mm');
-    return language === 'ru' ? `Сегодня, ${timeStr}` : `Today, ${timeStr}`;
+    return baseLang === 'ru' ? `Сегодня, ${timeStr}` : `Today, ${timeStr}`;
   }
   
   // Tomorrow
   const tomorrow = addDays(startOfDay(now), 1);
   if (date >= tomorrow && date < addDays(tomorrow, 1)) {
     const timeStr = format(date, 'HH:mm');
-    return language === 'ru' ? `Завтра, ${timeStr}` : `Tomorrow, ${timeStr}`;
+    return baseLang === 'ru' ? `Завтра, ${timeStr}` : `Tomorrow, ${timeStr}`;
   }
   
   // Further out
-  const dateStr = format(date, language === 'ru' ? 'd MMM, HH:mm' : 'MMM d, HH:mm');
+  const dateStr = format(date, baseLang === 'ru' ? 'd MMM, HH:mm' : 'MMM d, HH:mm');
   return dateStr;
 }
 

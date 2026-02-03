@@ -27,16 +27,17 @@ function getTrendSymbol(trend: WeeklyStats['moodTrend']): string {
   }
 }
 
-function formatRelativeTime(timestamp: number, language: 'ru' | 'en'): string {
+function formatRelativeTime(timestamp: number, language: string): string {
   const diff = Date.now() - timestamp;
   const minutes = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
+  const baseLang = language === 'ru' ? 'ru' : 'en';
   
-  if (minutes < 1) return language === 'ru' ? 'только что' : 'just now';
-  if (minutes < 60) return language === 'ru' ? `${minutes}м назад` : `${minutes}m ago`;
-  if (hours < 24) return language === 'ru' ? `${hours}ч назад` : `${hours}h ago`;
-  return language === 'ru' ? `${days}д назад` : `${days}d ago`;
+  if (minutes < 1) return baseLang === 'ru' ? 'только что' : 'just now';
+  if (minutes < 60) return baseLang === 'ru' ? `${minutes}м назад` : `${minutes}m ago`;
+  if (hours < 24) return baseLang === 'ru' ? `${hours}ч назад` : `${hours}h ago`;
+  return baseLang === 'ru' ? `${days}д назад` : `${days}d ago`;
 }
 
 function scrollToReminders() {
