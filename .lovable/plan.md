@@ -1,241 +1,256 @@
 
+# RTL-миграция v2.1 — Исправленный план
 
-# ТЗ: RTL-поддержка (иврит/арабский) — v1.1 Final
+## Ключевые исправления
 
-## Исправления v1.1
-
-| # | Было | Стало |
-|---|------|-------|
-| 1 | LogOut с rotate-180 | ChevronLeft/ArrowLeft с rotate-180 |
-| 2 | "rtl: работает" без fallback | Fallback на isRTL() если rtl: не применяется |
-| 3 | Мигрировать все left/right | Не трогать симметричные (inset-x-0, mx-auto) |
-
----
-
-## Правила миграции (обновлённые)
-
-### Что мигрируем
-
-| Было | Станет | Когда |
-|------|--------|-------|
-| `ml-*` | `ms-*` | Всегда |
-| `mr-*` | `me-*` | Всегда |
-| `pl-*` | `ps-*` | Всегда |
-| `pr-*` | `pe-*` | Всегда |
-| `text-left` | `text-start` | Всегда |
-| `text-right` | `text-end` | Всегда |
-| `left-*` | `start-*` | Только если НЕ симметрично |
-| `right-*` | `end-*` | Только если НЕ симметрично |
-| `rounded-l-*` | `rounded-s-*` | Только если НЕ симметрично |
-| `rounded-r-*` | `rounded-e-*` | Только если НЕ симметрично |
-| `border-l-*` | `border-s-*` | Только если НЕ симметрично |
-| `border-r-*` | `border-e-*` | Только если НЕ симметрично |
-
-### Что НЕ мигрируем (симметричные паттерны)
-
-```tsx
-// НЕ ТРОГАЕМ — симметрично
-inset-x-0
-left-0 right-0
-mx-auto
-px-4  // (это не pl/pr)
-rounded-lg  // (это не rounded-l/r)
-```
-
-### Directional иконки (исправлено)
-
-```tsx
-// ЗЕРКАЛИМ в RTL
-<ChevronLeft className={cn("h-4 w-4", isRTL(language) && "rotate-180")} />
-<ChevronRight className={cn("h-4 w-4", isRTL(language) && "rotate-180")} />
-<ArrowLeft className={cn("h-4 w-4", isRTL(language) && "rotate-180")} />
-<ArrowRight className={cn("h-4 w-4", isRTL(language) && "rotate-180")} />
-
-// НЕ ЗЕРКАЛИМ — не directional
-<LogOut />      // выход
-<Settings />    // настройки
-<Calendar />    // календарь
-<Search />      // поиск
-<Plus />        // добавить
-<X />           // закрыть
-<Users />       // пользователи
-```
-
-### Градиенты — стратегия с fallback
-
-```tsx
-// Вариант 1: Tailwind rtl: модификатор (если работает)
-className="bg-gradient-to-r rtl:bg-gradient-to-l"
-
-// Вариант 2: Fallback через isRTL (если rtl: не применяется)
-className={cn(
-  "bg-gradient-to-r",
-  isRTL(language) && "bg-gradient-to-l"
-)}
-```
-
-**Правило:** Сначала пробуем `rtl:`, если в runtime не работает — переключаемся на `isRTL()`.
+| # | Было (v2.0) | Стало (v2.1) |
+|---|-------------|--------------|
+| 1 | "Mo справа, Su слева" | Порядок дней определяется `weekStartsOn`, не `dir="rtl"` |
+| 2 | `dir="rtl"` на grid — и всё | + Тест: месяц с 1-м числом в середине недели |
+| 3 | Rotate обе ChevronLeft и ChevronRight | Swap иконок: `PrevIcon = isRTL ? ChevronRight : ChevronLeft` |
+| 4 | `rtl:flex-row-reverse` на Button | Button уже `inline-flex` — работает ✓ |
 
 ---
 
-## Этап 1 — RTL-инфраструктура
+## Архитектурное решение: Календарь
 
-**Файлы:** `src/lib/i18n.tsx`
-
-### 1.1 Расширение типов и helpers
-
+### Текущая логика (CalendarPage.tsx:48-49)
 ```typescript
-export type Language = 'ru' | 'en' | 'he' | 'ar';
-
-export const RTL_LANGUAGES = ['he', 'ar'] as const;
-
-export const isRTL = (lang: Language): boolean => 
-  RTL_LANGUAGES.includes(lang as 'he' | 'ar');
+const startDayOfWeek = monthStart.getDay(); // 0=Sunday, 1=Monday...
+const paddingDays = startDayOfWeek === 0 ? 6 : startDayOfWeek - 1; // Monday-first logic
 ```
 
-### 1.2 Автоматическое dir-переключение
+**Текущее поведение:**
+- Неделя начинается с Monday (EU default)
+- weekDays массив: `[Mon, Tue, Wed, Thu, Fri, Sat, Sun]`
 
-В `I18nProvider` добавить useEffect:
+**RTL-стратегия:**
+- `dir="rtl"` на grid переворачивает ВИЗУАЛЬНЫЙ порядок колонок
+- Логика offset и padding остаётся той же
+- Monday визуально будет справа, Sunday слева
 
-```typescript
-useEffect(() => {
-  document.documentElement.lang = language;
-  document.documentElement.dir = isRTL(language) ? 'rtl' : 'ltr';
-}, [language]);
-```
-
-### 1.3 Пустые переводы (placeholder)
-
-```typescript
-// Временно — чтобы не было ошибок
-he: '...',  // будет заполнено позже
-ar: '...',  // будет заполнено позже
-```
+**Критические тесты после изменений:**
+1. Месяц, где 1-е число — четверг (padding проверка)
+2. Клики по датам попадают в правильный день
+3. "Сегодня" и "выбранный" подсвечиваются корректно
 
 ---
 
-## Этап 2 — Settings UI
+## Шаг 1: Flex Layout Fixes
 
-**Файл:** `src/pages/SettingsPage.tsx`
+### 1.1 Headers с justify-between
 
-Добавить языки в селектор:
+**Файлы и строки:**
 
-```typescript
-{ value: 'he', label: 'עברית' },
-{ value: 'ar', label: 'العربية' }
-```
+| Файл | Строка | Контекст |
+|------|--------|----------|
+| `Today.tsx` | 172 | Date + Reminder button |
+| `CalendarPage.tsx` | 142 | Brand header |
+| `CalendarPage.tsx` | 158 | Month navigation |
+| `DiscussionsListPage.tsx` | 56 | Title + New button |
+| `SettingsPage.tsx` | TBD | Section headers |
 
-**Тест:** Переключение на иврит → весь UI отзеркаливается.
-
----
-
-## Этап 3 — Ядро навигации
-
-### 3.1 BottomNav (`src/components/BottomNav.tsx`)
-
-Замены:
-- `ml-*` → `ms-*`
-- `mr-*` → `me-*`
-- `left-*` → `start-*` (только асимметричные)
-- `right-*` → `end-*` (только асимметричные)
-
-### 3.2 EtherealBottomTabs (`src/components/ethereal/EtherealBottomTabs.tsx`)
-
-Аналогичные замены.
-
-### 3.3 EtherealHeader (`src/components/ethereal/EtherealHeader.tsx`)
-
-- Замены spacing классов
-- **НЕ** зеркалим LogOut (это не "назад")
-- Если есть ChevronLeft для "назад" — зеркалим
-
-**Тест:** Навигация выглядит корректно в RTL.
-
----
-
-## Этап 4 — UI Kit
-
-**Файлы:** button, card, dialog, sheet, input, textarea, select, badge, alert
-
-Применяем правила миграции:
-- Spacing: `ml/mr/pl/pr` → `ms/me/ps/pe`
-- Text: `text-left/right` → `text-start/end`
-- Position: только асимметричные `left/right` → `start/end`
-- Borders/Rounded: только асимметричные
-
-**Тест:** Компоненты работают в обоих направлениях.
-
----
-
-## Этап 5-8 — Страницы батчами
-
-| Батч | Страницы |
-|------|----------|
-| 5 | Today, Calendar |
-| 6 | Settings, Search |
-| 7 | Chat, Discussions |
-| 8 | Ethereal (все страницы) |
-
-Применяем те же правила + зеркалим directional иконки.
-
----
-
-## Этап 9 — Особые случаи
-
-### 9.1 Числа и валюта
-
+**Паттерн:**
 ```tsx
-<span dir="ltr" className="inline-block">₪ 125.00</span>
-<span dir="ltr" className="inline-block">15:30</span>
+// Было
+<div className="flex items-center justify-between">
+
+// Станет
+<div className="flex items-center justify-between rtl:flex-row-reverse">
 ```
 
-### 9.2 Градиенты
+### 1.2 Icon + Text в кнопках
 
-Проверяем работу `rtl:` модификатора, если нет — используем isRTL().
+Button уже имеет `inline-flex items-center` (button.tsx:8), поэтому `rtl:flex-row-reverse` будет работать.
 
-### 9.3 Анимации
+**Паттерн:**
+```tsx
+// Было
+<Button className="gap-1.5">
+  <Plus className="h-4 w-4" />
+  {t('text')}
+</Button>
 
-Проверяем sheet/drawer анимации, при необходимости корректируем направление.
-
----
-
-## Этап 10-11 — Переводы
-
-После стабильного RTL:
-- Пакет 10: Hebrew (5 пакетов по ~30 ключей)
-- Пакет 11: Arabic (5 пакетов по ~30 ключей)
-
----
-
-## План выполнения
-
-| Шаг | Описание | Файлы | Тест |
-|-----|----------|-------|------|
-| **1** | RTL infrastructure + types | `i18n.tsx` | ✓ |
-| **2** | Settings UI | `SettingsPage.tsx` | ✓ |
-| **3** | BottomNav + EtherealTabs + Header | 3 файла | ✓ |
-| **4** | UI kit batch | ~10 файлов | ✓ |
-| **5** | Today + Calendar | 2 файла | ✓ |
-| **6** | Settings + Search | 2 файла | ✓ |
-| **7** | Chat + Discussions | ~5 файлов | ✓ |
-| **8** | Ethereal module | ~10 файлов | ✓ |
-| **9** | Special cases | various | ✓ |
-| **10** | Hebrew translations | `i18n.tsx` | ✓ |
-| **11** | Arabic translations | `i18n.tsx` | ✓ |
-| **12** | Polish + edge cases | various | ✓ |
+// Станет
+<Button className="gap-1.5 rtl:flex-row-reverse">
+  <Plus className="h-4 w-4" />
+  {t('text')}
+</Button>
+```
 
 ---
 
-## Чек-лист безопасности
+## Шаг 2: Calendar RTL (Правильный подход)
 
-- [ ] Не мигрируем симметричные паттерны (inset-x-0, mx-auto)
-- [ ] Зеркалим только directional иконки (Chevron, Arrow)
-- [ ] НЕ зеркалим UI иконки (Settings, LogOut, Users)
-- [ ] Числа/даты обёрнуты в `dir="ltr"`
-- [ ] Fallback на isRTL() если rtl: не работает
-- [ ] Тест после каждого шага
+### 2.1 Grid direction
+
+**CalendarPage.tsx — строки 178, 188:**
+```tsx
+// Week headers — добавить dir
+<div className="mb-2 grid grid-cols-7 gap-1 text-center" dir="rtl">
+
+// Calendar grid — добавить dir
+<div className="grid grid-cols-7 gap-1" dir="rtl">
+```
+
+**Важно:** Логика `paddingDays` остаётся без изменений — grid автоматически отзеркалит визуальный порядок.
+
+### 2.2 Navigation icons (SWAP, не rotate)
+
+**CalendarPage.tsx — строки 159, 165:**
+```tsx
+import { isRTL, useI18n } from '@/lib/i18n';
+
+function CalendarContent() {
+  const { language } = useI18n();
+  
+  // Icon swap для prev/next
+  const PrevIcon = isRTL(language) ? ChevronRight : ChevronLeft;
+  const NextIcon = isRTL(language) ? ChevronLeft : ChevronRight;
+  
+  // ...
+  
+  <Button onClick={goToPreviousMonth}>
+    <PrevIcon className="h-5 w-5" />
+  </Button>
+  
+  <Button onClick={goToNextMonth}>
+    <NextIcon className="h-5 w-5" />
+  </Button>
+}
+```
+
+**Почему swap лучше rotate:**
+- При `rtl:flex-row-reverse` + rotate обе иконки = путаница
+- Swap сохраняет семантику: "Prev" всегда идёт к предыдущему
 
 ---
 
-**Готов начать с Шага 1 (RTL infrastructure)?**
+## Шаг 3: Today.tsx RTL
 
+### 3.1 Header layout (строка 172)
+```tsx
+// Было
+<div className="mt-3 flex items-center justify-between">
+
+// Станет
+<div className="mt-3 flex items-center justify-between rtl:flex-row-reverse">
+```
+
+### 3.2 Reminder button (строка 183-191)
+```tsx
+// Было
+<Button className="text-xs gap-1">
+  <Plus className="h-3.5 w-3.5" />
+  {language === 'ru' ? 'Напоминание' : 'Reminder'}
+</Button>
+
+// Станет
+<Button className="text-xs gap-1 rtl:flex-row-reverse">
+  <Plus className="h-3.5 w-3.5" />
+  {language === 'ru' ? 'Напоминание' : 'Reminder'}
+</Button>
+```
+
+### 3.3 Selection mode bar (строка 291)
+```tsx
+// Кнопки Cancel и Discuss уже в flex контейнере
+// Добавить rtl:flex-row-reverse к контейнеру
+<div className="flex items-center gap-2 ... rtl:flex-row-reverse">
+```
+
+---
+
+## Шаг 4: DiscussionsListPage.tsx RTL
+
+### 4.1 Header (строка 56-70)
+```tsx
+// Было
+<div className="flex items-center justify-between">
+
+// Станет
+<div className="flex items-center justify-between rtl:flex-row-reverse">
+```
+
+### 4.2 New button (строка 72-82)
+```tsx
+// Станет
+<Button className="gap-1.5 rtl:flex-row-reverse">
+  <Plus className="h-4 w-4" />
+  {t('discussions.new')}
+</Button>
+```
+
+---
+
+## Шаг 5: SettingsPage.tsx RTL
+
+Нужно проверить файл, но ожидаемые изменения:
+- Section headers: `rtl:flex-row-reverse`
+- Language/Theme selectors: grid/flex direction
+
+---
+
+## Шаг 6: NewEntry.tsx — Back Arrow
+
+### 6.1 Swap, не rotate
+```tsx
+const BackIcon = isRTL(language) ? ArrowRight : ArrowLeft;
+
+<Button onClick={() => navigate(-1)}>
+  <BackIcon className="h-5 w-5" />
+</Button>
+```
+
+---
+
+## Тестовый план (после каждого шага)
+
+### Обязательные проверки
+
+| Экран | Что проверить |
+|-------|---------------|
+| **Calendar** | 1) Дни идут RTL 2) Февраль 2026 (1-е = воскресенье) 3) Клик = правильная дата 4) "Сегодня" подсвечен |
+| **Today** | 1) Дата слева, Reminder справа в RTL 2) Selection bar корректен |
+| **Settings** | 1) Секции не "расползаются" 2) Language selector читаем |
+| **Discussions** | 1) + кнопка справа от заголовка |
+| **NewEntry** | 1) Стрелка "назад" указывает вправо (→) в RTL |
+
+### Edge case для календаря
+**Март 2026:** 1-е марта = воскресенье
+- В Monday-first логике будет 6 padding cells
+- После `dir="rtl"` padding должен быть справа, числа слева
+
+---
+
+## Ожидаемый результат (исправленный)
+
+После выполнения шагов 1-6:
+
+1. **Settings** — секции и переключатели не "расползаются", заголовки и действия стоят логично для RTL
+2. **Calendar** — сетка читается справа-налево, клики и подсветка работают корректно, навигация prev/next интуитивна
+3. **Today** — верхняя панель (дата/Reminder) выглядит естественно в RTL
+4. **Discussions** — кнопка "+" и заголовок не выглядят перепутанными
+5. **NewEntry** — кнопки "назад/сохранить" стоят логично; стрелка показывает реальное направление
+
+---
+
+## Что НЕ делаем на этом этапе
+
+1. ❌ Массовая замена `ml/mr → ms/me` (отложено до после flex-fixes)
+2. ❌ Переводы на иврит/арабский (отложено)
+3. ❌ Изменение логики `weekStartsOn` (оставляем Monday-first)
+
+---
+
+## Порядок выполнения
+
+| # | Файл | Изменения |
+|---|------|-----------|
+| 1 | `CalendarPage.tsx` | `dir="rtl"` на grids + icon swap |
+| 2 | `Today.tsx` | `rtl:flex-row-reverse` на headers и кнопки |
+| 3 | `DiscussionsListPage.tsx` | `rtl:flex-row-reverse` на header |
+| 4 | `NewEntry.tsx` | Icon swap для Back arrow |
+| 5 | `SettingsPage.tsx` | RTL layout fixes |
+
+**Тест после каждого файла!**
