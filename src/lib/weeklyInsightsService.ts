@@ -4,6 +4,7 @@
 import { db, DiaryEntry } from './db';
 import { getAIToken, isAITokenValid } from './aiTokenService';
 import { startOfWeek, subDays, format } from 'date-fns';
+import { Language, getBaseLanguage } from './i18n';
 
 export interface WeeklyInsight {
   weekStart: string;       // YYYY-MM-DD (Monday)
@@ -84,8 +85,9 @@ async function saveWeeklyInsight(insight: WeeklyInsight): Promise<void> {
  * Generate weekly insight via Edge Function
  */
 export async function generateWeeklyInsight(
-  language: 'ru' | 'en'
+  language: Language
 ): Promise<{ success: true; insight: WeeklyInsight } | { success: false; error: string }> {
+  const baseLang = getBaseLanguage(language);
   // Check AI token first
   if (!isAITokenValid()) {
     return { success: false, error: 'token_invalid' };
@@ -121,7 +123,7 @@ export async function generateWeeklyInsight(
       },
       body: JSON.stringify({
         entries: entryData,
-        language,
+        language: baseLang,
       }),
     });
 
@@ -162,7 +164,7 @@ export async function generateWeeklyInsight(
  * @param forceRegenerate - Skip cache and generate fresh insight
  */
 export async function getOrGenerateWeeklyInsight(
-  language: 'ru' | 'en',
+  language: Language,
   forceRegenerate: boolean = false
 ): Promise<{ success: true; insight: WeeklyInsight; fromCache: boolean } | { success: false; error: string }> {
   // Try cache first (unless force regenerate)

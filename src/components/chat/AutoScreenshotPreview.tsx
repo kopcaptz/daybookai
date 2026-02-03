@@ -9,13 +9,14 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { AutoScreenshotPayload } from '@/lib/screenshotService';
+import { Language } from '@/lib/i18n';
 
 interface AutoScreenshotPreviewProps {
   payload: AutoScreenshotPayload;
   onSend: (prompt: string, imageUrl: string) => void;
   onDismiss: () => void;
   isLoading?: boolean;
-  language?: 'ru' | 'en';
+  language?: Language;
 }
 
 // Auto-dismiss timeout (5 minutes)
