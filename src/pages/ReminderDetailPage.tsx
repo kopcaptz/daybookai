@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bell, Check, Clock, X, Trash2, ChevronDown, CalendarIcon, Save, FileText, ExternalLink, Repeat, SkipForward } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bell, Check, Clock, X, Trash2, ChevronDown, CalendarIcon, Save, FileText, ExternalLink, Repeat, SkipForward } from 'lucide-react';
 import { format, setHours, setMinutes } from 'date-fns';
 import { ru, enUS } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, isRTL } from '@/lib/i18n';
 import { toast } from 'sonner';
 import {
   type Reminder,
@@ -244,7 +244,7 @@ export default function ReminderDetailPage() {
             : 'It may have been deleted or completed.'}
         </p>
         <Button onClick={() => navigate('/')}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
+          {isRTL(language) ? <ArrowRight className="h-4 w-4 me-2" /> : <ArrowLeft className="h-4 w-4 me-2" />}
           {language === 'ru' ? 'Назад' : 'Back to Today'}
         </Button>
       </div>
@@ -273,7 +273,7 @@ export default function ReminderDetailPage() {
             size="icon"
             onClick={() => navigate('/')}
           >
-            <ArrowLeft className="h-5 w-5" />
+            {isRTL(language) ? <ArrowRight className="h-5 w-5" /> : <ArrowLeft className="h-5 w-5" />}
           </Button>
           
           <h1 className="text-lg font-semibold">

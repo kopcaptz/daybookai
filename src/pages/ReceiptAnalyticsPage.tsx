@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, TrendingUp, Store, Tag, AlertTriangle, Calendar, Wallet, Download } from "lucide-react";
+import { ArrowLeft, ArrowRight, TrendingUp, Store, Tag, AlertTriangle, Calendar, Wallet, Download } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, isRTL } from "@/lib/i18n";
 import {
   type DateRangePreset,
   type DateRange,
@@ -151,7 +151,7 @@ function ReceiptAnalyticsContent() {
             onClick={() => navigate("/receipts")}
             className="shrink-0"
           >
-            <ArrowLeft className="h-5 w-5" />
+            {isRTL(language) ? <ArrowRight className="h-5 w-5" /> : <ArrowLeft className="h-5 w-5" />}
           </Button>
           <div>
             <h1 className="text-lg font-serif font-medium text-foreground">

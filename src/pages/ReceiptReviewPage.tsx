@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2, Save, Store, Calendar, Coins, AlertTriangle, Zap, Target } from "lucide-react";
+import { ArrowLeft, ArrowRight, Plus, Trash2, Save, Store, Calendar, Coins, AlertTriangle, Zap, Target } from "lucide-react";
 import { toast } from "sonner";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, isRTL } from "@/lib/i18n";
 import { saveReceipt, type ReceiptScanResult, type ScanMode } from "@/lib/receiptService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -172,7 +172,7 @@ function ReceiptReviewContent() {
               onClick={() => navigate("/receipts")}
               className="shrink-0"
             >
-              <ArrowLeft className="h-5 w-5" />
+              {isRTL(language) ? <ArrowRight className="h-5 w-5" /> : <ArrowLeft className="h-5 w-5" />}
             </Button>
             <h1 className="text-lg font-serif font-medium text-foreground">
               {language === "ru" ? "Проверка чека" : "Review Receipt"}
