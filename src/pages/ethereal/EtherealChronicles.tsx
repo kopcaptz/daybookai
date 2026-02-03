@@ -9,10 +9,29 @@ import { ChronicleEditor } from '@/components/ethereal/ChronicleEditor';
 import { useEtherealChronicles } from '@/hooks/useEtherealChronicles';
 import { EtherealChronicle } from '@/lib/etherealDb';
 import { toast } from 'sonner';
+import { useI18n, getBaseLanguage } from '@/lib/i18n';
+
+const texts = {
+  library: { ru: 'Библиотека', en: 'Library' },
+  chronicles: { ru: 'Хроники', en: 'Chronicles' },
+  created: { ru: 'Запись создана', en: 'Entry created' },
+  createFailed: { ru: 'Не удалось создать запись', en: 'Failed to create entry' },
+  saved: { ru: 'Запись сохранена', en: 'Entry saved' },
+  saveFailed: { ru: 'Не удалось сохранить запись', en: 'Failed to save entry' },
+  pinned: { ru: 'Запись закреплена', en: 'Entry pinned' },
+  unpinned: { ru: 'Запись откреплена', en: 'Entry unpinned' },
+  lockFailed: { ru: 'Не удалось взять запись в редактирование', en: 'Failed to lock entry for editing' },
+  lockedBy: { ru: 'уже редактирует эту запись', en: 'is already editing this entry' },
+  someone: { ru: 'Кто-то', en: 'Someone' },
+} as const;
 
 type ViewMode = 'list' | 'view' | 'edit' | 'create';
 
 export default function EtherealChronicles() {
+  const { language } = useI18n();
+  const lang = getBaseLanguage(language);
+  const t = (key: keyof typeof texts) => texts[key][lang];
+
   if (!isEtherealSessionValid()) {
     return <Navigate to="/e/home" replace />;
   }
@@ -54,19 +73,19 @@ export default function EtherealChronicles() {
     // Try to acquire lock
     const result = await lockChronicle(selectedChronicle.serverId);
     if (!result) {
-      toast.error('Не удалось взять запись в редактирование');
+      toast.error(t('lockFailed'));
       return;
     }
 
     if (!result.locked) {
-      toast.warning(`${result.lockedByName || 'Кто-то'} уже редактирует эту запись`);
+      toast.warning(`${result.lockedByName || t('someone')} ${t('lockedBy')}`);
       setEditLockState({ isLocked: true, lockedByName: result.lockedByName });
     } else {
       setEditLockState({ isLocked: false });
     }
 
     setViewMode('edit');
-  }, [selectedChronicle, lockChronicle]);
+  }, [selectedChronicle, lockChronicle, lang]);
 
   const handleBack = useCallback(async () => {
     // If editing, release lock
@@ -89,30 +108,30 @@ export default function EtherealChronicles() {
     if (viewMode === 'create') {
       const created = await createChronicle(data.title, data.content, data.tags);
       if (created) {
-        toast.success('Запись создана');
+        toast.success(t('created'));
         setSelectedChronicle(created);
         setViewMode('view');
       } else {
-        toast.error('Не удалось создать запись');
+        toast.error(t('createFailed'));
       }
     } else if (selectedChronicle) {
       const updated = await updateChronicle(selectedChronicle.serverId, data);
       if (updated) {
-        toast.success('Запись сохранена');
+        toast.success(t('saved'));
         setSelectedChronicle(updated);
         setViewMode('view');
       } else {
-        toast.error('Не удалось сохранить запись');
+        toast.error(t('saveFailed'));
       }
     }
-  }, [viewMode, selectedChronicle, createChronicle, updateChronicle]);
+  }, [viewMode, selectedChronicle, createChronicle, updateChronicle, lang]);
 
   const handleTogglePin = useCallback(async () => {
     if (!selectedChronicle) return;
     const newPinned = await togglePin(selectedChronicle.serverId);
     setSelectedChronicle({ ...selectedChronicle, pinned: newPinned });
-    toast.success(newPinned ? 'Запись закреплена' : 'Запись откреплена');
-  }, [selectedChronicle, togglePin]);
+    toast.success(newPinned ? t('pinned') : t('unpinned'));
+  }, [selectedChronicle, togglePin, lang]);
 
   const handleLockRefresh = useCallback(async (): Promise<boolean> => {
     if (!selectedChronicle) return false;
@@ -129,7 +148,7 @@ export default function EtherealChronicles() {
   return (
     <div className="flex flex-col min-h-screen yacht-gradient">
       {viewMode === 'list' && (
-        <EtherealHeader title="Библиотека" subtitle="Хроники" />
+        <EtherealHeader title={t('library')} subtitle={t('chronicles')} />
       )}
 
       <div className="flex-1 flex flex-col">

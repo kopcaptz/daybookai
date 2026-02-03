@@ -9,8 +9,17 @@ import { Button } from '@/components/ui/button';
 import { X, Crown, Loader2 } from 'lucide-react';
 import { getEtherealApiHeaders } from '@/lib/etherealTokenService';
 import { formatDistanceToNow } from 'date-fns';
+import { ru, enUS } from 'date-fns/locale';
+import { useI18n, getBaseLanguage } from '@/lib/i18n';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
+const texts = {
+  title: { ru: 'Участники', en: 'Members' },
+  you: { ru: '(вы)', en: '(you)' },
+  lastSeen: { ru: 'Был(а)', en: 'Last seen' },
+  ago: { ru: 'назад', en: 'ago' },
+} as const;
 
 interface Member {
   id: string;
@@ -38,6 +47,11 @@ export function EtherealMembersSheet({
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [kickingId, setKickingId] = useState<string | null>(null);
+
+  const { language } = useI18n();
+  const lang = getBaseLanguage(language);
+  const t = (key: keyof typeof texts) => texts[key][lang];
+  const dateLocale = lang === 'ru' ? ru : enUS;
 
   useEffect(() => {
     if (open) {
@@ -91,7 +105,7 @@ export function EtherealMembersSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent>
         <SheetHeader>
-          <SheetTitle>Members</SheetTitle>
+          <SheetTitle>{t('title')}</SheetTitle>
         </SheetHeader>
 
         {isLoading ? (
@@ -112,11 +126,11 @@ export function EtherealMembersSheet({
                       <Crown className="h-4 w-4 text-amber-500 flex-shrink-0" />
                     )}
                     {member.id === currentMemberId && (
-                      <span className="text-xs text-muted-foreground">(you)</span>
+                      <span className="text-xs text-muted-foreground">{t('you')}</span>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Last seen {formatDistanceToNow(new Date(member.lastSeenAt))} ago
+                    {t('lastSeen')} {formatDistanceToNow(new Date(member.lastSeenAt), { locale: dateLocale })} {t('ago')}
                   </p>
                 </div>
 

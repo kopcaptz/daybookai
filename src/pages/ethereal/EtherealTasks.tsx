@@ -5,12 +5,21 @@ import { EtherealBottomTabs } from '@/components/ethereal/EtherealBottomTabs';
 import { TasksList } from '@/components/ethereal/TasksList';
 import { useEtherealTasks } from '@/hooks/useEtherealTasks';
 import { useState, useEffect } from 'react';
+import { useI18n, getBaseLanguage } from '@/lib/i18n';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
+const texts = {
+  bridge: { ru: 'Мостик', en: 'Bridge' },
+  tasks: { ru: 'Задачи', en: 'Tasks' },
+} as const;
 
 export default function EtherealTasks() {
   const [members, setMembers] = useState<Array<{ id: string; displayName: string }>>([]);
   const session = getEtherealSession();
+  const { language } = useI18n();
+  const lang = getBaseLanguage(language);
+  const t = (key: keyof typeof texts) => texts[key][lang];
 
   const {
     groupedTasks,
@@ -55,7 +64,7 @@ export default function EtherealTasks() {
 
   return (
     <div className="flex flex-col min-h-screen yacht-gradient">
-      <EtherealHeader title="Мостик" subtitle="Задачи" />
+      <EtherealHeader title={t('bridge')} subtitle={t('tasks')} />
       
       <div className="flex-1 pt-4">
         <TasksList

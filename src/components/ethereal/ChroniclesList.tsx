@@ -5,6 +5,17 @@ import { Button } from '@/components/ui/button';
 import { EtherealChronicle } from '@/lib/etherealDb';
 import { ChronicleCard } from './ChronicleCard';
 import { cn } from '@/lib/utils';
+import { useI18n, getBaseLanguage } from '@/lib/i18n';
+
+const texts = {
+  searchPlaceholder: { ru: 'Поиск по записям...', en: 'Search entries...' },
+  newEntry: { ru: 'Новая запись', en: 'New entry' },
+  emptyLibrary: { ru: 'Библиотека пуста', en: 'Library is empty' },
+  emptyLibraryHint: { ru: 'Создайте первую запись, чтобы начать вести совместный журнал вашей команды.', en: 'Create your first entry to start a shared journal for your team.' },
+  nothingFound: { ru: 'Ничего не найдено', en: 'Nothing found' },
+  pinned: { ru: 'Закреплённые', en: 'Pinned' },
+  allEntries: { ru: 'Все записи', en: 'All entries' },
+} as const;
 
 interface ChroniclesListProps {
   chronicles: EtherealChronicle[];
@@ -16,6 +27,9 @@ interface ChroniclesListProps {
 
 export function ChroniclesList({ chronicles, loading, onSelect, onCreate, onRefresh }: ChroniclesListProps) {
   const [search, setSearch] = useState('');
+  const { language } = useI18n();
+  const lang = getBaseLanguage(language);
+  const t = (key: keyof typeof texts) => texts[key][lang];
 
   const filtered = useMemo(() => {
     if (!search.trim()) return chronicles;
@@ -38,7 +52,7 @@ export function ChroniclesList({ chronicles, loading, onSelect, onCreate, onRefr
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Поиск по записям..."
+            placeholder={t('searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10"
@@ -48,7 +62,7 @@ export function ChroniclesList({ chronicles, loading, onSelect, onCreate, onRefr
         <div className="flex gap-2">
           <Button onClick={onCreate} className="flex-1 gap-2">
             <Plus className="w-4 h-4" />
-            Новая запись
+            {t('newEntry')}
           </Button>
           <Button
             variant="outline"
@@ -70,9 +84,9 @@ export function ChroniclesList({ chronicles, loading, onSelect, onCreate, onRefr
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
               <BookOpen className="w-8 h-8 text-muted-foreground" />
             </div>
-            <h3 className="font-medium mb-2">Библиотека пуста</h3>
+            <h3 className="font-medium mb-2">{t('emptyLibrary')}</h3>
             <p className="text-sm text-muted-foreground max-w-xs">
-              Создайте первую запись, чтобы начать вести совместный журнал вашей команды.
+              {t('emptyLibraryHint')}
             </p>
           </div>
         )}
@@ -80,7 +94,7 @@ export function ChroniclesList({ chronicles, loading, onSelect, onCreate, onRefr
         {/* No results */}
         {chronicles.length > 0 && filtered.length === 0 && (
           <div className="text-center py-8 text-muted-foreground">
-            Ничего не найдено
+            {t('nothingFound')}
           </div>
         )}
 
@@ -89,7 +103,7 @@ export function ChroniclesList({ chronicles, loading, onSelect, onCreate, onRefr
           <div>
             <div className="flex items-center gap-2 mb-2 text-sm font-medium text-amber-600">
               <Pin className="w-4 h-4" />
-              Закреплённые
+              {t('pinned')}
             </div>
             <div className="space-y-2">
               {pinned.map((c) => (
@@ -104,7 +118,7 @@ export function ChroniclesList({ chronicles, loading, onSelect, onCreate, onRefr
           <div>
             {pinned.length > 0 && (
               <div className="text-sm font-medium text-muted-foreground mb-2">
-                Все записи
+                {t('allEntries')}
               </div>
             )}
             <div className="space-y-2">

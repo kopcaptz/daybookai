@@ -1,9 +1,17 @@
 import { format } from 'date-fns';
-import { ru } from 'date-fns/locale';
+import { ru, enUS } from 'date-fns/locale';
 import { Pin, User, Clock } from 'lucide-react';
 import { EtherealChronicle } from '@/lib/etherealDb';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useI18n, getBaseLanguage } from '@/lib/i18n';
+
+const texts = {
+  noTitle: { ru: 'Без названия', en: 'Untitled' },
+  edited: { ru: 'ред.', en: 'ed.' },
+  editing: { ru: 'редактирует', en: 'is editing' },
+  someone: { ru: 'Кто-то', en: 'Someone' },
+} as const;
 
 interface ChronicleCardProps {
   chronicle: EtherealChronicle;
@@ -11,11 +19,16 @@ interface ChronicleCardProps {
 }
 
 export function ChronicleCard({ chronicle, onClick }: ChronicleCardProps) {
+  const { language } = useI18n();
+  const lang = getBaseLanguage(language);
+  const t = (key: keyof typeof texts) => texts[key][lang];
+  const dateLocale = lang === 'ru' ? ru : enUS;
+
   const preview = chronicle.content.slice(0, 120).replace(/\n/g, ' ');
   const hasMore = chronicle.content.length > 120;
   
   const authorDisplay = chronicle.updatedByName 
-    ? `${chronicle.updatedByName} (ред.)` 
+    ? `${chronicle.updatedByName} (${t('edited')})` 
     : chronicle.authorName;
 
   return (
@@ -30,7 +43,7 @@ export function ChronicleCard({ chronicle, onClick }: ChronicleCardProps) {
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <h3 className="font-medium text-base line-clamp-1 flex-1">
-          {chronicle.title || 'Без названия'}
+          {chronicle.title || t('noTitle')}
         </h3>
         {chronicle.pinned && (
           <Pin className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
@@ -65,13 +78,13 @@ export function ChronicleCard({ chronicle, onClick }: ChronicleCardProps) {
         </span>
         <span className="flex items-center gap-1">
           <Clock className="w-3 h-3" />
-          {format(new Date(chronicle.updatedAtMs), 'd MMM HH:mm', { locale: ru })}
+          {format(new Date(chronicle.updatedAtMs), 'd MMM HH:mm', { locale: dateLocale })}
         </span>
       </div>
 
       {chronicle.editingBy && chronicle.editingExpiresAt && chronicle.editingExpiresAt > Date.now() && (
         <div className="mt-2 text-xs text-amber-600 bg-amber-500/10 px-2 py-1 rounded">
-          ✏️ {chronicle.editingByName || 'Кто-то'} редактирует
+          ✏️ {chronicle.editingByName || t('someone')} {t('editing')}
         </div>
       )}
     </button>
