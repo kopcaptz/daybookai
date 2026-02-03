@@ -1,256 +1,137 @@
 
-# RTL-миграция v2.1 — Исправленный план
+# RTL Layout Fixes Plan v2.2
 
-## Ключевые исправления
+## Root Cause Analysis
 
-| # | Было (v2.0) | Стало (v2.1) |
-|---|-------------|--------------|
-| 1 | "Mo справа, Su слева" | Порядок дней определяется `weekStartsOn`, не `dir="rtl"` |
-| 2 | `dir="rtl"` на grid — и всё | + Тест: месяц с 1-м числом в середине недели |
-| 3 | Rotate обе ChevronLeft и ChevronRight | Swap иконок: `PrevIcon = isRTL ? ChevronRight : ChevronLeft` |
-| 4 | `rtl:flex-row-reverse` на Button | Button уже `inline-flex` — работает ✓ |
+Based on the screenshots and code review, the current implementation has these bugs:
 
----
+| Bug | Location | Cause | Fix |
+|-----|----------|-------|-----|
+| Calendar shows "Su Sa Fr Th We Tu Mo" (mirrored) | `CalendarPage.tsx:184,194` | Using `dir="rtl"` on grid containers | Remove `dir` attr, reverse weekDays array instead |
+| Month nav buttons in wrong position | `CalendarPage.tsx:162` | Missing container-level row reverse | Add `rtl:flex-row-reverse` |
+| Today header jumps between screenshots | `Today.tsx:172` | Already has fix, but button needs `rtl:flex-row-reverse` too | Verify button styling |
+| Year numbers should stay LTR | `CalendarPage.tsx:167` | No `dir="ltr"` wrapping | Wrap year in `<span dir="ltr">` |
 
-## Архитектурное решение: Календарь
+## Step 1: Calendar Weekday Headers (Data-Level Fix)
 
-### Текущая логика (CalendarPage.tsx:48-49)
-```typescript
-const startDayOfWeek = monthStart.getDay(); // 0=Sunday, 1=Monday...
-const paddingDays = startDayOfWeek === 0 ? 6 : startDayOfWeek - 1; // Monday-first logic
+**Problem:** `dir="rtl"` on grid visually reverses columns, creating "Su Sa Fr Th We Tu Mo".
+
+**Solution:** Remove `dir` attributes from grids. Instead, reverse the weekDays array in RTL mode.
+
+```tsx
+// CalendarPage.tsx - lines 117-125
+// CURRENT (wrong):
+const weekDays = [
+  t('calendar.mon'), t('calendar.tue'), t('calendar.wed'), 
+  t('calendar.thu'), t('calendar.fri'), t('calendar.sat'), t('calendar.sun'),
+];
+
+// NEW (correct):
+const weekDaysBase = [
+  t('calendar.mon'), t('calendar.tue'), t('calendar.wed'), 
+  t('calendar.thu'), t('calendar.fri'), t('calendar.sat'), t('calendar.sun'),
+];
+const weekDays = isRTL(language) ? [...weekDaysBase].reverse() : weekDaysBase;
 ```
 
-**Текущее поведение:**
-- Неделя начинается с Monday (EU default)
-- weekDays массив: `[Mon, Tue, Wed, Thu, Fri, Sat, Sun]`
+**Remove `dir` from grids:**
+- Line 184: Remove `dir={isRTL(language) ? 'rtl' : 'ltr'}` from week header grid
+- Line 194: Remove `dir={isRTL(language) ? 'rtl' : 'ltr'}` from calendar grid
 
-**RTL-стратегия:**
-- `dir="rtl"` на grid переворачивает ВИЗУАЛЬНЫЙ порядок колонок
-- Логика offset и padding остаётся той же
-- Monday визуально будет справа, Sunday слева
+## Step 2: Calendar Month Navigation
 
-**Критические тесты после изменений:**
-1. Месяц, где 1-е число — четверг (padding проверка)
-2. Клики по датам попадают в правильный день
-3. "Сегодня" и "выбранный" подсвечиваются корректно
+**Problem:** Chevron buttons stay in LTR order despite icon swap.
 
----
+**Solution:** Add `rtl:flex-row-reverse` to month nav container.
 
-## Шаг 1: Flex Layout Fixes
-
-### 1.1 Headers с justify-between
-
-**Файлы и строки:**
-
-| Файл | Строка | Контекст |
-|------|--------|----------|
-| `Today.tsx` | 172 | Date + Reminder button |
-| `CalendarPage.tsx` | 142 | Brand header |
-| `CalendarPage.tsx` | 158 | Month navigation |
-| `DiscussionsListPage.tsx` | 56 | Title + New button |
-| `SettingsPage.tsx` | TBD | Section headers |
-
-**Паттерн:**
 ```tsx
-// Было
+// CalendarPage.tsx - line 162
+// CURRENT:
 <div className="flex items-center justify-between">
 
-// Станет
+// NEW:
 <div className="flex items-center justify-between rtl:flex-row-reverse">
 ```
 
-### 1.2 Icon + Text в кнопках
-
-Button уже имеет `inline-flex items-center` (button.tsx:8), поэтому `rtl:flex-row-reverse` будет работать.
-
-**Паттерн:**
+**Keep existing icon swap** (already correct at lines 159-160):
 ```tsx
-// Было
-<Button className="gap-1.5">
-  <Plus className="h-4 w-4" />
-  {t('text')}
-</Button>
-
-// Станет
-<Button className="gap-1.5 rtl:flex-row-reverse">
-  <Plus className="h-4 w-4" />
-  {t('text')}
-</Button>
+const PrevIcon = isRTL(language) ? ChevronRight : ChevronLeft;
+const NextIcon = isRTL(language) ? ChevronLeft : ChevronRight;
 ```
+
+## Step 3: LTR Numbers/Dates
+
+**Problem:** Year "2026" should stay LTR in RTL mode.
+
+**Solution:** Wrap year in `<span dir="ltr">`:
+
+```tsx
+// CalendarPage.tsx - line 167
+// CURRENT:
+{getMonthName(currentMonth)} {currentMonth.getFullYear()}
+
+// NEW:
+{getMonthName(currentMonth)} <span dir="ltr">{currentMonth.getFullYear()}</span>
+```
+
+## Step 4: Today Page Consistency
+
+The Today page already has `rtl:flex-row-reverse` on line 172. Verify:
+
+1. Header container has the class
+2. Reminder button has `rtl:flex-row-reverse` for icon+text (line 187 - already present)
+
+**No changes needed if already correct.**
+
+## Step 5: Discussions Header
+
+Line 71 already has `rtl:flex-row-reverse`. Verify New button (line 87) also has it for icon+text.
+
+**Already present - no changes needed.**
+
+## Step 6: Settings Header
+
+Line 179 already has `rtl:flex-row-reverse`.
+
+**No changes needed.**
+
+## Step 7: NewEntry Page
+
+Lines 559-568 already have proper RTL handling:
+- Header has `rtl:flex-row-reverse`
+- BackIcon swaps between ArrowRight/ArrowLeft
+
+**No changes needed.**
 
 ---
 
-## Шаг 2: Calendar RTL (Правильный подход)
+## Files to Modify
 
-### 2.1 Grid direction
+| File | Changes |
+|------|---------|
+| `src/pages/CalendarPage.tsx` | 1. Reverse weekDays array for RTL 2. Remove `dir` from grids 3. Add `rtl:flex-row-reverse` to month nav 4. Wrap year in `<span dir="ltr">` |
 
-**CalendarPage.tsx — строки 178, 188:**
-```tsx
-// Week headers — добавить dir
-<div className="mb-2 grid grid-cols-7 gap-1 text-center" dir="rtl">
-
-// Calendar grid — добавить dir
-<div className="grid grid-cols-7 gap-1" dir="rtl">
-```
-
-**Важно:** Логика `paddingDays` остаётся без изменений — grid автоматически отзеркалит визуальный порядок.
-
-### 2.2 Navigation icons (SWAP, не rotate)
-
-**CalendarPage.tsx — строки 159, 165:**
-```tsx
-import { isRTL, useI18n } from '@/lib/i18n';
-
-function CalendarContent() {
-  const { language } = useI18n();
-  
-  // Icon swap для prev/next
-  const PrevIcon = isRTL(language) ? ChevronRight : ChevronLeft;
-  const NextIcon = isRTL(language) ? ChevronLeft : ChevronRight;
-  
-  // ...
-  
-  <Button onClick={goToPreviousMonth}>
-    <PrevIcon className="h-5 w-5" />
-  </Button>
-  
-  <Button onClick={goToNextMonth}>
-    <NextIcon className="h-5 w-5" />
-  </Button>
-}
-```
-
-**Почему swap лучше rotate:**
-- При `rtl:flex-row-reverse` + rotate обе иконки = путаница
-- Swap сохраняет семантику: "Prev" всегда идёт к предыдущему
+**All other files already have correct RTL handling.**
 
 ---
 
-## Шаг 3: Today.tsx RTL
+## What We Are NOT Doing
 
-### 3.1 Header layout (строка 172)
-```tsx
-// Было
-<div className="mt-3 flex items-center justify-between">
-
-// Станет
-<div className="mt-3 flex items-center justify-between rtl:flex-row-reverse">
-```
-
-### 3.2 Reminder button (строка 183-191)
-```tsx
-// Было
-<Button className="text-xs gap-1">
-  <Plus className="h-3.5 w-3.5" />
-  {language === 'ru' ? 'Напоминание' : 'Reminder'}
-</Button>
-
-// Станет
-<Button className="text-xs gap-1 rtl:flex-row-reverse">
-  <Plus className="h-3.5 w-3.5" />
-  {language === 'ru' ? 'Напоминание' : 'Reminder'}
-</Button>
-```
-
-### 3.3 Selection mode bar (строка 291)
-```tsx
-// Кнопки Cancel и Discuss уже в flex контейнере
-// Добавить rtl:flex-row-reverse к контейнеру
-<div className="flex items-center gap-2 ... rtl:flex-row-reverse">
-```
+- No spacing migration (`ml/mr → ms/me`) - deferred to next phase
+- No translation additions - deferred
+- No changes to business logic (weekStartsOn remains Monday-first)
 
 ---
 
-## Шаг 4: DiscussionsListPage.tsx RTL
+## Test Checklist (Must Pass in Hebrew)
 
-### 4.1 Header (строка 56-70)
-```tsx
-// Было
-<div className="flex items-center justify-between">
-
-// Станет
-<div className="flex items-center justify-between rtl:flex-row-reverse">
-```
-
-### 4.2 New button (строка 72-82)
-```tsx
-// Станет
-<Button className="gap-1.5 rtl:flex-row-reverse">
-  <Plus className="h-4 w-4" />
-  {t('discussions.new')}
-</Button>
-```
-
----
-
-## Шаг 5: SettingsPage.tsx RTL
-
-Нужно проверить файл, но ожидаемые изменения:
-- Section headers: `rtl:flex-row-reverse`
-- Language/Theme selectors: grid/flex direction
-
----
-
-## Шаг 6: NewEntry.tsx — Back Arrow
-
-### 6.1 Swap, не rotate
-```tsx
-const BackIcon = isRTL(language) ? ArrowRight : ArrowLeft;
-
-<Button onClick={() => navigate(-1)}>
-  <BackIcon className="h-5 w-5" />
-</Button>
-```
-
----
-
-## Тестовый план (после каждого шага)
-
-### Обязательные проверки
-
-| Экран | Что проверить |
-|-------|---------------|
-| **Calendar** | 1) Дни идут RTL 2) Февраль 2026 (1-е = воскресенье) 3) Клик = правильная дата 4) "Сегодня" подсвечен |
-| **Today** | 1) Дата слева, Reminder справа в RTL 2) Selection bar корректен |
-| **Settings** | 1) Секции не "расползаются" 2) Language selector читаем |
-| **Discussions** | 1) + кнопка справа от заголовка |
-| **NewEntry** | 1) Стрелка "назад" указывает вправо (→) в RTL |
-
-### Edge case для календаря
-**Март 2026:** 1-е марта = воскресенье
-- В Monday-first логике будет 6 padding cells
-- После `dir="rtl"` padding должен быть справа, числа слева
-
----
-
-## Ожидаемый результат (исправленный)
-
-После выполнения шагов 1-6:
-
-1. **Settings** — секции и переключатели не "расползаются", заголовки и действия стоят логично для RTL
-2. **Calendar** — сетка читается справа-налево, клики и подсветка работают корректно, навигация prev/next интуитивна
-3. **Today** — верхняя панель (дата/Reminder) выглядит естественно в RTL
-4. **Discussions** — кнопка "+" и заголовок не выглядят перепутанными
-5. **NewEntry** — кнопки "назад/сохранить" стоят логично; стрелка показывает реальное направление
-
----
-
-## Что НЕ делаем на этом этапе
-
-1. ❌ Массовая замена `ml/mr → ms/me` (отложено до после flex-fixes)
-2. ❌ Переводы на иврит/арабский (отложено)
-3. ❌ Изменение логики `weekStartsOn` (оставляем Monday-first)
-
----
-
-## Порядок выполнения
-
-| # | Файл | Изменения |
-|---|------|-----------|
-| 1 | `CalendarPage.tsx` | `dir="rtl"` на grids + icon swap |
-| 2 | `Today.tsx` | `rtl:flex-row-reverse` на headers и кнопки |
-| 3 | `DiscussionsListPage.tsx` | `rtl:flex-row-reverse` на header |
-| 4 | `NewEntry.tsx` | Icon swap для Back arrow |
-| 5 | `SettingsPage.tsx` | RTL layout fixes |
-
-**Тест после каждого файла!**
+| Screen | Expected Behavior |
+|--------|-------------------|
+| Calendar | Weekdays show: Mo Tu We Th Fr Sa Su (left-to-right, reversed array means RTL reading order is correct) |
+| Calendar | Month nav: ← Feb 2026 → with correct chevron directions |
+| Calendar | Year "2026" displays as LTR numbers |
+| Calendar | Clicking on day 3 navigates to Feb 3 (not a different day) |
+| Today | Date left, Reminder button right (consistent, no jumping) |
+| Discussions | Title left, +New button right |
+| Settings | Grimoire icon left, empty spacer right |
+| NewEntry | Back arrow points right (→), title center, save/delete right |
