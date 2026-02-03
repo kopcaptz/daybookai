@@ -1,136 +1,108 @@
 
-# План: Исправить направление стрелок "назад" для RTL-языков
+
+# План: Добавить кнопку "Новое обсуждение" на страницу Discussions
 
 ## Проблема
 
-На скриншоте видно, что в режиме RTL (иврит) стрелка назад указывает влево (←), но для RTL-языков "назад" должно указывать вправо (→), так как направление чтения — справа налево.
-
-## Текущая ситуация
-
-**Правильно реализовано:**
-- `NewEntry.tsx` — использует `isRTL(language) ? ArrowRight : ArrowLeft`
-- `CalendarPage.tsx` — использует условную замену иконок для навигации
-
-**Требует исправления (10 мест):**
-1. `DiscussionChatPage.tsx` — строка 221
-2. `DayView.tsx` — строки 55, 72
-3. `ReceiptReviewPage.tsx` — строка 175
-4. `ReceiptDetailPage.tsx` — строка 180
-5. `ReceiptScanPage.tsx` — строка 286
-6. `ReceiptsPage.tsx` — строка 121
-7. `ReceiptAnalyticsPage.tsx` — строка 154
-8. `ReminderDetailPage.tsx` — строки 247, 276
-9. `ChronicleView.tsx` — строка 58
-
----
+После предыдущих изменений кнопка "+New" была полностью убрана из header. Пользователь хочет, чтобы была видимая кнопка для создания нового обсуждения.
 
 ## Решение
 
-Для каждой страницы применить паттерн из `NewEntry.tsx`:
+Добавить кнопку обратно в header с правильной поддержкой RTL:
+- В LTR (рус/англ): кнопка **справа** от заголовка
+- В RTL (иврит/араб): кнопка **слева** от заголовка (визуально справа в RTL)
+
+---
+
+## Изменение: `src/pages/DiscussionsListPage.tsx`
+
+### 1. Добавить импорты
 
 ```tsx
-// Импорт
-import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { useI18n, isRTL } from '@/lib/i18n';
+import { Plus, MessageSquare, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { isRTL } from '@/lib/i18n';
+```
 
-// В компоненте — определить иконку
-const BackIcon = isRTL(language) ? ArrowRight : ArrowLeft;
+### 2. Обновить header (строки 78-93)
 
-// Использование
-<Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-  <BackIcon className="h-5 w-5" />
-</Button>
+Заменить простой centered header на flex-layout с кнопкой:
+
+```tsx
+<header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
+  <div className="flex items-center justify-between">
+    {/* Spacer для баланса (в LTR — слева) */}
+    <div className="w-20" />
+    
+    {/* Centered title */}
+    <div className="text-center flex-1">
+      <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
+        {t('discussions.title')}
+      </h1>
+      <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
+        {t('discussions.subtitle')}
+      </p>
+    </div>
+    
+    {/* New button (справа в LTR, слева в RTL — но визуально всегда справа) */}
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={handleNewDiscussion}
+      disabled={creating}
+      className="gap-1.5"
+    >
+      {creating ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <Plus className="h-4 w-4" />
+      )}
+      <span>{t('discussions.new')}</span>
+    </Button>
+  </div>
+  
+  {/* Rune divider */}
+  <div className="mt-4 rune-divider">
+    <span className="sigil-separator">◆</span>
+  </div>
+</header>
 ```
 
 ---
 
-## Детальный план изменений
+## Как это работает для RTL
 
-### 1. `src/pages/DiscussionChatPage.tsx`
+Flexbox с `justify-between` автоматически:
+- **LTR**: `[spacer] | [title] | [button]` — кнопка справа ✓
+- **RTL**: `[button] | [title] | [spacer]` — кнопка слева визуально, но это правая сторона RTL ✓
 
-- Добавить импорт `ArrowRight` и `isRTL`
-- Определить `BackIcon` внутри компонента
-- Заменить `<ArrowLeft ...>` на `<BackIcon ...>`
-
-### 2. `src/pages/DayView.tsx`
-
-- Добавить импорт `ArrowRight` и `isRTL`
-- Определить `BackIcon` перед return
-- Обновить оба места использования (loading state и main view)
-
-### 3. `src/pages/ReceiptReviewPage.tsx`
-
-- Добавить импорт `ArrowRight` и `isRTL`
-- Определить `BackIcon` внутри компонента
-- Заменить `<ArrowLeft ...>` на `<BackIcon ...>`
-
-### 4. `src/pages/ReceiptDetailPage.tsx`
-
-- Добавить импорт `ArrowRight` и `isRTL`
-- Определить `BackIcon` внутри компонента
-- Заменить `<ArrowLeft ...>` на `<BackIcon ...>`
-
-### 5. `src/pages/ReceiptScanPage.tsx`
-
-- Добавить импорт `ArrowRight` и `isRTL`
-- Определить `BackIcon` внутри компонента
-- Заменить `<ArrowLeft ...>` на `<BackIcon ...>`
-
-### 6. `src/pages/ReceiptsPage.tsx`
-
-- Добавить импорт `ArrowRight` и `isRTL`
-- Определить `BackIcon` внутри компонента
-- Заменить `<ArrowLeft ...>` на `<BackIcon ...>`
-
-### 7. `src/pages/ReceiptAnalyticsPage.tsx`
-
-- Добавить импорт `ArrowRight` и `isRTL`
-- Определить `BackIcon` внутри компонента
-- Заменить `<ArrowLeft ...>` на `<BackIcon ...>`
-
-### 8. `src/pages/ReminderDetailPage.tsx`
-
-- Добавить импорт `ArrowRight` и `isRTL`
-- Определить `BackIcon` внутри компонента
-- Обновить оба места использования (not found и main view)
-
-### 9. `src/components/ethereal/ChronicleView.tsx`
-
-- Добавить импорт `ArrowRight` 
-- Принимать `language` как prop или использовать i18n hook
-- Определить `BackIcon` условно
+Не нужно `rtl:flex-row-reverse` — flexbox сам адаптируется к `dir="rtl"`.
 
 ---
 
 ## Файлы для изменения
 
-| Файл | Мест изменений |
-|------|----------------|
-| `src/pages/DiscussionChatPage.tsx` | 1 |
-| `src/pages/DayView.tsx` | 2 |
-| `src/pages/ReceiptReviewPage.tsx` | 1 |
-| `src/pages/ReceiptDetailPage.tsx` | 1 |
-| `src/pages/ReceiptScanPage.tsx` | 1 |
-| `src/pages/ReceiptsPage.tsx` | 1 |
-| `src/pages/ReceiptAnalyticsPage.tsx` | 1 |
-| `src/pages/ReminderDetailPage.tsx` | 2 |
-| `src/components/ethereal/ChronicleView.tsx` | 1 |
-| **Всего** | **11** |
+| Файл | Изменения |
+|------|-----------|
+| `src/pages/DiscussionsListPage.tsx` | Добавить кнопку "+New" в header с правильным RTL layout |
 
 ---
 
 ## Визуальный результат
 
-**До (неправильно в RTL):**
+**English/Russian (LTR):**
 ```
-┌────────────────────────────┐
-│ [←]  דיון חדש              │  ← Стрелка влево
-└────────────────────────────┘
+┌───────────────────────────────────────┐
+│           Discussions        [+ New]  │
+│         Chat with entries             │
+└───────────────────────────────────────┘
 ```
 
-**После (правильно в RTL):**
+**Hebrew/Arabic (RTL):**
 ```
-┌────────────────────────────┐
-│              דיון חדש  [→] │  → Стрелка вправо (назад = справа)
-└────────────────────────────┘
+┌───────────────────────────────────────┐
+│  [+ חדש]          דיונים              │
+│              צ'אט עם רשומות           │
+└───────────────────────────────────────┘
 ```
+
