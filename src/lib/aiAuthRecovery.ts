@@ -275,7 +275,10 @@ export async function createAIAuthError(response: Response): Promise<AIAuthRetry
 /**
  * Get localized error message for AI error codes
  */
-export function getErrorMessage(errorCode: string, language: 'ru' | 'en'): string {
+export function getErrorMessage(errorCode: string, language: string): string {
+  // Use base language for messages (he/ar fall back to en)
+  const baseLang = (language === 'ru') ? 'ru' : 'en';
+  
   const messages: Record<string, { ru: string; en: string }> = {
     ai_token_required: {
       ru: 'Требуется авторизация ИИ',
@@ -311,8 +314,8 @@ export function getErrorMessage(errorCode: string, language: 'ru' | 'en'): strin
     },
   };
   
-  return messages[errorCode]?.[language] || 
-    (language === 'ru' ? 'Неизвестная ошибка' : 'Unknown error');
+  return messages[errorCode]?.[baseLang] || 
+    (baseLang === 'ru' ? 'Неизвестная ошибка' : 'Unknown error');
 }
 
 /**
@@ -321,11 +324,12 @@ export function getErrorMessage(errorCode: string, language: 'ru' | 'en'): strin
 export function formatErrorWithRequestId(
   message: string,
   requestId?: string,
-  language: 'ru' | 'en' = 'ru'
+  language: string = 'ru'
 ): string {
   if (!requestId) return message;
   
   const shortId = requestId.slice(0, 8);
-  const prefix = language === 'ru' ? 'ID запроса' : 'Request ID';
+  const baseLang = (language === 'ru') ? 'ru' : 'en';
+  const prefix = baseLang === 'ru' ? 'ID запроса' : 'Request ID';
   return `${message}\n\n${prefix}: ${shortId}...`;
 }

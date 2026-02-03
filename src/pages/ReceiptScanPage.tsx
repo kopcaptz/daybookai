@@ -504,7 +504,8 @@ function ReceiptScanContent() {
   );
 }
 
-function getErrorTitle(type: ScanError["type"], language: "ru" | "en"): string {
+function getErrorTitle(type: ScanError["type"], language: string): string {
+  const baseLang = (language === 'ru') ? 'ru' : 'en';
   const titles: Record<ScanError["type"], { ru: string; en: string }> = {
     unreadable: { ru: "Не удалось прочитать", en: "Could not read" },
     not_receipt: { ru: "Это не чек", en: "Not a receipt" },
@@ -514,10 +515,11 @@ function getErrorTitle(type: ScanError["type"], language: "ru" | "en"): string {
     image_too_large: { ru: "Файл слишком большой", en: "File too large" },
     unknown: { ru: "Неизвестная ошибка", en: "Unknown error" },
   };
-  return titles[type][language];
+  return titles[type][baseLang];
 }
 
-function getErrorHint(type: ReceiptScanError["error"], language: "ru" | "en"): string {
+function getErrorHint(type: ReceiptScanError["error"], language: string): string {
+  const baseLang = (language === 'ru') ? 'ru' : 'en';
   const hints: Record<ReceiptScanError["error"], { ru: string; en: string }> = {
     unreadable: {
       ru: "Текст на чеке нечитаем. Попробуйте сфотографировать ровнее и без бликов.",
@@ -540,7 +542,7 @@ function getErrorHint(type: ReceiptScanError["error"], language: "ru" | "en"): s
       en: "Service temporarily unavailable. Please try later.",
     },
   };
-  return hints[type][language];
+  return hints[type][baseLang];
 }
 
 export default function ReceiptScanPage() {

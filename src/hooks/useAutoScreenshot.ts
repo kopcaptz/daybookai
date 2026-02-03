@@ -7,9 +7,10 @@ import { captureVisibleArea, ScreenshotResult, AutoScreenshotPayload } from '@/l
 import { loadAISettings } from '@/lib/aiConfig';
 import { useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
+import { Language } from '@/lib/i18n';
 
 export interface UseAutoScreenshotOptions {
-  language?: 'ru' | 'en';
+  language?: Language;
   iframeRef?: React.RefObject<HTMLIFrameElement | null>;
   onCaptureStart?: () => void;
   onCaptureComplete?: (result: ScreenshotResult) => void;

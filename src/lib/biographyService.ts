@@ -164,13 +164,15 @@ export async function generateBiography(
   language: Language = 'ru',
   _isRetry: boolean = false
 ): Promise<GenerationResult> {
+  const baseLang = getBaseLanguage(language);
+  
   // Check token before making request (only on first attempt)
   if (!_isRetry && !isAITokenValid()) {
     // Try to get a PIN first
     try {
       await requestPinDialog(undefined, 'ai_token_required');
     } catch {
-      const error = new Error(getErrorMessage('pin_cancelled', language)) as BiographyError;
+      const error = new Error(getErrorMessage('pin_cancelled', baseLang)) as BiographyError;
       error.statusCode = 401;
       throw error;
     }
@@ -216,13 +218,13 @@ export async function generateBiography(
         // Retry once after successful PIN
         return generateBiography(date, profile, language, true);
       } catch {
-        const error = new Error(getErrorMessage('pin_cancelled', language)) as BiographyError;
+        const error = new Error(getErrorMessage('pin_cancelled', baseLang)) as BiographyError;
         error.requestId = errorData.requestId;
         error.statusCode = 401;
         throw error;
       }
     }
-    const error = new Error(getErrorMessage(errorData.errorCode, language)) as BiographyError;
+    const error = new Error(getErrorMessage(errorData.errorCode, baseLang)) as BiographyError;
     error.requestId = errorData.requestId;
     error.statusCode = 401;
     throw error;
@@ -354,9 +356,10 @@ export async function isBiographyStale(date: string): Promise<boolean> {
 function showErrorToast(
   message: string, 
   requestId: string | undefined, 
-  language: 'ru' | 'en'
+  language: Language
 ): void {
-  const title = language === 'ru' ? 'Ошибка генерации биографии' : 'Biography generation error';
+  const baseLang = getBaseLanguage(language);
+  const title = baseLang === 'ru' ? 'Ошибка генерации биографии' : 'Biography generation error';
   const description = requestId 
     ? `${message}\n\nRequestId: ${requestId.slice(0, 8)}...`
     : message;
@@ -371,7 +374,7 @@ function showErrorToast(
 // showToast: true for user-initiated, false for background retries
 export async function requestBiographyGeneration(
   date: string,
-  language: 'ru' | 'en' = 'ru',
+  language: Language = 'ru',
   showToast: boolean = true
 ): Promise<StoredBiography> {
   const settings = loadAISettings();
@@ -449,11 +452,12 @@ export async function requestBiographyGeneration(
 
 // Retry pending biographies (background, silent unless max retries reached)
 export async function retryPendingBiographies(
-  language: 'ru' | 'en' = 'ru'
+  language: Language = 'ru'
 ): Promise<number> {
   const settings = loadAISettings();
   if (!settings.enabled) return 0;
   
+  const baseLang = getBaseLanguage(language);
   const pending = await getPendingBiographies();
   let retried = 0;
   let maxRetriesReached = 0;
@@ -472,11 +476,11 @@ export async function retryPendingBiographies(
   
   // Show single banner if any biographies reached max retries
   if (maxRetriesReached > 0) {
-    const message = language === 'ru'
+    const message = baseLang === 'ru'
       ? `${maxRetriesReached} биографий не удалось сгенерировать после нескольких попыток`
       : `${maxRetriesReached} biographies failed after multiple attempts`;
     
-    toast.warning(language === 'ru' ? 'Отложенные биографии' : 'Pending biographies', {
+    toast.warning(baseLang === 'ru' ? 'Отложенные биографии' : 'Pending biographies', {
       description: message,
       duration: 6000,
     });

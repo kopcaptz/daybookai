@@ -8,6 +8,7 @@ import {
   getErrorMessage,
   isAuthError,
 } from "./aiAuthRecovery";
+import { Language, getBaseLanguage } from "./i18n";
 
 // Receipt scanning limits (optimized for mobile + OCR)
 export const RECEIPT_LIMITS = {
@@ -191,7 +192,7 @@ export async function compressReceiptImage(
  */
 export async function scanReceipt(
   imageBase64: string,
-  language: "ru" | "en",
+  language: Language,
   options?: {
     currencyHint?: string;
     timezone?: string;
@@ -202,6 +203,7 @@ export async function scanReceipt(
   const requestId = crypto.randomUUID();
   const mode = options?.mode || "accurate";
   const model = SCAN_MODELS[mode];
+  const baseLang = getBaseLanguage(language);
   
   // Check token before making request (only on first attempt)
   if (!_isRetry && !isAITokenValid()) {
@@ -211,7 +213,7 @@ export async function scanReceipt(
     } catch {
       return {
         error: "service_error",
-        hint: getErrorMessage("pin_cancelled", language),
+        hint: getErrorMessage("pin_cancelled", baseLang),
         requestId,
       };
     }
@@ -224,7 +226,7 @@ export async function scanReceipt(
   const { data, error } = await supabase.functions.invoke<ReceiptScanResponse>("ai-receipt", {
     body: {
       imageBase64,
-      language,
+      language: baseLang,
       timezone: options?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
       currencyHint: options?.currencyHint,
       model,
@@ -253,7 +255,7 @@ export async function scanReceipt(
       } catch {
         return {
           error: "service_error",
-          hint: getErrorMessage("pin_cancelled", language),
+          hint: getErrorMessage("pin_cancelled", baseLang),
           requestId,
         };
       }
@@ -283,7 +285,7 @@ export async function scanReceipt(
     } catch {
       return {
         error: "service_error",
-        hint: getErrorMessage("pin_cancelled", language),
+        hint: getErrorMessage("pin_cancelled", baseLang),
         requestId: data.requestId,
       };
     }
