@@ -69,7 +69,21 @@ function DiscussionsListContent() {
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
         {/* Brand header */}
         <div className="flex items-center justify-between rtl:flex-row-reverse">
-          <div className="shrink-0 w-10" />
+          <div className="shrink-0">
+            <Button
+              onClick={handleNewDiscussion}
+              disabled={creating}
+              size="sm"
+              className="gap-1.5 rtl:flex-row-reverse"
+            >
+              {creating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              {t('discussions.new')}
+            </Button>
+          </div>
           <div className="flex-1 text-center min-w-0">
             <h1 className="text-xl font-serif font-medium text-foreground tracking-wide truncate">
               {t('discussions.title')}
@@ -78,22 +92,7 @@ function DiscussionsListContent() {
               {t('discussions.subtitle')}
             </p>
           </div>
-          <div className="shrink-0">
-          
-          <Button
-            onClick={handleNewDiscussion}
-            disabled={creating}
-            size="sm"
-            className="gap-1.5 rtl:flex-row-reverse"
-          >
-            {creating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Plus className="h-4 w-4" />
-            )}
-            {t('discussions.new')}
-          </Button>
-          </div>
+          <div className="shrink-0 w-10" />
         </div>
         
         {/* Rune divider */}
