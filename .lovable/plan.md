@@ -1,67 +1,58 @@
 
-# План: Исправить дублирование иконки на Settings
+# План: Переместить кнопку "חדש" в левый верхний угол
 
 ## Проблема
 
-На странице `/settings` две иконки гримуара:
-1. **GrimoireIcon в header** (строки 180-182) — бренд-декорация, не функциональная
-2. **FeedbackModal** — рабочая кнопка обратной связи
+На скриншоте видно, что кнопка "חדש" (Новое обсуждение) находится справа, но FeedbackModal тоже располагается в левом верхнем углу. В RTL-режиме кнопка "חדש" должна быть слева для удобного доступа.
 
-Я ошибочно убрал FeedbackModal, а нужно было убрать декоративную иконку из header.
+## Текущая структура (строки 71-97)
 
----
+```
+┌─────────────────────────────────────────┐
+│ [пустой div w-10]  │  ЗАГОЛОВОК  │ [+חדש] │
+└─────────────────────────────────────────┘
+```
 
 ## Решение
 
-### Изменение 1: `src/pages/SettingsPage.tsx`
+Поменять местами кнопку и пустой div:
 
-**Строки 179-192** — Убрать GrimoireIcon из header, оставив симметричный layout:
+```
+┌─────────────────────────────────────────┐
+│ [+חדש]  │  ЗАГОЛОВОК  │ [пустой div w-10] │
+└─────────────────────────────────────────┘
+```
+
+---
+
+## Изменение
+
+### Файл: `src/pages/DiscussionsListPage.tsx`
+
+**Строки 71-97** — Поменять порядок элементов:
 
 ```tsx
 // Было:
 <div className="flex items-center justify-between rtl:flex-row-reverse">
-  <div className="relative shrink-0 w-8">
-    <GrimoireIcon className="h-6 w-6 text-cyber-sigil" />
-  </div>
-  <div className="flex-1 text-center">
+  <div className="shrink-0 w-10" />           {/* Пустое место слева */}
+  <div className="flex-1 text-center min-w-0">
     ...
   </div>
-  <div className="shrink-0 w-8" />
+  <div className="shrink-0">                  {/* Кнопка справа */}
+    <Button ... />
+  </div>
 </div>
 
 // Стало:
-<div className="flex items-center justify-center">
-  <div className="text-center">
-    <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
-      {t('app.name')}
-    </h1>
-    <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
-      {t('app.subtitle')}
-    </p>
+<div className="flex items-center justify-between rtl:flex-row-reverse">
+  <div className="shrink-0">                  {/* Кнопка слева */}
+    <Button ... />
   </div>
+  <div className="flex-1 text-center min-w-0">
+    ...
+  </div>
+  <div className="shrink-0 w-10" />           {/* Пустое место справа */}
 </div>
-```
-
-Также можно удалить неиспользуемый импорт `GrimoireIcon` если он больше нигде не нужен на этой странице.
-
----
-
-### Изменение 2: `src/App.tsx`
-
-**Строка 139** — Убрать `/settings` из `hideFeedback`, чтобы вернуть кнопку обратной связи:
-
-```tsx
-// Было:
-const hideFeedback = ... ||
-  location.pathname === '/settings';
-
-// Стало (убрать эту строку):
-const hideFeedback = location.pathname.startsWith('/admin') || 
-  location.pathname === '/onboarding' ||
-  location.pathname === '/new' ||
-  location.pathname.startsWith('/entry/') ||
-  location.pathname.startsWith('/discussions/') ||
-  location.pathname.startsWith('/e/');
 ```
 
 ---
@@ -70,13 +61,17 @@ const hideFeedback = location.pathname.startsWith('/admin') ||
 
 | Файл | Изменения |
 |------|-----------|
-| `src/pages/SettingsPage.tsx` | Убрать GrimoireIcon из header |
-| `src/App.tsx` | Убрать `/settings` из `hideFeedback` |
+| `src/pages/DiscussionsListPage.tsx` | Поменять порядок элементов в header |
 
 ---
 
 ## Результат
 
-- **FeedbackModal** остаётся в левом верхнем углу и работает
-- **Header Settings** — чистый, без дублирующей иконки
-- Центрированный заголовок без лишних элементов
+В RTL-режиме (иврит/арабский):
+- Кнопка "חדש" будет в **левом** верхнем углу (визуально слева)
+- Заголовок остаётся по центру
+- Пустое пространство справа для баланса
+
+В LTR-режиме:
+- Кнопка будет слева
+- `rtl:flex-row-reverse` перевернёт порядок для RTL
