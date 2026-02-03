@@ -68,7 +68,7 @@ function DiscussionsListContent() {
     <div className="min-h-screen pb-24 cyber-noise rune-grid">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
         {/* Brand header */}
-        <div className="flex items-center justify-between rtl:flex-row-reverse">
+        <div className="flex items-center justify-between">
           <div className="shrink-0">
             <Button
               onClick={handleNewDiscussion}
