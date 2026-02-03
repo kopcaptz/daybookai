@@ -418,25 +418,25 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
 export function getScopeCountText(
   entryIds: number[],
   docIds: number[],
-  language: 'ru' | 'en'
+  language: string
 ): string {
+  const labels: Record<string, { entries: string; documents: string; noSources: string }> = {
+    ru: { entries: 'записей', documents: 'документов', noSources: 'Нет источников' },
+    en: { entries: 'entries', documents: 'documents', noSources: 'No sources' },
+    he: { entries: 'רשומות', documents: 'מסמכים', noSources: 'אין מקורות' },
+    ar: { entries: 'مدخلات', documents: 'مستندات', noSources: 'لا توجد مصادر' },
+  };
+  
+  const l = labels[language] || labels.en;
   const parts: string[] = [];
   
   if (entryIds.length > 0) {
-    parts.push(language === 'ru' 
-      ? `${entryIds.length} записей`
-      : `${entryIds.length} entries`);
+    parts.push(`${entryIds.length} ${l.entries}`);
   }
   
   if (docIds.length > 0) {
-    parts.push(language === 'ru'
-      ? `${docIds.length} документов`
-      : `${docIds.length} documents`);
+    parts.push(`${docIds.length} ${l.documents}`);
   }
   
-  if (parts.length === 0) {
-    return language === 'ru' ? 'Нет источников' : 'No sources';
-  }
-  
-  return parts.join(', ');
+  return parts.length === 0 ? l.noSources : parts.join(', ');
 }

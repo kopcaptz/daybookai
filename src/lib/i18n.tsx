@@ -373,13 +373,19 @@ export const translations = {
   
   // Discussions List
   'discussions.title': { ru: 'Обсуждения', en: 'Discussions', he: 'דיונים', ar: 'مناقشات' },
+  'discussions.subtitle': { ru: 'Чат с записями', en: 'Chat with entries', he: 'צ\'אט עם רשומות', ar: 'دردشة مع المدخلات' },
   'discussions.new': { ru: 'Новое', en: 'New', he: 'חדש', ar: 'جديد' },
+  'discussions.newTitle': { ru: 'Новое обсуждение', en: 'New discussion', he: 'דיון חדש', ar: 'مناقشة جديدة' },
   'discussions.empty': { ru: 'Нет обсуждений', en: 'No discussions', he: 'אין דיונים', ar: 'لا توجد مناقشات' },
   'discussions.emptyHint': { ru: 'Выберите записи и начните обсуждение', en: 'Select entries and start discussing', he: 'בחר רשומות והתחל לדון', ar: 'اختر مدخلات وابدأ المناقشة' },
   'discussions.delete': { ru: 'Удалить', en: 'Delete', he: 'מחק', ar: 'حذف' },
   'discussions.deleteConfirm': { ru: 'Удалить обсуждение?', en: 'Delete discussion?', he: 'למחוק דיון?', ar: 'حذف المناقشة؟' },
+  'discussions.deleteDesc': { ru: 'Это действие нельзя отменить. Все сообщения будут удалены.', en: 'This action cannot be undone. All messages will be deleted.', he: 'לא ניתן לבטל פעולה זו. כל ההודעות יימחקו.', ar: 'لا يمكن التراجع عن هذا الإجراء. سيتم حذف جميع الرسائل.' },
   'discussions.pin': { ru: 'Закрепить', en: 'Pin', he: 'הצמד', ar: 'تثبيت' },
   'discussions.unpin': { ru: 'Открепить', en: 'Unpin', he: 'בטל הצמדה', ar: 'إلغاء التثبيت' },
+  'discussions.entries': { ru: 'записей', en: 'entries', he: 'רשומות', ar: 'مدخلات' },
+  'discussions.documents': { ru: 'документов', en: 'documents', he: 'מסמכים', ar: 'مستندات' },
+  'discussions.noSources': { ru: 'Нет источников', en: 'No sources', he: 'אין מקורות', ar: 'لا توجد مصادر' },
   
   // Discussion Chat
   'discussion.context': { ru: 'Контекст', en: 'Context', he: 'הקשר', ar: 'السياق' },
