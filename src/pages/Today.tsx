@@ -153,9 +153,9 @@ function TodayContent() {
           </div>
         </div>
         
-        {/* Select button - positioned absolute right */}
+        {/* Select button - positioned absolute end for RTL */}
         {entries.length > 0 && !selectionMode && (
-          <div className="absolute top-6 right-4">
+          <div className="absolute top-6 end-4">
             <Button
               variant="ghost"
               size="sm"
@@ -187,7 +187,7 @@ function TodayContent() {
             className="text-xs gap-1 rtl:flex-row-reverse"
           >
             <Plus className="h-3.5 w-3.5" />
-            {language === 'ru' ? 'Напоминание' : 'Reminder'}
+            {t('today.reminder')}
           </Button>
         </div>
 
