@@ -1,6 +1,7 @@
 /**
  * Quick Reminder Sheet - create reminders directly from Today page.
  * Auto-creates a minimal diary entry to maintain entryId link.
+ * Supports ru, en, he, ar languages with RTL layout.
  */
 
 import { useState } from 'react';
@@ -21,12 +22,42 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { useI18n } from '@/lib/i18n';
-import { TIME_CHIPS, REPEAT_OPTIONS } from '@/lib/reminderUtils';
+import { TIME_CHIPS, REPEAT_OPTIONS, getLabel } from '@/lib/reminderUtils';
 import { createEntry, createReminder, type ReminderRepeat } from '@/lib/db';
 import { reconcileReminderNotifications } from '@/lib/reminderNotifications';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { SuggestedTime } from '@/lib/reminderDetection';
+
+// ============================================
+// LOCALIZED TEXTS
+// ============================================
+
+const texts = {
+  title: { ru: 'Новое напоминание', en: 'New reminder', he: 'תזכורת חדשה', ar: 'تذكير جديد' },
+  description: { 
+    ru: 'Создайте напоминание о важном деле', 
+    en: 'Create a reminder for something important', 
+    he: 'צור תזכורת לדבר חשוב', 
+    ar: 'أنشئ تذكيراً لشيء مهم' 
+  },
+  whatToRemind: { ru: 'Что напомнить?', en: 'What to remind?', he: 'מה להזכיר?', ar: 'ماذا تريد تذكيرك به؟' },
+  placeholder: { ru: 'Напр: Позвонить маме', en: 'E.g: Call mom', he: 'לדוגמה: להתקשר לאמא', ar: 'مثال: اتصل بأمي' },
+  when: { ru: 'Когда?', en: 'When?', he: 'מתי?', ar: 'متى؟' },
+  pickDate: { ru: 'Выбрать дату…', en: 'Pick date…', he: 'בחר תאריך…', ar: 'اختر تاريخ…' },
+  clearDate: { ru: 'Очистить дату', en: 'Clear date', he: 'נקה תאריך', ar: 'مسح التاريخ' },
+  repeat: { ru: 'Повторять', en: 'Repeat', he: 'חזרה', ar: 'تكرار' },
+  cancel: { ru: 'Отмена', en: 'Cancel', he: 'ביטול', ar: 'إلغاء' },
+  create: { ru: 'Создать', en: 'Create', he: 'צור', ar: 'إنشاء' },
+  creating: { ru: 'Создание...', en: 'Creating...', he: 'יוצר...', ar: 'جاري الإنشاء...' },
+  selected: { ru: 'Выбрано', en: 'Selected', he: 'נבחר', ar: 'تم الاختيار' },
+  enterText: { ru: 'Введите текст напоминания', en: 'Enter reminder text', he: 'הכנס טקסט לתזכורת', ar: 'أدخل نص التذكير' },
+  selectFuture: { ru: 'Выберите время в будущем', en: 'Select a future time', he: 'בחר זמן בעתיד', ar: 'اختر وقتاً في المستقبل' },
+  created: { ru: 'Напоминание создано', en: 'Reminder created', he: 'התזכורת נוצרה', ar: 'تم إنشاء التذكير' },
+  failed: { ru: 'Ошибка создания', en: 'Creation failed', he: 'היצירה נכשלה', ar: 'فشل الإنشاء' },
+};
+
+type TextKey = keyof typeof texts;
 
 interface QuickReminderSheetProps {
   open: boolean;
@@ -35,6 +66,10 @@ interface QuickReminderSheetProps {
 
 export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetProps) {
   const { language } = useI18n();
+  
+  // Helper to get localized text
+  const t = (key: TextKey): string => 
+    texts[key][language as keyof typeof texts[TextKey]] || texts[key].en;
   
   const [actionText, setActionText] = useState('');
   const [selectedChip, setSelectedChip] = useState<SuggestedTime | null>('tomorrow_morning');
@@ -45,6 +80,10 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
   const [customDate, setCustomDate] = useState<Date | undefined>();
   const [customTime, setCustomTime] = useState('09:00');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  // Get base language for date-fns (he/ar fallback to en)
+  const getBaseLanguage = () => (language === 'ru' ? 'ru' : 'en');
+  const getDateLocale = () => (language === 'ru' ? ru : enUS);
   
   // Compute final dueAt from either chip or custom selection
   const computeDueAt = (): number | null => {
@@ -69,13 +108,13 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
   
   const handleCreate = async () => {
     if (!actionText.trim()) {
-      toast.error(language === 'ru' ? 'Введите текст напоминания' : 'Enter reminder text');
+      toast.error(t('enterText'));
       return;
     }
     
     const dueAt = computeDueAt();
     if (dueAt === null) {
-      toast.error(language === 'ru' ? 'Выберите время в будущем' : 'Select a future time');
+      toast.error(t('selectFuture'));
       return;
     }
     
@@ -109,13 +148,13 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
       // Track usage
       trackUsageEvent('remindersCreated');
       
-      toast.success(language === 'ru' ? 'Напоминание создано' : 'Reminder created');
+      toast.success(t('created'));
       
       // Reset and close
       resetAndClose();
     } catch (error) {
       console.error('Failed to create reminder:', error);
-      toast.error(language === 'ru' ? 'Ошибка создания' : 'Creation failed');
+      toast.error(t('failed'));
     } finally {
       setIsCreating(false);
     }
@@ -158,8 +197,9 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
     if (!chip) return null;
     const timestamp = chip.getTimestamp();
     const date = new Date(timestamp);
-    const dateStr = format(date, language === 'ru' ? 'd MMM, HH:mm' : 'MMM d, HH:mm', { 
-      locale: language === 'ru' ? ru : enUS 
+    const baseLang = getBaseLanguage();
+    const dateStr = format(date, baseLang === 'ru' ? 'd MMM, HH:mm' : 'MMM d, HH:mm', { 
+      locale: getDateLocale() 
     });
     return dateStr;
   };
@@ -169,13 +209,13 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
   // Format custom selection for display
   const formatCustomSelection = (): string | null => {
     if (!customDate) return null;
-    const dateStr = format(customDate, language === 'ru' ? 'd MMM' : 'MMM d', { 
-      locale: language === 'ru' ? ru : enUS 
+    const baseLang = getBaseLanguage();
+    const dateStr = format(customDate, baseLang === 'ru' ? 'd MMM' : 'MMM d', { 
+      locale: getDateLocale() 
     });
     const timeStr = customTime;
-    return language === 'ru' 
-      ? `Выбрано: ${dateStr}, ${timeStr}`
-      : `Selected: ${dateStr}, ${timeStr}`;
+    const selectedLabel = t('selected');
+    return `${selectedLabel}: ${dateStr}, ${timeStr}`;
   };
   
   const customSelectionLabel = formatCustomSelection();
@@ -184,15 +224,13 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="rounded-t-xl">
-        <SheetHeader className="text-left">
-          <SheetTitle className="flex items-center gap-2">
+        <SheetHeader className="text-start">
+          <SheetTitle className="flex items-center gap-2 rtl:flex-row-reverse">
             <Bell className="h-5 w-5 text-cyber-sigil" />
-            {language === 'ru' ? 'Новое напоминание' : 'New reminder'}
+            {t('title')}
           </SheetTitle>
           <SheetDescription>
-            {language === 'ru' 
-              ? 'Создайте напоминание о важном деле'
-              : 'Create a reminder for something important'}
+            {t('description')}
           </SheetDescription>
         </SheetHeader>
         
@@ -200,13 +238,13 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
           {/* Action text input */}
           <div className="space-y-2">
             <Label htmlFor="action-text">
-              {language === 'ru' ? 'Что напомнить?' : 'What to remind?'}
+              {t('whatToRemind')}
             </Label>
             <Input
               id="action-text"
               value={actionText}
               onChange={(e) => setActionText(e.target.value)}
-              placeholder={language === 'ru' ? 'Напр: Позвонить маме' : 'E.g: Call mom'}
+              placeholder={t('placeholder')}
               autoFocus
               disabled={isCreating}
             />
@@ -215,7 +253,7 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
           {/* Time chips */}
           <div className="space-y-2">
             <Label>
-              {language === 'ru' ? 'Когда?' : 'When?'}
+              {t('when')}
             </Label>
             <div className="flex flex-wrap gap-2">
               {TIME_CHIPS.map((chip) => (
@@ -231,7 +269,7 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
                       : "bg-background border-border hover:bg-accent hover:text-accent-foreground"
                   )}
                 >
-                  {language === 'ru' ? chip.labelRu : chip.labelEn}
+                  {getLabel(chip, language)}
                 </button>
               ))}
             </div>
@@ -240,7 +278,7 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
             {chipTimePreview && (
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <Clock className="h-3 w-3" />
-                {chipTimePreview}
+                <span dir="ltr">{chipTimePreview}</span>
               </p>
             )}
             
@@ -253,14 +291,14 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
                     size="sm"
                     disabled={isCreating}
                     className={cn(
-                      "flex-1 justify-start text-left font-normal",
+                      "flex-1 justify-start text-start font-normal",
                       customDate && "border-primary"
                     )}
                   >
-                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    <CalendarIcon className="h-4 w-4 me-2" />
                     {customDate 
-                      ? format(customDate, 'dd.MM.yyyy')
-                      : (language === 'ru' ? 'Выбрать дату…' : 'Pick date…')}
+                      ? <span dir="ltr">{format(customDate, 'dd.MM.yyyy')}</span>
+                      : t('pickDate')}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0 z-[60]" align="start">
@@ -283,6 +321,7 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
                     onChange={(e) => setCustomTime(e.target.value)}
                     disabled={isCreating}
                     className="w-24"
+                    dir="ltr"
                   />
                   <Button
                     variant="ghost"
@@ -290,7 +329,7 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
                     onClick={handleClearCustomDate}
                     disabled={isCreating}
                     className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground"
-                    aria-label={language === 'ru' ? 'Очистить дату' : 'Clear date'}
+                    aria-label={t('clearDate')}
                   >
                     ×
                   </Button>
@@ -310,7 +349,7 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
           {/* Repeat selector */}
           <div className="space-y-2">
             <Label>
-              {language === 'ru' ? 'Повторять' : 'Repeat'}
+              {t('repeat')}
             </Label>
             <div className="flex flex-wrap gap-2">
               {REPEAT_OPTIONS.map((option) => (
@@ -326,7 +365,7 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
                       : "bg-background border-border hover:bg-accent hover:text-accent-foreground"
                   )}
                 >
-                  {language === 'ru' ? option.labelRu : option.labelEn}
+                  {getLabel(option, language)}
                 </button>
               ))}
             </div>
@@ -340,16 +379,14 @@ export function QuickReminderSheet({ open, onOpenChange }: QuickReminderSheetPro
               disabled={isCreating}
               className="flex-1"
             >
-              {language === 'ru' ? 'Отмена' : 'Cancel'}
+              {t('cancel')}
             </Button>
             <Button
               onClick={handleCreate}
               disabled={isCreating || !actionText.trim() || !hasSelection}
               className="flex-1"
             >
-              {isCreating 
-                ? (language === 'ru' ? 'Создание...' : 'Creating...') 
-                : (language === 'ru' ? 'Создать' : 'Create')}
+              {isCreating ? t('creating') : t('create')}
             </Button>
           </div>
         </div>
