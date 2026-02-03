@@ -1,58 +1,99 @@
 
+# План: Центральная кнопка создаёт обсуждение на /discussions
 
-# План: Исправить позицию кнопки "חדש" для RTL
+## Идея
 
-## Проблема
+Убрать кнопку "+חדש" из header страницы Discussions. Вместо этого центральная кнопка в BottomNav будет:
+- На `/discussions` → создавать новое обсуждение
+- На других страницах → переходить на `/new` (как сейчас)
 
-На скриншоте видно, что кнопка обрезается ("ew" вместо "New"). Это происходит из-за неправильной логики RTL:
+## Текущая архитектура
 
-**Текущая ситуация:**
-- Кнопка в DOM находится **первой** (слева)
-- `rtl:flex-row-reverse` разворачивает порядок
-- В RTL кнопка оказывается **справа** (неправильно!)
+```
+BottomNav.tsx:
+├── Центральная кнопка → всегда /new (новая запись)
+├── handleCenterClick() → startTransition(path='/new')
+
+DiscussionsListPage.tsx:
+├── Header содержит кнопку "+חדש"  
+├── handleNewDiscussion() → createDiscussionSession()
+```
 
 ## Решение
 
-Вернуть кнопку в конец DOM и убрать `rtl:flex-row-reverse`, чтобы в LTR кнопка была справа, а в RTL — слева (естественное поведение flexbox в RTL).
+### Изменение 1: `src/components/BottomNav.tsx`
 
-Или проще: удалить `rtl:flex-row-reverse` и оставить кнопку первой — тогда в RTL она автоматически будет справа (что неправильно).
-
-**Правильное решение**: Кнопка должна быть в начале DOM БЕЗ `rtl:flex-row-reverse`:
-
-```
-LTR: [Кнопка] | Заголовок | [пусто]  → кнопка слева ✓
-RTL: [пусто] | Заголовок | [Кнопка]  → кнопка слева (визуально) ✓
-```
-
----
-
-## Изменение
-
-### Файл: `src/pages/DiscussionsListPage.tsx`
-
-**Строка 71** — Убрать `rtl:flex-row-reverse`:
+Добавить логику определения текущего route:
 
 ```tsx
-// Было:
-<div className="flex items-center justify-between rtl:flex-row-reverse">
-
-// Стало:
-<div className="flex items-center justify-between">
+const handleCenterClick = (e: React.MouseEvent) => {
+  e.preventDefault();
+  
+  if (navigator.vibrate) {
+    navigator.vibrate(15);
+  }
+  
+  // На странице обсуждений — создаём новое обсуждение напрямую
+  if (location.pathname === '/discussions') {
+    // Dispatch custom event для DiscussionsListPage
+    window.dispatchEvent(new CustomEvent('create-new-discussion'));
+    return;
+  }
+  
+  // На других страницах — переход на /new
+  window.dispatchEvent(new CustomEvent('grimoire-ritual-start'));
+  startTransition(centerButtonRef.current, item.path);
+};
 ```
 
-Это сохранит текущий DOM-порядок (кнопка первая), и:
-- В **LTR**: кнопка будет слева
-- В **RTL**: flexbox автоматически отобразит кнопку справа (начало строки в RTL — это правая сторона)
+### Изменение 2: `src/pages/DiscussionsListPage.tsx`
 
-Но на скриншоте язык — английский (LTR), и кнопка обрезается. Нужно проверить, не перекрывает ли что-то кнопку.
+1. Убрать кнопку "+חדש" из header
+2. Добавить listener на event `create-new-discussion`:
+
+```tsx
+useEffect(() => {
+  const handleCreateDiscussion = () => {
+    handleNewDiscussion();
+  };
+  
+  window.addEventListener('create-new-discussion', handleCreateDiscussion);
+  return () => window.removeEventListener('create-new-discussion', handleCreateDiscussion);
+}, []);
+```
+
+3. Упростить header (только заголовок по центру):
+
+```tsx
+<header className="sticky top-0 z-40 ...">
+  <div className="text-center">
+    <h1 className="text-xl font-serif ...">{t('discussions.title')}</h1>
+    <p className="text-xs text-cyber-sigil/60 ...">{t('discussions.subtitle')}</p>
+  </div>
+  <div className="mt-4 rune-divider">...</div>
+</header>
+```
 
 ---
 
-## Альтернативная проблема
+## Визуальный результат
 
-Смотря на скриншот внимательнее — кнопка "New" частично скрыта превью-баром Lovable (видна только "ew"). Это не баг в коде, а особенность preview-окна.
+**До:**
+```
+┌──────────────────────────────────────┐
+│  [+חדש]  │  דיונים  │  [пусто]       │
+└──────────────────────────────────────┘
+         [Центральная кнопка] → /new
+```
 
-Если это действительно проблема preview, то код уже правильный!
+**После:**
+```
+┌──────────────────────────────────────┐
+│           דיונים                     │
+│       צ'אט עם רשומות                 │
+└──────────────────────────────────────┘
+         [Центральная кнопка] → новое обсуждение
+```
 
 ---
 
@@ -60,11 +101,14 @@ RTL: [пусто] | Заголовок | [Кнопка]  → кнопка сле
 
 | Файл | Изменения |
 |------|-----------|
-| `src/pages/DiscussionsListPage.tsx` | Проверить и, возможно, убрать `rtl:flex-row-reverse` |
+| `src/components/BottomNav.tsx` | Добавить логику route-aware для центральной кнопки |
+| `src/pages/DiscussionsListPage.tsx` | Убрать кнопку из header, добавить event listener |
 
 ---
 
-## Рекомендация
+## Преимущества
 
-Попробуйте открыть приложение в полноэкранном режиме или в отдельном окне браузера, чтобы убедиться, что кнопка не обрезается preview-интерфейсом Lovable.
-
+1. **Чистый header** — только заголовок, без лишних элементов
+2. **Консистентный UX** — центральная кнопка всегда "создаёт что-то новое" в контексте текущей страницы
+3. **Больше места** — FeedbackModal не конфликтует с кнопкой "+חדש"
+4. **Интуитивно** — пользователи привыкнут, что большая кнопка = главное действие
