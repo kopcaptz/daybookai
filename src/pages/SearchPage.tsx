@@ -64,7 +64,7 @@ function SearchContent() {
             <SearchIcon className="h-6 w-6 text-cyber-sigil" />
           </div>
           <div className="flex-1 text-center">
-            <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
+            <h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
               {t('app.name')}
             </h1>
             <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">

@@ -386,7 +386,7 @@ function ChatContent() {
               <SigilIcon className="h-6 w-6 text-cyber-sigil" />
             </div>
             <div>
-              <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
+              <h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
                 {t('app.name')}
               </h1>
               <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
@@ -435,7 +435,7 @@ function ChatContent() {
               <SigilIcon className="h-6 w-6 text-cyber-sigil" />
             </div>
             <div>
-              <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
+              <h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
                 {t('app.name')}
               </h1>
               <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
@@ -481,7 +481,7 @@ function ChatContent() {
               <div className="absolute -bottom-1 -right-1 w-2 h-2 rounded-full bg-cyber-glow animate-pulse-glow" />
             </div>
             <div>
-              <h1 className="text-xl font-serif font-medium text-foreground tracking-wide">
+              <h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
                 {t('app.name')}
               </h1>
               <p className="text-xs text-muted-foreground/80 tracking-widest">
