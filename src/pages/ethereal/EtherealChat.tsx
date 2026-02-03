@@ -157,7 +157,7 @@ export default function EtherealChat() {
                   )}
                 </div>
                 <span className="text-[10px] text-muted-foreground mt-1">
-                  {format(new Date(msg.createdAtMs), 'HH:mm')}
+                  <span dir="ltr">{format(new Date(msg.createdAtMs), 'HH:mm')}</span>
                 </span>
               </div>
             );
@@ -195,7 +195,7 @@ export default function EtherealChat() {
           </div>
         )}
         
-        <div className="flex gap-2">
+        <div className="flex rtl:flex-row-reverse gap-2">
           <EtherealMediaButton
             onImageSelect={handleImageSelect}
             disabled={!isConnected || isSending}

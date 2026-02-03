@@ -148,7 +148,7 @@ export function TaskCard({ task, onToggle, onTap, onDelete }: TaskCardProps) {
                   isOverdue && "text-destructive font-medium"
                 )}>
                   <Calendar className="w-3 h-3" />
-                  {t('due')} {dueText}
+                  {t('due')} <span dir="ltr">{dueText}</span>
                 </span>
               )}
 
