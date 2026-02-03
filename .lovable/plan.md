@@ -1,164 +1,150 @@
 
-# План: RTL Polish & Hebrew i18n (v2.3)
+# План: i18n для FeedbackModal
 
-## Приоритет задач
+## Проблема
 
-| # | Задача | Статус |
-|---|--------|--------|
-| 1 | Проверить onboarding в Hebrew | ✅ Код готов — ждёт ручной проверки |
-| 2 | Hebrew i18n — минимальный скелет | ✅ Добавлено ~350 ключей (he + ar) |
-| 3 | Spacing migration (точечно) | ✅ `BottomNav` + `EntryCard` готовы |
-
----
-
-## Шаг 1: Проверка Onboarding (Manual Test)
-
-**Onboarding уже должен работать!** Мы добавили:
-- `slides.he` и `slides.ar` с 4 слайдами каждый
-- `labels.he` и `labels.ar` для кнопок
-- Fallback для theme labels через `getBaseLanguage()`
-
-**Как проверить:**
-1. В DevTools Console выполнить: `localStorage.removeItem('daybook-onboarded')`
-2. Перезагрузить страницу
-3. Язык должен быть עברית
-4. Проверить:
-   - [ ] Страница загружается без белого экрана
-   - [ ] Текст на иврите отображается
-   - [ ] Кнопки "דלג", "הבא", "חזרה", "התחל" работают
-   - [ ] Свайпы работают (RTL направление)
+На скриншоте видно, что модал "Связь с Мастером" показывает русский текст даже в Hebrew-режиме:
+- "Связь с Мастером" (заголовок)
+- "Изложите вашу мысль..." (placeholder)
+- "Прикрепить артефакт" (кнопка)
+- "Отправить в эфир" (submit)
+- Toast-сообщения на русском
 
 ---
 
-## Шаг 2: Hebrew i18n — Минимальный скелет
+## Решение
 
-Добавить Hebrew переводы для ключевых разделов в `src/lib/i18n.tsx`.
-
-### 2.1 Navigation keys (критично для BottomNav)
-
-```typescript
-'nav.today': { ru: '...', en: '...', he: 'היום' },
-'nav.calendar': { ru: '...', en: '...', he: 'לוח שנה' },
-'nav.discussions': { ru: '...', en: '...', he: 'דיונים' },
-'nav.settings': { ru: '...', en: '...', he: 'הגדרות' },
-```
-
-### 2.2 Common keys
-
-```typescript
-'common.save': { ..., he: 'שמור' },
-'common.cancel': { ..., he: 'ביטול' },
-'common.delete': { ..., he: 'מחק' },
-'common.back': { ..., he: 'חזרה' },
-```
-
-### 2.3 Today page keys
-
-```typescript
-'today.noEntries': { ..., he: 'אין רשומות עדיין' },
-'today.startDay': { ..., he: 'התחל את היום' },
-'today.select': { ..., he: 'בחר' },
-'today.cancel': { ..., he: 'ביטול' },
-'today.discuss': { ..., he: 'דון' },
-```
-
-### 2.4 Calendar keys (weekdays + months)
-
-```typescript
-'calendar.mon': { ..., he: 'ב׳' },
-'calendar.tue': { ..., he: 'ג׳' },
-'calendar.wed': { ..., he: 'ד׳' },
-'calendar.thu': { ..., he: 'ה׳' },
-'calendar.fri': { ..., he: 'ו׳' },
-'calendar.sat': { ..., he: 'ש׳' },
-'calendar.sun': { ..., he: 'א׳' },
-
-'calendar.january': { ..., he: 'ינואר' },
-'calendar.february': { ..., he: 'פברואר' },
-// ... и т.д.
-```
-
-### 2.5 Entry keys
-
-```typescript
-'entry.new': { ..., he: 'רשומה חדשה' },
-'entry.empty': { ..., he: 'רשומה ריקה' },
-'entry.saved': { ..., he: 'רשומה נשמרה' },
-```
-
-### 2.6 Settings keys
-
-```typescript
-'settings.title': { ..., he: 'הגדרות' },
-'settings.theme': { ..., he: 'ערכת נושא' },
-'settings.language': { ..., he: 'שפה' },
-```
-
-**Общее количество:** ~50-60 ключей для "ощущения продукта"
+Интегрировать `useI18n()` и добавить ключи `feedback.*` для всех языков.
 
 ---
 
-## Шаг 3: Spacing Migration (точечно)
+## Изменения
 
-### 3.1 BottomNav (`src/components/BottomNav.tsx`)
+### Файл: `src/lib/i18n.tsx`
 
-**Проблемные места:**
+Добавить новую секцию переводов:
 
-| Строка | Текущий | Исправленный |
-|--------|---------|--------------|
-| 75 | `left-1` | `start-1` (для Glow accent) |
-| 109 | `-right-3` | `-end-3` (для Badge) |
+```typescript
+// Feedback Modal
+'feedback.title': { 
+  ru: 'Связь с Мастером', 
+  en: 'Contact the Master', 
+  he: 'קשר עם המאסטר', 
+  ar: 'تواصل مع المعلم' 
+},
+'feedback.placeholder': { 
+  ru: 'Изложите вашу мысль...', 
+  en: 'Share your thoughts...', 
+  he: 'שתפו את מחשבותיכם...', 
+  ar: 'شاركنا أفكارك...' 
+},
+'feedback.attachArtifact': { 
+  ru: 'Прикрепить артефакт', 
+  en: 'Attach artifact', 
+  he: 'צרף קובץ', 
+  ar: 'إرفاق ملف' 
+},
+'feedback.submit': { 
+  ru: 'Отправить в эфир', 
+  en: 'Send to ether', 
+  he: 'שלח', 
+  ar: 'إرسال' 
+},
+'feedback.submitting': { 
+  ru: 'Отправка...', 
+  en: 'Sending...', 
+  he: 'שולח...', 
+  ar: 'جاري الإرسال...' 
+},
+'feedback.successTitle': { 
+  ru: 'Сообщение отправлено в архив', 
+  en: 'Message sent to archive', 
+  he: 'ההודעה נשלחה', 
+  ar: 'تم إرسال الرسالة' 
+},
+'feedback.successDesc': { 
+  ru: 'Мастер получит ваше послание', 
+  en: 'The Master will receive your message', 
+  he: 'המאסטר יקבל את הודעתך', 
+  ar: 'سيستلم المعلم رسالتك' 
+},
+'feedback.errorTitle': { 
+  ru: 'Ошибка отправки', 
+  en: 'Send error', 
+  he: 'שגיאה בשליחה', 
+  ar: 'خطأ في الإرسال' 
+},
+'feedback.errorDesc': { 
+  ru: 'Не удалось отправить сообщение. Попробуйте позже.', 
+  en: 'Failed to send message. Try again later.', 
+  he: 'לא ניתן לשלוח את ההודעה. נסו שוב מאוחר יותר.', 
+  ar: 'فشل إرسال الرسالة. حاول مرة أخرى لاحقاً.' 
+},
+'feedback.fileTooLargeTitle': { 
+  ru: 'Файл слишком большой', 
+  en: 'File too large', 
+  he: 'הקובץ גדול מדי', 
+  ar: 'الملف كبير جداً' 
+},
+'feedback.fileTooLargeDesc': { 
+  ru: 'Максимальный размер изображения — 5 МБ', 
+  en: 'Maximum image size is 5 MB', 
+  he: 'גודל תמונה מקסימלי 5 מ"ב', 
+  ar: 'الحد الأقصى لحجم الصورة 5 ميجابايت' 
+},
+'feedback.removeFile': { 
+  ru: 'Удалить файл', 
+  en: 'Remove file', 
+  he: 'הסר קובץ', 
+  ar: 'إزالة الملف' 
+},
+```
+
+---
+
+### Файл: `src/components/FeedbackModal.tsx`
+
+**1. Добавить импорт i18n (строка 19)**
 
 ```tsx
-// Строка 75
-<div className="absolute top-1 start-1 w-4 h-4 rounded-full bg-cyber-glow/20 blur-sm" />
-
-// Строка 109
-<Badge 
-  className="absolute -top-2 -end-3 h-4 min-w-4 px-1 ..."
->
+import { useI18n } from '@/lib/i18n';
 ```
 
-**Что НЕ меняем:**
-- `left-0 right-0` — симметричные, работают в RTL
-- `left-1/2 -translate-x-1/2` — центрирование, работает
-
-### 3.2 EntryCard (`src/components/EntryCard.tsx`)
-
-**Проблемные места:**
-
-| Строка | Текущий | Исправленный |
-|--------|---------|--------------|
-| 67 | `ml-1` | `ms-1` (для AI sparkle) |
-| 82 | `ml-auto` | `ms-auto` (для Lock icon) |
+**2. Получить функцию перевода в компоненте (строка 28)**
 
 ```tsx
-// Строка 67
-{entry.titleSource === 'ai' && (
-  <span className="ms-1 text-xs text-cyber-glow/60">✨</span>
+export function FeedbackModal({ onSecretUnlock }: FeedbackModalProps) {
+  const { t } = useI18n();
+  // ... rest of state
+```
+
+**3. Заменить хардкод-строки на `t()` вызовы**
+
+| Строка | Было | Стало |
+|--------|------|-------|
+| 48 | `"Файл слишком большой"` | `t('feedback.fileTooLargeTitle')` |
+| 49 | `"Максимальный размер..."` | `t('feedback.fileTooLargeDesc')` |
+| 133 | `"Сообщение отправлено..."` | `t('feedback.successTitle')` |
+| 134 | `"Мастер получит..."` | `t('feedback.successDesc')` |
+| 144 | `"Ошибка отправки"` | `t('feedback.errorTitle')` |
+| 145 | `"Не удалось..."` | `t('feedback.errorDesc')` |
+| 184 | `aria-label="Связь с Мастером"` | `aria-label={t('feedback.title')}` |
+| 240 | `Связь с Мастером` | `{t('feedback.title')}` |
+| 250 | `placeholder="Изложите..."` | `placeholder={t('feedback.placeholder')}` |
+| 286 | `Прикрепить артефакт` | `{t('feedback.attachArtifact')}` |
+| 315 | `aria-label="Удалить файл"` | `aria-label={t('feedback.removeFile')}` |
+| 346 | `"Отправка..." / "Отправить в эфир"` | `t('feedback.submitting') / t('feedback.submit')` |
+
+**4. RTL-совместимость кнопки (строка 172)**
+
+Заменить `left-4` на `start-4` для RTL:
+
+```tsx
+className={cn(
+  "fixed top-4 start-4 z-50",  // left-4 → start-4
+  // ... rest
 )}
-
-// Строка 82
-<Lock className="h-3 w-3 ms-auto text-cyber-rune/60" />
 ```
-
-### 3.3 ChevronRight direction
-
-В RTL ChevronRight должен указывать влево. Варианты:
-
-**Опция A (простая):** Добавить `rtl:rotate-180`
-```tsx
-<ChevronRight className="... rtl:rotate-180" />
-```
-
-**Опция B (семантическая):** Swap на ChevronLeft
-```tsx
-import { isRTL, useI18n } from '@/lib/i18n';
-
-const ArrowIcon = isRTL(language) ? ChevronLeft : ChevronRight;
-```
-
-Рекомендую **Опция A** для EntryCard, т.к. это декоративный индикатор.
 
 ---
 
@@ -166,37 +152,18 @@ const ArrowIcon = isRTL(language) ? ChevronLeft : ChevronRight;
 
 | Файл | Изменения |
 |------|-----------|
-| `src/lib/i18n.tsx` | Добавить `he:` переводы для ~50-60 ключей |
-| `src/components/BottomNav.tsx` | `left-1` → `start-1`, `-right-3` → `-end-3` |
-| `src/components/EntryCard.tsx` | `ml-1` → `ms-1`, `ml-auto` → `ms-auto`, ChevronRight RTL |
+| `src/lib/i18n.tsx` | Добавить ~12 ключей `feedback.*` |
+| `src/components/FeedbackModal.tsx` | Интегрировать `useI18n()`, заменить строки |
 
 ---
 
-## Чек-лист после изменений
+## Результат
 
-### Onboarding (уже должен работать)
-- [ ] Страница загружается в Hebrew
-- [ ] Свайпы работают в обе стороны
-- [ ] Кнопки навигации работают
+После изменений в Hebrew-режиме будет отображаться:
+- **Заголовок**: "קשר עם המאסטר"
+- **Placeholder**: "שתפו את מחשבותיכם..."
+- **Кнопка attach**: "צרף קובץ"
+- **Кнопка submit**: "שלח"
+- **Toast success**: "ההודעה נשלחה"
 
-### BottomNav
-- [ ] Badge напоминаний справа от иконки (в LTR) / слева (в RTL)
-- [ ] Glow accent в правильном углу кнопки
-
-### EntryCard
-- [ ] Sparkle "✨" после заголовка (не перед)
-- [ ] Lock иконка справа (в LTR) / слева (в RTL)
-- [ ] Chevron указывает в направлении перехода
-
-### i18n
-- [ ] BottomNav показывает ивритские лейблы
-- [ ] Calendar показывает ивритские дни недели
-- [ ] Today page не имеет английских fallback-ов
-
----
-
-## Что НЕ делаем в этом патче
-
-- Массовый рефактор всех `ml/mr` → `ms/me`
-- Arabic переводы (только Hebrew как первый RTL)
-- Изменения в логике календаря (weekStartsOn)
+Кнопка переместится в правый верхний угол (RTL) благодаря `start-4`.
