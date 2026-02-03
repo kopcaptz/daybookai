@@ -64,7 +64,7 @@ export function EntryCard({ entry, showDate = false, selectable = false, selecte
             <h4 className="text-sm font-medium text-foreground mb-1 line-clamp-1">
               {entry.title}
               {entry.titleSource === 'ai' && (
-                <span className="ml-1 text-xs text-cyber-glow/60">✨</span>
+                <span className="ms-1 text-xs text-cyber-glow/60">✨</span>
               )}
             </h4>
           )}
@@ -79,7 +79,7 @@ export function EntryCard({ entry, showDate = false, selectable = false, selecte
               </>
             )}
             {entry.isPrivate && (
-              <Lock className="h-3 w-3 ml-auto text-cyber-rune/60" />
+              <Lock className="h-3 w-3 ms-auto text-cyber-rune/60" />
             )}
           </div>
           
@@ -107,7 +107,7 @@ export function EntryCard({ entry, showDate = false, selectable = false, selecte
         
         {/* Arrow indicator (hidden in select mode) */}
         {!selectable && (
-          <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-cyber-sigil/70 group-hover:translate-x-0.5 transition-all duration-200 shrink-0 mt-1" />
+          <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-cyber-sigil/70 group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5 transition-all duration-200 shrink-0 mt-1" />
         )}
       </div>
     </div>

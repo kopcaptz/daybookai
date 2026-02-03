@@ -72,7 +72,7 @@ export function BottomNav() {
                   "relative overflow-hidden grimoire-shadow"
                 )}>
                   {/* Glow accent */}
-                  <div className="absolute top-1 left-1 w-4 h-4 rounded-full bg-cyber-glow/20 blur-sm" />
+                  <div className="absolute top-1 start-1 w-4 h-4 rounded-full bg-cyber-glow/20 blur-sm" />
                   
                   {/* Pulsing ring indicator for tappability */}
                   <div className="absolute inset-0 rounded-lg border-2 border-cyber-glow/20 animate-ping-slow" />
@@ -106,7 +106,7 @@ export function BottomNav() {
                 {item.showBadge && pendingCount > 0 && (
                   <Badge 
                     variant="destructive" 
-                    className="absolute -top-2 -right-3 h-4 min-w-4 px-1 text-[10px] font-bold flex items-center justify-center"
+                    className="absolute -top-2 -end-3 h-4 min-w-4 px-1 text-[10px] font-bold flex items-center justify-center"
                   >
                     {pendingCount > 9 ? '9+' : pendingCount}
                   </Badge>
