@@ -324,6 +324,19 @@ export interface WeeklyInsight {
   sourceEntryCount: number;
 }
 
+// Audio Transcript type (v15)
+export interface AudioTranscript {
+  attachmentId: number;      // PK, links to attachments table
+  createdAt: number;
+  updatedAt: number;
+  status: 'pending' | 'done' | 'error';
+  model: string;             // "google/gemini-2.5-flash"
+  text: string | null;
+  language: string | null;
+  durationSec: number | null; // null in v1.0
+  errorCode: string | null;   // too_large | unsupported_format | rate_limited | transcription_failed | auth_required | unknown
+}
+
 // База данных Dexie
 class DaybookDatabase extends Dexie {
   entries!: EntityTable<DiaryEntry, 'id'>;
@@ -339,6 +352,7 @@ class DaybookDatabase extends Dexie {
   discussionMessages!: EntityTable<DiscussionMessage, 'id'>;
   analysisQueue!: EntityTable<AnalysisQueueItem, 'id'>;
   weeklyInsights!: EntityTable<WeeklyInsight, 'weekStart'>;
+  audioTranscripts!: EntityTable<AudioTranscript, 'attachmentId'>;
 
   constructor() {
     super('DaybookDB');
@@ -547,6 +561,24 @@ class DaybookDatabase extends Dexie {
       discussionMessages: '++id, sessionId, [sessionId+createdAt]',
       analysisQueue: '++id, entryId, status, createdAt',
       weeklyInsights: 'weekStart, generatedAt',
+    });
+
+    // Version 15: Add audio transcripts table for audio attachment transcription
+    this.version(15).stores({
+      entries: '++id, date, mood, *tags, *semanticTags, isPrivate, aiAllowed, createdAt, updatedAt, aiAnalyzedAt',
+      attachments: '++id, entryId, kind, createdAt',
+      drafts: 'id, updatedAt',
+      biographies: 'date, status, generatedAt',
+      attachmentInsights: 'attachmentId, createdAt',
+      receipts: '++id, entryId, date, storeName, createdAt, updatedAt',
+      receiptItems: '++id, receiptId, category',
+      scanLogs: '++id, timestamp',
+      reminders: '++id, entryId, status, dueAt, createdAt',
+      discussionSessions: '++id, updatedAt, lastMessageAt, pinned',
+      discussionMessages: '++id, sessionId, [sessionId+createdAt]',
+      analysisQueue: '++id, entryId, status, createdAt',
+      weeklyInsights: 'weekStart, generatedAt',
+      audioTranscripts: 'attachmentId, status, createdAt',
     });
   }
 }
@@ -860,13 +892,18 @@ export async function exportAllData(): Promise<string> {
 }
 
 export async function clearAllData(): Promise<void> {
-  await db.transaction('rw', [db.entries, db.attachments, db.drafts, db.receipts, db.receiptItems, db.scanLogs], async () => {
+  await db.transaction('rw', [
+    db.entries, db.attachments, db.drafts, 
+    db.receipts, db.receiptItems, db.scanLogs,
+    db.audioTranscripts,
+  ], async () => {
     await db.entries.clear();
     await db.attachments.clear();
     await db.drafts.clear();
     await db.receipts.clear();
     await db.receiptItems.clear();
     await db.scanLogs.clear();
+    await db.audioTranscripts.clear();
   });
 }
 

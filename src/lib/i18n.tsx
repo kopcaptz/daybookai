@@ -408,6 +408,23 @@ export const translations = {
   'mode.compute': { ru: 'Расчёт', en: 'Compute', he: 'חשב', ar: 'حساب' },
   'mode.plan': { ru: 'План', en: 'Plan', he: 'תוכנית', ar: 'خطة' },
   
+  // Audio Transcription
+  'audio.transcribe': { ru: 'Транскрибировать', en: 'Transcribe', he: 'תמלל', ar: 'نسخ صوتي' },
+  'audio.transcribing': { ru: 'Транскрипция...', en: 'Transcribing...', he: 'מתמלל...', ar: 'جاري النسخ...' },
+  'audio.transcriptionReady': { ru: 'Транскрипция готова', en: 'Transcription ready', he: 'התמלול מוכן', ar: 'النسخ جاهز' },
+  'audio.copy': { ru: 'Копировать', en: 'Copy', he: 'העתק', ar: 'نسخ' },
+  'audio.insert': { ru: 'Вставить', en: 'Insert', he: 'הכנס', ar: 'إدراج' },
+  'audio.privacyTitle': { ru: 'Обработка аудио', en: 'Audio Processing', he: 'עיבוד אודיו', ar: 'معالجة الصوت' },
+  'audio.privacyWarning': { ru: 'Аудио будет отправлено на обработку', en: 'Audio will be sent for processing', he: 'האודיו יישלח לעיבוד', ar: 'سيتم إرسال الصوت للمعالجة' },
+  'audio.tooLarge': { ru: 'Файл слишком большой (макс. 25 МБ)', en: 'File too large (max 25 MB)', he: 'הקובץ גדול מדי (מקסימום 25 מ"ב)', ar: 'الملف كبير جداً (الحد 25 ميجابايت)' },
+  'audio.unsupportedFormat': { ru: 'Формат не поддерживается', en: 'Unsupported format', he: 'פורמט לא נתמך', ar: 'تنسيق غير مدعوم' },
+  'audio.transcriptionFailed': { ru: 'Не удалось транскрибировать', en: 'Transcription failed', he: 'התמלול נכשל', ar: 'فشل النسخ' },
+  'audio.authRequired': { ru: 'Требуется авторизация', en: 'Authorization required', he: 'נדרש אימות', ar: 'مطلوب التفويض' },
+  'audio.rateLimited': { ru: 'Слишком много запросов', en: 'Too many requests', he: 'יותר מדי בקשות', ar: 'طلبات كثيرة جداً' },
+  'audio.copied': { ru: 'Скопировано', en: 'Copied', he: 'הועתק', ar: 'تم النسخ' },
+  'common.retry': { ru: 'Повторить', en: 'Retry', he: 'נסה שוב', ar: 'إعادة المحاولة' },
+  'common.continue': { ru: 'Продолжить', en: 'Continue', he: 'המשך', ar: 'استمرار' },
+  
 } as const;
 
 export type TranslationKey = keyof typeof translations;
