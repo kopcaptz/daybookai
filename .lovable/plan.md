@@ -1,193 +1,193 @@
 
-# План: Полный бэкап и восстановление IndexedDB
+# План: Верификация и усиление Backup/Restore
 
-## Анализ проблемы
+## Обзор текущей реализации
 
-### 1. Origin (домен) — подтверждение
-- **Preview URL**: `https://id-preview--9fca1fba-dfe1-49a4-880b-c14ab9bec760.lovable.app`
-- **Production URL**: `https://daybookai.lovable.app`
+### Что уже есть:
+- `backupService.ts` — экспорт/импорт всех 14 таблиц IndexedDB
+- Blob→base64 конвертация для attachments и drafts
+- UI карточка в Settings с Export/Import кнопками
+- Progress callback (частично используется)
+- Валидация manifest (dbName, dbVersion, exportedAt)
 
-Это **разные origin** — у них разные IndexedDB. Данные из preview НЕ переносятся в production автоматически. Это ожидаемое поведение браузера.
-
-Если пользователь работал в preview, а потом открыл production — он увидит пустую базу. Решение: **Export/Import Backup**.
-
-### 2. Текущее состояние экспорта
-Существующая функция `exportAllData()` экспортирует **только entries** — это неполный бэкап:
-```typescript
-export async function exportAllData(): Promise<string> {
-  const entries = await getAllEntries();
-  return JSON.stringify({ 
-    entries, 
-    exportedAt: new Date().toISOString(),
-    note: 'Вложения (фото, видео, аудио) не экспортируются'
-  }, null, 2);
-}
-```
-
-Не экспортируются: `attachments`, `drafts`, `biographies`, `reminders`, `receipts`, `receiptItems`, `discussionSessions`, `discussionMessages`, `weeklyInsights`, `audioTranscripts`, `attachmentInsights`, `analysisQueue`.
+### Что нужно улучшить:
+1. Добавить тесты для проверки цикла export→import
+2. ZIP формат вместо монолитного JSON
+3. Защита (предупреждение о размере, полный progress UI)
+4. Напоминание о бэкапе (14+ дней)
 
 ---
 
-## План реализации
+## Шаг 1: Unit/Integration тест для backup цикла
 
-### Шаг 1: Новый сервис `src/lib/backupService.ts`
-
-Создать полноценный backup-сервис:
+Создать файл `src/lib/backupService.test.ts`:
 
 ```text
-+---------------------+
-|   BackupManifest    |
-+---------------------+
-| dbName: string      |
-| dbVersion: number   |
-| exportedAt: string  |
-| appVersion: string  |
-| tables: {           |
-|   [name]: count     |
-| }                   |
-+---------------------+
-
-+---------------------+
-|   BackupPayload     |
-+---------------------+
-| manifest            |
-| entries[]           |
-| attachments[]       | <- Blob → base64
-| drafts[]            |
-| biographies[]       |
-| reminders[]         |
-| receipts[]          |
-| receiptItems[]      |
-| discussionSessions[]|
-| discussionMessages[]|
-| weeklyInsights[]    |
-| audioTranscripts[]  |
-| attachmentInsights[]|
-| analysisQueue[]     |
-| scanLogs[]          |
-+---------------------+
+describe('Backup Service')
+├── it('exports all tables with correct manifest')
+├── it('imports backup and restores data correctly')
+├── it('validates backup manifest structure')
+├── it('handles blob to base64 conversion')
+└── it('handles base64 to blob conversion')
 ```
 
-**Функции:**
-- `exportFullBackup()` — сериализует все таблицы в JSON
-  - Blob-ы конвертируются в base64 для портативности
-  - Генерирует manifest с counts для валидации
-- `validateBackupManifest(data)` — проверяет структуру и версию
-- `importFullBackup(data, options)` — восстанавливает данные
-  - `options.wipeExisting: boolean` — очистить перед импортом
-  - Декодирует base64 обратно в Blob
-  - Использует `bulkPut` для эффективной вставки
+**Тестовые данные:**
+- 3 entries (разные даты, mood, tags)
+- 2 attachments (image + audio, включая blob)
+- 1 biography
 
-### Шаг 2: UI в Settings — карточка "Backup & Restore"
+**Проверки:**
+- manifest.tables counts === фактические counts после импорта
+- Blob attachments читаются после импорта
+- App не падает (нет исключений)
 
-Добавить новую карточку между "Storage" и "Export Data":
+---
+
+## Шаг 2: ZIP формат бэкапа (с JSZip)
+
+### Установка зависимости
+```json
+"jszip": "^3.10.1"
+```
+
+### Структура ZIP файла
+```
+daybook-backup-2026-02-05.zip
+├── manifest.json           # BackupManifest (dbName, dbVersion, appVersion, exportedAt, tables)
+├── tables/
+│   ├── entries.json
+│   ├── biographies.json
+│   ├── reminders.json
+│   ├── receipts.json
+│   ├── receiptItems.json
+│   ├── discussionSessions.json
+│   ├── discussionMessages.json
+│   ├── weeklyInsights.json
+│   ├── audioTranscripts.json
+│   ├── attachmentInsights.json
+│   ├── analysisQueue.json
+│   └── scanLogs.json
+└── media/
+    ├── attachments.json     # metadata only (id, entryId, kind, mimeType, size, duration, createdAt)
+    ├── att_1.jpeg           # actual blob files
+    ├── att_1_thumb.jpeg     # thumbnails
+    ├── att_2.mp3
+    └── drafts.json          # includes draft attachments metadata
+```
+
+### Преимущества:
+- Сжатие в ~5-10x меньше (особенно для текста)
+- Медиа хранится как отдельные файлы (не base64 bloat)
+- Легче дебажить (можно открыть и посмотреть)
+
+### Новые функции в backupService.ts:
+```typescript
+// New exports
+export async function exportBackupZip(onProgress?): Promise<Blob>
+export async function importBackupZip(zipBlob: Blob, options, onProgress?): Promise<void>
+export function validateZipManifest(data: unknown): boolean
+
+// Helper
+function getMimeExtension(mimeType: string): string
+```
+
+---
+
+## Шаг 3: Улучшения UI в BackupRestoreCard
+
+### 3.1 Предупреждение о большом размере
+При экспорте, если оценочный размер > 50MB:
+```
+⚠️ Бэкап может быть большим (~XX MB)
+   Убедитесь, что у вас достаточно места.
+   [Продолжить] [Отмена]
+```
+
+Оценка размера:
+```typescript
+// Quick estimate before export
+async function estimateBackupSize(): Promise<number> {
+  const attachments = await db.attachments.toArray();
+  let total = 0;
+  for (const att of attachments) {
+    total += att.blob.size;
+    if (att.thumbnail) total += att.thumbnail.size;
+  }
+  // Add ~10% for JSON overhead
+  return Math.round(total * 1.1);
+}
+```
+
+### 3.2 Полный Progress UI
+Текущее состояние показывает только текущую таблицу. Улучшаем:
 
 ```
 ┌─────────────────────────────────────┐
-│ 💾 Backup & Restore                 │
+│ Экспорт бэкапа...                   │
 │                                     │
-│ ⚠️ Удаление приложения или очистка  │
-│    данных сайта удаляет память.     │
-│    Перед этим сделайте бэкап!       │
+│ [■■■■■■■■□□□□□□□□] 52%              │
 │                                     │
-│ ┌─────────────────┐ ┌─────────────┐ │
-│ │ 📤 Export       │ │ 📥 Import   │ │
-│ │    Backup       │ │    Backup   │ │
-│ └─────────────────┘ └─────────────┘ │
-│                                     │
-│ Последний бэкап: 05.02.2026 14:30   │
+│ ✓ entries (142)                     │
+│ ✓ biographies (45)                  │
+│ → attachments (23/47)               │
+│ ○ reminders                         │
+│ ○ receipts                          │
+│ ...                                 │
 └─────────────────────────────────────┘
 ```
 
-**Export:**
-1. Показать прогресс (может занять время для больших баз)
-2. Скачать файл `daybook-backup-YYYY-MM-DD.json`
-3. Сохранить дату последнего бэкапа в localStorage
-
-**Import:**
-1. File picker для выбора .json
-2. Валидация manifest
-3. Показать summary: "Будет восстановлено: 42 записи, 15 чеков..."
-4. AlertDialog с предупреждением: "Текущие данные будут заменены"
-5. Прогресс импорта
-6. Toast с результатом
-
-### Шаг 3: i18n — новые ключи перевода
-
+Новый тип для детального прогресса:
 ```typescript
-// Backup & Restore
-'backup.title': { ru: 'Резервное копирование', en: 'Backup & Restore', ... },
-'backup.warning': { ru: 'Удаление приложения или очистка данных сайта удаляет память. Сделайте бэкап перед этим!', ... },
-'backup.export': { ru: 'Экспорт бэкапа', en: 'Export Backup', ... },
-'backup.import': { ru: 'Импорт бэкапа', en: 'Import Backup', ... },
-'backup.exporting': { ru: 'Создание бэкапа...', en: 'Creating backup...', ... },
-'backup.importing': { ru: 'Восстановление...', en: 'Restoring...', ... },
-'backup.exportSuccess': { ru: 'Бэкап создан', en: 'Backup created', ... },
-'backup.importSuccess': { ru: 'Данные восстановлены', en: 'Data restored', ... },
-'backup.invalidFile': { ru: 'Неверный формат файла', en: 'Invalid file format', ... },
-'backup.confirmImport': { ru: 'Восстановить данные?', en: 'Restore data?', ... },
-'backup.confirmImportDesc': { ru: 'Текущие данные будут заменены данными из бэкапа.', en: 'Current data will be replaced with backup data.', ... },
-'backup.lastBackup': { ru: 'Последний бэкап', en: 'Last backup', ... },
-'backup.never': { ru: 'Никогда', en: 'Never', ... },
-'backup.summary': { ru: 'Будет восстановлено', en: 'Will restore', ... },
+export interface DetailedProgress {
+  phase: 'reading' | 'processing' | 'compressing' | 'complete';
+  overallPercent: number;
+  tables: Array<{
+    name: string;
+    status: 'pending' | 'processing' | 'done';
+    current?: number;
+    total?: number;
+  }>;
+}
 ```
 
-### Шаг 4: Предупреждение в Clear Data
+### 3.3 Приватность — никаких логов с данными
+```typescript
+// ❌ НЕЛЬЗЯ
+console.log('Processing entry:', entry.text);
 
-Обновить AlertDialog для "Clear Data":
-- Добавить красное предупреждение: "Сначала сделайте Export Backup!"
-- Ссылка на секцию Backup выше
+// ✅ МОЖНО
+console.log('[Backup] Processing entries:', entries.length);
+```
+
+Добавить ESLint правило или code review note.
 
 ---
 
-## Детали реализации
+## Шаг 4: Напоминание о бэкапе (14+ дней)
 
-### Конвертация Blob ↔ Base64
+### Логика
 ```typescript
-// Blob → base64
-async function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
-// base64 → Blob
-function base64ToBlob(base64: string): Blob {
-  const [header, data] = base64.split(',');
-  const mimeMatch = header.match(/data:(.*?);/);
-  const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
-  const binary = atob(data);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new Blob([bytes], { type: mime });
+function shouldShowBackupReminder(): boolean {
+  const lastBackup = getLastBackupDate();
+  if (!lastBackup) return true; // Never backed up
+  
+  const daysSince = differenceInDays(new Date(), new Date(lastBackup));
+  return daysSince >= 14;
 }
 ```
 
-### Прогресс экспорта
-Для больших баз с медиа (attachments) экспорт может занять время. Показываем:
+### UI в SettingsPage
+Маленький баннер над BackupRestoreCard:
+
 ```
-Экспорт бэкапа...
-├── Записи: 142 ✓
-├── Вложения: 23/45 (обработка...)
-├── Чеки: 15 ✓
-└── ...
+┌─────────────────────────────────────┐
+│ ⚠️ Последний бэкап: 18 дней назад   │
+│    Рекомендуем сделать новый бэкап  │
+│                          [Скрыть]   │
+└─────────────────────────────────────┘
 ```
 
-### Валидация manifest
-```typescript
-function validateBackupManifest(data: unknown): data is BackupPayload {
-  if (!data || typeof data !== 'object') return false;
-  const manifest = (data as any).manifest;
-  if (!manifest) return false;
-  if (manifest.dbName !== 'DaybookDB') return false;
-  if (typeof manifest.dbVersion !== 'number') return false;
-  if (!manifest.exportedAt) return false;
-  return true;
-}
-```
+Dismiss сохраняет в localStorage (игнорировать до следующего бэкапа).
 
 ---
 
@@ -195,24 +195,72 @@ function validateBackupManifest(data: unknown): data is BackupPayload {
 
 | Файл | Изменения |
 |------|-----------|
-| `src/lib/backupService.ts` | **Новый** — логика export/import |
-| `src/lib/i18n.tsx` | Добавить ключи backup.* |
-| `src/pages/SettingsPage.tsx` | Добавить карточку Backup & Restore |
-| `src/lib/db.ts` | Экспортировать `db` для доступа к таблицам |
+| `package.json` | Добавить `jszip: ^3.10.1` |
+| `src/lib/backupService.ts` | Добавить ZIP export/import, estimateSize, DetailedProgress |
+| `src/lib/backupService.test.ts` | **Новый** — unit тесты |
+| `src/components/settings/BackupRestoreCard.tsx` | Улучшенный progress UI, size warning, file accept=".json,.zip" |
+| `src/pages/SettingsPage.tsx` | Добавить BackupReminderBanner |
 
 ---
 
-## Ограничения
+## Техническая детализация
 
-1. **Размер файла**: При большом количестве медиа файл может быть 100+ MB
-2. **Производительность**: base64 увеличивает размер на ~33%
-3. **Совместимость версий**: При импорте старого бэкапа в новую версию приложения Dexie применит миграции автоматически
+### JSZip API (для справки)
+```typescript
+import JSZip from 'jszip';
+
+// Create
+const zip = new JSZip();
+zip.file('manifest.json', JSON.stringify(manifest));
+zip.file('tables/entries.json', JSON.stringify(entries));
+zip.file('media/att_1.jpeg', blob);
+
+// Generate
+const zipBlob = await zip.generateAsync({ 
+  type: 'blob',
+  compression: 'DEFLATE',
+  compressionOptions: { level: 6 }
+});
+
+// Read
+const zip = await JSZip.loadAsync(file);
+const manifest = JSON.parse(await zip.file('manifest.json').async('text'));
+const attBlob = await zip.file('media/att_1.jpeg').async('blob');
+```
+
+### Обратная совместимость
+Import должен поддерживать оба формата:
+1. `.json` — старый формат (монолитный JSON)
+2. `.zip` — новый формат
+
+```typescript
+async function readBackupFile(file: File): Promise<BackupPayload> {
+  if (file.name.endsWith('.zip')) {
+    return readBackupZip(file);
+  } else {
+    return readBackupJson(file);
+  }
+}
+```
 
 ---
 
-## Альтернативный подход (опционально)
+## Порядок реализации
 
-Для очень больших баз можно рассмотреть:
-- ZIP-архив вместо JSON (уменьшит размер в ~5-10 раз)
-- Требует библиотеку `jszip` (~50KB)
-- Медиа-файлы как отдельные файлы в архиве
+1. **Тесты** — написать тесты для текущей JSON-версии
+2. **JSZip интеграция** — добавить ZIP export/import
+3. **UI улучшения** — progress, size warning
+4. **Напоминание** — 14-day banner
+5. **Smoke test** — ручная проверка полного цикла
+
+---
+
+## Ожидаемый результат
+
+После реализации:
+- ✅ Тесты подтверждают, что export→import сохраняет все данные
+- ✅ ZIP файлы в ~5x меньше JSON
+- ✅ Пользователь видит прогресс каждой таблицы
+- ✅ Предупреждение если бэкап > 50MB
+- ✅ Напоминание если прошло 14+ дней
+- ✅ Никаких приватных данных в console.log
