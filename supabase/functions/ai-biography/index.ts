@@ -367,25 +367,40 @@ function isValidBiographyShape(parsed: unknown): parsed is Record<string, unknow
 function buildBiographyPrompt(
   items: BiographyItem[],
   date: string,
-  language: "ru" | "en"
+  language: "ru" | "en" | "he" | "ar"
 ): string {
   // Format date for display
   const dateObj = new Date(date);
+  const localeMap: Record<string, string> = {
+    ru: "ru-RU",
+    en: "en-US",
+    he: "he-IL",
+    ar: "ar-SA",
+  };
   const formattedDate = dateObj.toLocaleDateString(
-    language === "ru" ? "ru-RU" : "en-US",
+    localeMap[language] || "en-US",
     { day: "numeric", month: "long", year: "numeric", weekday: "long" }
   );
 
   // Get unique timeLabels from input (preserve order)
   const timeLabels = [...new Set(items.map((i) => i.timeLabel))];
 
+  // Localized labels for context block
+  const labels: Record<string, { mood: string; themes: string; tags: string; media: string }> = {
+    ru: { mood: "настроение", themes: "темы", tags: "теги", media: "медиа" },
+    en: { mood: "mood", themes: "themes", tags: "tags", media: "media" },
+    he: { mood: "מצב רוח", themes: "נושאים", tags: "תגיות", media: "מדיה" },
+    ar: { mood: "المزاج", themes: "المواضيع", tags: "الوسوم", media: "الوسائط" },
+  };
+  const l = labels[language] || labels.en;
+
   // Build context block from items
   let contextBlock = "";
   for (const item of items) {
-    contextBlock += `\n- ${item.timeLabel}: настроение ${item.mood}/5`;
-    if (item.themes.length) contextBlock += `, темы: [${item.themes.join(", ")}]`;
-    if (item.tags.length) contextBlock += `, теги: [${item.tags.join(", ")}]`;
-    if (item.attachmentCount > 0) contextBlock += `, медиа: ${item.attachmentCount}`;
+    contextBlock += `\n- ${item.timeLabel}: ${l.mood} ${item.mood}/5`;
+    if (item.themes.length) contextBlock += `, ${l.themes}: [${item.themes.join(", ")}]`;
+    if (item.tags.length) contextBlock += `, ${l.tags}: [${item.tags.join(", ")}]`;
+    if (item.attachmentCount > 0) contextBlock += `, ${l.media}: ${item.attachmentCount}`;
   }
 
   const confidence = getConfidence(items.length);
@@ -467,9 +482,10 @@ CONFIDENCE (meta.confidence) — выбери по количеству данн
 }`;
   }
 
-  // English version
-  if (items.length === 0) {
-    return `You are the Day Seal for the Cyber-Grimoire app. Date: ${formattedDate}.
+  // English version (also fallback for unknown languages)
+  if (language === "en") {
+    if (items.length === 0) {
+      return `You are the Day Seal for the Cyber-Grimoire app. Date: ${formattedDate}.
 
 You have NO input data — there are no notes for this day.
 
@@ -481,9 +497,9 @@ Return JSON strictly following this schema:
   "timeline": [],
   "meta": { "style": "daybook_biography_v2", "confidence": "low" }
 }`;
-  }
+    }
 
-  return `You are the Day Seal for the Cyber-Grimoire app. Your task is to create an artistic yet honest "biography of the day" based ONLY on summarized themes, tags, mood, and attachment count.
+    return `You are the Day Seal for the Cyber-Grimoire app. Your task is to create an artistic yet honest "biography of the day" based ONLY on summarized themes, tags, mood, and attachment count.
 
 DATE: ${formattedDate}
 
@@ -541,6 +557,172 @@ Return STRICTLY valid JSON (no markdown, no comments) using this schema:
   "timeline": [${timeLabels.map((t) => `{"timeLabel": "${t}", "summary": "1–2 generalized sentences"}`).join(", ")}],
   "meta": { "style": "daybook_biography_v2", "confidence": "${confidence}" }
 }`;
+  }
+  const heTimeLabels: Record<string, string> = {
+    morning: "בוקר", afternoon: "צהריים", evening: "ערב", night: "לילה",
+    утро: "בוקר", день: "צהריים", вечер: "ערב", ночь: "לילה",
+  };
+
+  if (language === "he") {
+    if (items.length === 0) {
+      return `אתה "חותם היום" עבור אפליקציית Cyber-Grimoire. תאריך: ${formattedDate}.
+
+אין לך נתוני קלט — אין רשומות ליום זה.
+
+החזר JSON לפי הסכמה הבאה:
+{
+  "title": "יום שקט",
+  "narrative": "טקסט קצר (2-4 משפטים) על יום שעבר ללא פרטים מתועדים. ללא עובדות בדויות.",
+  "highlights": [],
+  "timeline": [],
+  "meta": { "style": "daybook_biography_v2", "confidence": "low" }
+}`;
+    }
+
+    return `אתה "חותם היום" עבור אפליקציית Cyber-Grimoire. המשימה שלך היא ליצור "ביוגרפיה של היום" אמנותית אך כנה, המבוססת רק על נושאים כלליים, תגיות, מצב רוח וכמות מדיה.
+
+תאריך: ${formattedDate}
+
+נתוני קלט (כלליים בלבד):
+${contextBlock}
+
+כללים קריטיים (חובה):
+1) לעולם אל תצטט ואל תשחזר טקסט מהיומן. אין ציטוטים כלל.
+2) לעולם אל תמציא אירועים, אנשים, מקומות, מקצועות, דיאלוגים, מספרים, שמות, קניות, נסיעות וכדומה.
+3) מותרות רק ניסוחים כלליים ברמת נושאים ומצבים (למשל: "עבודה", "משפחה", "בריאות", "רעיונות", "מנוחה", "מתח", "בהירות", "עייפות", "השראה").
+4) אם יש מעט נתונים — כתוב בקצרה ובכנות, בלי "להוסיף צבע" בעובדות.
+
+השפעת מצב הרוח (1–5):
+- 1: כבד/מורכב → ניסוח עדין ותומך.
+- 2: מתוח → רוך והדגשת התאוששות.
+- 3: ניטרלי → תיאור רגוע ויציב.
+- 4: טוב → בהירות ואנרגיה.
+- 5: מעורר השראה → קלילות וביטחון.
+
+מדיה:
+- ניתן להזכיר את כמות המדיה רק באופן כללי: "היו רגעים שראוי היה לתעד".
+- אין לציין מפורשות תמונה/וידאו/אודיו. אין להמציא תוכן מדיה.
+
+סגנון:
+- 80% עברית מודרנית וברורה.
+- 20% טרמינולוגיה טכנו-מיסטית של Cyber-Grimoire, בשימוש מדוד:
+  • ב-narrative: עד 1–2 מונחים
+  • בכל highlight: עד מונח אחד
+  • בכל timeline: עד מונח אחד
+
+מונחים מותרים:
+קונטור היום, חותם, קורלציה, כיול,
+משאב (= אנרגיה), עצת החותם, פרוטוקול, חתימה,
+תהודה (= התאמת דפוסים), ערוץ (= חיבור)
+
+אסור:
+קסם, לחשים, מיסטיקה, טארוט, אסטרולוגיה, רוחות
+
+מבנה ה-narrative:
+- 1–2 משפטים: קונטור כללי של היום.
+- 1–3 משפטים: דינמיקת המשאב/תשומת הלב/המצב.
+- 0–2 משפטים: אזורים של מתח (אם mood ≤3).
+- משפט אחד: "עצת החותם" — עדינה ומעשית.
+
+Confidence:
+- high: 3+ רשומות ו־2 זמנים שונים
+- medium: 2 רשומות או רשומה עם תגיות/מדיה
+- low: מעט מידע
+
+החזר JSON תקין בלבד (ללא markdown):
+{
+  "title": "3–7 מילים פואטיות ללא תאריך",
+  "narrative": "${items.length <= 2 ? "3–6 משפטים" : "6–12 משפטים"} כלליים ללא עובדות",
+  "highlights": ["3–6 נקודות עיקריות"${items.length === 0 ? " או [] אם אין נתונים" : ""}],
+  "timeline": [${timeLabels.map((t) => `{"timeLabel": "${heTimeLabels[t] || t}", "summary": "1–2 משפטים כלליים"}`).join(", ")}],
+  "meta": { "style": "daybook_biography_v2", "confidence": "${confidence}" }
+}`;
+  }
+
+  // Arabic version
+  const arTimeLabels: Record<string, string> = {
+    morning: "صباح", afternoon: "ظهر", evening: "مساء", night: "ليل",
+    утро: "صباح", день: "ظهر", вечер: "مساء", ночь: "ليل",
+  };
+
+  if (language === "ar") {
+    if (items.length === 0) {
+      return `أنت «ختم اليوم» لتطبيق Cyber-Grimoire. التاريخ: ${formattedDate}.
+
+لا توجد بيانات إدخال — لا توجد ملاحظات لهذا اليوم.
+
+أعد JSON وفق الهيكل التالي:
+{
+  "title": "يوم هادئ",
+  "narrative": "نص مختصر (2-4 جمل) عن يوم مرّ دون تفاصيل موثقة. بدون حقائق مختلقة.",
+  "highlights": [],
+  "timeline": [],
+  "meta": { "style": "daybook_biography_v2", "confidence": "low" }
+}`;
+    }
+
+    return `أنت «ختم اليوم» لتطبيق Cyber-Grimoire. مهمتك هي كتابة "سيرة اليوم" بأسلوب فني وصادق اعتمادًا فقط على المواضيع العامة، الوسوم، المزاج، وعدد الوسائط.
+
+التاريخ: ${formattedDate}
+
+المدخلات (بصيغة عامة فقط):
+${contextBlock}
+
+قواعد أساسية (إلزامية):
+1) لا تقتبس ولا تعيد إنتاج نصوص اليوميات حرفيًا.
+2) لا تخترع أحداثًا أو أشخاصًا أو أماكن أو حوارات أو أرقامًا أو أسماء أو مشتريات أو رحلات.
+3) يُسمح فقط بتعابير عامة على مستوى المواضيع والحالات (مثل: العمل، العائلة، الصحة، الأفكار، الراحة، التوتر، الوضوح، التعب، الإلهام).
+4) إذا كانت البيانات قليلة — اكتب بصدق وباختصار دون إضافة تفاصيل متخيلة.
+
+تأثير المزاج (1–5):
+- 1: ثقيل/صعب → أسلوب لطيف وداعم.
+- 2: متوتر → نعومة وتركيز على الاستعادة.
+- 3: محايد → وصف هادئ.
+- 4: جيد → وضوح وطاقة.
+- 5: مُلهم → خفة وثقة.
+
+الوسائط:
+- يمكن ذكرها بشكل عام فقط: "كانت هناك لحظات تستحق التوثيق".
+- لا تذكر صراحة صورة/فيديو/صوت.
+
+الأسلوب:
+- 80% لغة عربية واضحة وحديثة.
+- 20% مصطلحات Cyber-Grimoire التقنية-الغامضة بشكل محدود:
+  • في السرد: حتى مصطلحين
+  • في كل highlight: مصطلح واحد كحد أقصى
+  • في timeline: مصطلح واحد كحد أقصى
+
+مصطلحات مسموحة:
+محيط اليوم، الختم، ترابط، معايرة،
+المورد (= الطاقة)، نصيحة الختم، بروتوكول، توقيع،
+رنين (= تطابق أنماط)، قناة (= اتصال)
+
+ممنوع:
+السحر، التعويذات، الروحانيات، التاروت، التنجيم
+
+بنية السرد:
+- 1–2 جمل: محيط اليوم.
+- 1–3 جمل: ديناميكية الطاقة/الانتباه/المزاج.
+- 0–2 جمل: مناطق التوتر (إذا المزاج ≤3).
+- جملة واحدة: "نصيحة الختم".
+
+Confidence:
+- high: 3+ مدخلات وزمنين مختلفين
+- medium: مدخلان أو مدخل مع وسوم/وسائط
+- low: معلومات قليلة
+
+أعد JSON صحيح فقط:
+{
+  "title": "3–7 كلمات شاعرية بدون تاريخ",
+  "narrative": "${items.length <= 2 ? "3–6 جمل" : "6–12 جملة"} عامة بدون حقائق",
+  "highlights": ["3–6 نقاط رئيسية"${items.length === 0 ? " أو [] إذا لا توجد بيانات" : ""}],
+  "timeline": [${timeLabels.map((t) => `{"timeLabel": "${arTimeLabels[t] || t}", "summary": "1–2 جملة عامة"}`).join(", ")}],
+  "meta": { "style": "daybook_biography_v2", "confidence": "${confidence}" }
+}`;
+  }
+
+  // Fallback to English (should not reach here)
+  return `You are the Day Seal. Return empty JSON: {"title":"","narrative":"","highlights":[],"timeline":[],"meta":{"style":"daybook_biography_v2","confidence":"low"}}`;
 }
 
 serve(async (req) => {
