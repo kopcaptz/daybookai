@@ -357,17 +357,35 @@ export async function exportFullBackup(
 
 /**
  * Export to ZIP file with separate files for each table
+ * 
+ * ZIP Structure Contract:
+ * 
+ * daybook-backup-YYYY-MM-DD.zip
+ * ├── manifest.json              # BackupManifest
+ * ├── tables/
+ * │   ├── entries.json           # Entry[]
+ * │   ├── biographies.json       
+ * │   ├── reminders.json         
+ * │   ├── receipts.json          
+ * │   ├── receiptItems.json      
+ * │   ├── discussionSessions.json
+ * │   ├── discussionMessages.json
+ * │   ├── weeklyInsights.json    
+ * │   ├── audioTranscripts.json  
+ * │   ├── attachmentInsights.json
+ * │   ├── analysisQueue.json     
+ * │   ├── scanLogs.json          
+ * │   └── drafts.json            # Draft[] with _blobPath references
+ * └── media/
+ *     ├── attachments.json       # Attachment metadata with _blobPath
+ *     ├── att_<id>.<ext>         # Attachment blobs
+ *     ├── att_<id>_thumb.<ext>   # Thumbnails
+ *     └── draft_<id>_<idx>.<ext> # Draft attachment blobs
  */
 export async function exportBackupZip(
   onProgress?: (progress: DetailedProgress) => void
 ): Promise<Blob> {
   const zip = new JSZip();
-  const tablesFolder = zip.folder('tables');
-  const mediaFolder = zip.folder('media');
-  
-  if (!tablesFolder || !mediaFolder) {
-    throw new Error('Failed to create ZIP folders');
-  }
 
   // Initialize progress - use mutable status
   const tableStatuses: Array<{
@@ -419,14 +437,14 @@ export async function exportBackupZip(
         const ext = getMimeExtension(att.mimeType);
         const blobPath = `att_${att.id || j}.${ext}`;
         
-        // Store blob as file
-        mediaFolder.file(blobPath, att.blob);
+        // Store blob as file (using absolute paths for reliability)
+        zip.file(`media/${blobPath}`, att.blob);
         
         // Store thumbnail if exists
         let thumbPath: string | undefined;
         if (att.thumbnail) {
           thumbPath = `att_${att.id || j}_thumb.${ext}`;
-          mediaFolder.file(thumbPath, att.thumbnail);
+          zip.file(`media/${thumbPath}`, att.thumbnail);
         }
         
         // Store metadata without blob
@@ -441,7 +459,7 @@ export async function exportBackupZip(
         mediaIndex++;
       }
       
-      mediaFolder.file('attachments.json', JSON.stringify(metadata, null, 2));
+      zip.file('media/attachments.json', JSON.stringify(metadata, null, 2));
     } else if (tableName === 'drafts') {
       const metadata: unknown[] = [];
       
@@ -455,12 +473,13 @@ export async function exportBackupZip(
           const ext = getMimeExtension(att.mimeType);
           const blobPath = `draft_${draft.id}_${k}.${ext}`;
           
-          mediaFolder.file(blobPath, att.blob);
+          // Use absolute paths for reliability
+          zip.file(`media/${blobPath}`, att.blob);
           
           let thumbPath: string | undefined;
           if (att.thumbnail) {
             thumbPath = `draft_${draft.id}_${k}_thumb.${ext}`;
-            mediaFolder.file(thumbPath, att.thumbnail);
+            zip.file(`media/${thumbPath}`, att.thumbnail);
           }
           
           processedAtts.push({
@@ -478,10 +497,10 @@ export async function exportBackupZip(
         });
       }
       
-      tablesFolder.file('drafts.json', JSON.stringify(metadata, null, 2));
+      zip.file('tables/drafts.json', JSON.stringify(metadata, null, 2));
     } else {
-      // Regular table - just store as JSON
-      tablesFolder.file(`${tableName}.json`, JSON.stringify(rows, null, 2));
+      // Regular table - just store as JSON (absolute path)
+      zip.file(`tables/${tableName}.json`, JSON.stringify(rows, null, 2));
     }
 
     tableStatuses[i].status = 'done';
@@ -748,7 +767,11 @@ export async function importBackupZip(
         const metaText = await metaFile.async('text');
         const metadata = JSON.parse(metaText);
         
-        const attachments = [];
+        // Import attachments in chunks to avoid memory issues on mobile
+        const CHUNK_SIZE = 50;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const attachments: any[] = [];
+        
         for (let j = 0; j < metadata.length; j++) {
           const att = metadata[j];
           tableStatuses[i].current = j + 1;
@@ -767,8 +790,15 @@ export async function importBackupZip(
           // Remove path metadata and add blobs
           const { _blobPath, _thumbPath, ...rest } = att;
           attachments.push({ ...rest, blob, thumbnail });
+          
+          // Flush chunk to DB to avoid memory exhaustion
+          if (attachments.length >= CHUNK_SIZE) {
+            await db.attachments.bulkPut(attachments);
+            attachments.length = 0; // clear array
+          }
         }
         
+        // Flush remaining attachments
         if (attachments.length > 0) {
           await db.attachments.bulkPut(attachments);
         }
@@ -780,7 +810,11 @@ export async function importBackupZip(
         const tableText = await tableFile.async('text');
         const drafts = JSON.parse(tableText);
         
-        const processedDrafts = [];
+        // Import drafts in chunks to avoid memory issues on mobile
+        const DRAFT_CHUNK_SIZE = 50;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const processedDrafts: any[] = [];
+        
         for (const draft of drafts) {
           const processedAtts = [];
           for (const att of draft.attachments || []) {
@@ -798,8 +832,15 @@ export async function importBackupZip(
           }
           
           processedDrafts.push({ ...draft, attachments: processedAtts });
+          
+          // Flush chunk to DB
+          if (processedDrafts.length >= DRAFT_CHUNK_SIZE) {
+            await db.drafts.bulkPut(processedDrafts);
+            processedDrafts.length = 0;
+          }
         }
         
+        // Flush remaining drafts
         if (processedDrafts.length > 0) {
           await db.drafts.bulkPut(processedDrafts);
         }
