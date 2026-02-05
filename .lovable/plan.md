@@ -1,473 +1,361 @@
 
+# План: Надёжный парсинг JSON в ai-biography с детекцией усечения
 
-# Layer 2 v1.0: Audio Transcription (Gemini) — Исправленный план
+## Текущее состояние (строки 632-664)
 
-## Учтённые замечания
-
-| Проблема | Исправление |
-|----------|-------------|
-| "Без base64" противоречие | Клиент → Edge: multipart/form-data (Blob как есть). Edge → Gemini: base64 допускается внутри сервера, т.к. Lovable AI Gateway требует. |
-| MIME-типы слишком строгие | Расширить: `audio/*`, `video/webm`, `application/ogg` |
-| Публичный endpoint = риск | Добавить X-AI-Token проверку (как ai-chat) |
-| DB индекс | `audioTranscripts: 'attachmentId, status, createdAt'` |
-| Insert кнопка | Показывать только если есть `onInsertText` callback |
-| durationSec | Оставить `null` в v1.0, не обещать точность |
-
----
-
-## Step 1 — IndexedDB audioTranscripts (DB v15)
-
-### Изменения в `src/lib/db.ts`
-
-**Новый интерфейс:**
 ```typescript
-export interface AudioTranscript {
-  attachmentId: number;      // PK, ссылка на attachments
-  createdAt: number;
-  updatedAt: number;
-  status: 'pending' | 'done' | 'error';
-  model: string;             // "google/gemini-2.5-flash"
-  text: string | null;
-  language: string | null;
-  durationSec: number | null; // null в v1.0
-  errorCode: string | null;   // too_large | unsupported_format | rate_limited | transcription_failed | auth_required | unknown
+// Parse JSON from AI response
+let biography: BiographyResponse;
+try {
+  // Extract JSON from potential markdown wrapper
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error("No JSON found in response");
+  }
+  const parsed = JSON.parse(jsonMatch[0]);
+  // ...
+} catch (parseError) {
+  console.error({ requestId, action: "ai_biography_parse_error", error: String(parseError), content });
+  return new Response(
+    JSON.stringify({ error: "Failed to parse AI response", requestId }),
+    { status: 500, headers: responseHeaders() }
+  );
 }
 ```
 
-**Добавить в класс DaybookDatabase:**
+**Проблемы:**
+- regex `\{[\s\S]*\}` жадный — захватывает мусор до/после JSON
+- Если ответ усечён (токены закончились), `JSON.parse` падает без полезной диагностики
+- Markdown wrapper (` ```json ``` `) не снимается
+- Нет различия между truncated и syntax error
+
+---
+
+## Изменения
+
+### 1. Увеличить maxTokens (строка 534)
+
 ```typescript
-audioTranscripts!: EntityTable<AudioTranscript, 'attachmentId'>;
+// Было:
+const effectiveMaxTokens = Math.min(maxTokens || 2048, MAX_TOKENS_LIMIT);
+
+// Станет:
+const effectiveMaxTokens = Math.min(maxTokens || 3072, MAX_TOKENS_LIMIT);
 ```
 
-**Новая версия (v15):**
+---
+
+### 2. Добавить extractJSON helper (после строки 216)
+
+Вставить предоставленную тобой функцию `extractJSON` с полной диагностикой:
+
 ```typescript
-// Version 15: Add audio transcripts table
-this.version(15).stores({
-  // ... все существующие таблицы без изменений (копия из v14)
-  entries: '++id, date, mood, *tags, *semanticTags, isPrivate, aiAllowed, createdAt, updatedAt, aiAnalyzedAt',
-  attachments: '++id, entryId, kind, createdAt',
-  drafts: 'id, updatedAt',
-  biographies: 'date, status, generatedAt',
-  attachmentInsights: 'attachmentId, createdAt',
-  receipts: '++id, entryId, date, storeName, createdAt, updatedAt',
-  receiptItems: '++id, receiptId, category',
-  scanLogs: '++id, timestamp',
-  reminders: '++id, entryId, status, dueAt, createdAt',
-  discussionSessions: '++id, updatedAt, lastMessageAt, pinned',
-  discussionMessages: '++id, sessionId, [sessionId+createdAt]',
-  analysisQueue: '++id, entryId, status, createdAt',
-  weeklyInsights: 'weekStart, generatedAt',
-  audioTranscripts: 'attachmentId, status, createdAt', // NEW
-});
+// ============ JSON extraction with truncation detection ============
+
+type ExtractJSONSuccess = { ok: true; value: unknown; jsonText: string };
+type ExtractJSONFail = {
+  ok: false;
+  error: string;
+  truncated: boolean;
+  diagnostics: {
+    contentLength: number;
+    startsWithFence: boolean;
+    endsWithFence: boolean;
+    hasFenceAnywhere: boolean;
+    braceBalance: number;
+    bracketBalance: number;
+    lastChar: string;
+  };
+};
+
+const SUSPICIOUS_TAIL_CHARS = ['"', ',', ':', '[', '{', '\\'];
+
+function extractJSON(content: string): ExtractJSONSuccess | ExtractJSONFail {
+  const trimmed = content.trim();
+
+  const startsWithFence = trimmed.startsWith("```");
+  const endsWithFence = trimmed.endsWith("```");
+  const hasFenceAnywhere = trimmed.includes("```");
+
+  // Strip opening fence if present; strip closing only if it exists at the end.
+  let cleaned = trimmed;
+  if (startsWithFence) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, "").trim();
+  }
+  if (endsWithFence) {
+    cleaned = cleaned.replace(/\n?```\s*$/, "").trim();
+  }
+
+  // Find JSON start: object or array (whichever appears first)
+  const firstBrace = cleaned.indexOf("{");
+  const firstBracket = cleaned.indexOf("[");
+  if (firstBrace === -1 && firstBracket === -1) {
+    return {
+      ok: false,
+      error: "No JSON object/array start found",
+      truncated: false,
+      diagnostics: {
+        contentLength: content.length,
+        startsWithFence,
+        endsWithFence,
+        hasFenceAnywhere,
+        braceBalance: 0,
+        bracketBalance: 0,
+        lastChar: cleaned.slice(-1) || "",
+      },
+    };
+  }
+
+  const isObject =
+    firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket);
+
+  const jsonStart = isObject ? firstBrace : firstBracket;
+  const jsonEnd = isObject ? cleaned.lastIndexOf("}") : cleaned.lastIndexOf("]");
+
+  // If no closing token found, it's almost certainly truncated.
+  if (jsonEnd <= jsonStart) {
+    const tail = cleaned.trim().slice(-1);
+    return {
+      ok: false,
+      error: "JSON appears truncated (no closing brace/bracket)",
+      truncated: true,
+      diagnostics: {
+        contentLength: content.length,
+        startsWithFence,
+        endsWithFence,
+        hasFenceAnywhere,
+        braceBalance: 1,
+        bracketBalance: 1,
+        lastChar: tail,
+      },
+    };
+  }
+
+  const jsonText = cleaned.slice(jsonStart, jsonEnd + 1);
+
+  // Balances (separate)
+  const openBraces = (jsonText.match(/\{/g) || []).length;
+  const closeBraces = (jsonText.match(/\}/g) || []).length;
+  const openBrackets = (jsonText.match(/\[/g) || []).length;
+  const closeBrackets = (jsonText.match(/\]/g) || []).length;
+  const braceBalance = openBraces - closeBraces;
+  const bracketBalance = openBrackets - closeBrackets;
+
+  const lastChar = cleaned.trim().slice(-1);
+  const suspiciousTail = SUSPICIOUS_TAIL_CHARS.includes(lastChar);
+
+  // Parse first; decide truncated only if parse fails + heuristics suggest truncation
+  try {
+    return { ok: true, value: JSON.parse(jsonText), jsonText };
+  } catch (e) {
+    const unclosedFence = startsWithFence && !endsWithFence;
+    const imbalanced = braceBalance !== 0 || bracketBalance !== 0;
+    const likelyTruncated = unclosedFence || imbalanced || suspiciousTail;
+
+    return {
+      ok: false,
+      error: String(e),
+      truncated: likelyTruncated,
+      diagnostics: {
+        contentLength: content.length,
+        startsWithFence,
+        endsWithFence,
+        hasFenceAnywhere,
+        braceBalance,
+        bracketBalance,
+        lastChar,
+      },
+    };
+  }
+}
 ```
 
-**Обновить clearAllData():**
+---
+
+### 3. Добавить isValidBiographyShape (после extractJSON)
+
 ```typescript
-export async function clearAllData(): Promise<void> {
-  await db.transaction('rw', [
-    db.entries, db.attachments, db.drafts, 
-    db.receipts, db.receiptItems, db.scanLogs,
-    db.audioTranscripts, // ADD THIS
-  ], async () => {
-    await db.entries.clear();
-    await db.attachments.clear();
-    await db.drafts.clear();
-    await db.receipts.clear();
-    await db.receiptItems.clear();
-    await db.scanLogs.clear();
-    await db.audioTranscripts.clear(); // ADD THIS
+function isValidBiographyShape(parsed: unknown): parsed is Record<string, unknown> {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return false;
+  }
+  
+  const obj = parsed as Record<string, unknown>;
+  
+  // Must have narrative or story (string)
+  const hasNarrative = typeof obj.narrative === "string" || typeof obj.story === "string";
+  
+  // highlights and timeline should be arrays if present
+  const validHighlights = obj.highlights === undefined || Array.isArray(obj.highlights);
+  const validTimeline = obj.timeline === undefined || Array.isArray(obj.timeline);
+  
+  // Basic timeline element validation
+  if (Array.isArray(obj.timeline) && obj.timeline.length > 0) {
+    const firstItem = obj.timeline[0];
+    if (!firstItem || typeof firstItem !== "object") {
+      return false;
+    }
+    const hasTimelineFields = "summary" in firstItem || "timeLabel" in firstItem;
+    if (!hasTimelineFields) {
+      return false;
+    }
+  }
+  
+  return hasNarrative && validHighlights && validTimeline;
+}
+```
+
+---
+
+### 4. Заменить блок парсинга (строки 632-664)
+
+```typescript
+// Parse JSON from AI response
+let biography: BiographyResponse;
+
+const parseResult = extractJSON(content);
+
+if (!parseResult.ok) {
+  const { error, truncated, diagnostics } = parseResult;
+  
+  console.error({
+    requestId,
+    action: truncated ? "ai_biography_truncated" : "ai_biography_parse_error",
+    error,
+    truncated,
+    effectiveMaxTokens,
+    model: effectiveModel,
+    diagnostics,
+    content_preview: content.slice(0, 500),
   });
+  
+  // 502 for truncation (upstream issue), 500 for parse error
+  const httpStatus = truncated ? 502 : 500;
+  const userMessage = truncated
+    ? (language === "ru" 
+        ? "Ответ AI был обрезан. Повторите попытку." 
+        : "AI response was truncated. Please retry.")
+    : (language === "ru"
+        ? "Не удалось разобрать ответ AI"
+        : "Failed to parse AI response");
+  
+  return new Response(
+    JSON.stringify({ 
+      error: userMessage, 
+      errorCode: truncated ? "truncated" : "parse_error",
+      requestId 
+    }),
+    { status: httpStatus, headers: responseHeaders() }
+  );
 }
-```
 
-**Smoke-test:** Приложение стартует без ошибок миграции.
+// Validate structure
+if (!isValidBiographyShape(parseResult.value)) {
+  console.error({
+    requestId,
+    action: "ai_biography_invalid_schema",
+    keys: Object.keys(parseResult.value as object),
+    content_preview: content.slice(0, 500),
+  });
+  
+  return new Response(
+    JSON.stringify({ 
+      error: language === "ru" 
+        ? "AI вернул некорректную структуру" 
+        : "AI returned invalid structure",
+      errorCode: "invalid_schema",
+      requestId 
+    }),
+    { status: 500, headers: responseHeaders() }
+  );
+}
+
+const parsed = parseResult.value as Record<string, unknown>;
+
+// Calculate confidence
+const confidence = getConfidence(items.length);
+
+biography = {
+  title: (parsed.title as string) || (language === "ru" ? "Тихий день" : "A Quiet Day"),
+  narrative: (parsed.narrative as string) || (parsed.story as string) || "",
+  highlights: (parsed.highlights as string[]) || [],
+  timeline: (parsed.timeline as Array<{timeLabel: string; summary: string}>) || [],
+  meta: {
+    model: effectiveModel,
+    tokens: aiResponse.usage?.total_tokens,
+    requestId,
+    style: "daybook_biography_v2",
+    confidence: (parsed.meta as Record<string, unknown>)?.confidence as "low" | "medium" | "high" || confidence,
+  },
+};
+```
 
 ---
 
-## Step 2 — Edge Function ai-transcribe (с X-AI-Token)
+### 5. Улучшить лог успеха (строка 665)
 
-### Новый файл: `supabase/functions/ai-transcribe/index.ts`
-
-**Ключевые особенности:**
-1. **X-AI-Token валидация** — копируем из `ai-chat/index.ts`
-2. **CORS с allowed origins** — как в `ai-chat`
-3. **multipart/form-data** на входе
-4. **base64 внутри edge** — для Lovable AI Gateway (допустимо server-side)
-
-**Input (multipart/form-data):**
-- `file`: Blob audio
-- `languageHint`: "ru" | "en" | "he" | "ar" | "auto" (optional, default "auto")
-
-**Валидация MIME-типов:**
-```typescript
-const ALLOWED_AUDIO_TYPES = [
-  'audio/webm',
-  'audio/ogg',
-  'audio/mpeg',
-  'audio/mp3',
-  'audio/wav',
-  'audio/mp4',
-  'audio/x-m4a',
-  'audio/aac',
-  'video/webm',      // браузеры часто отдают webm audio как video/webm
-  'application/ogg', // некоторые браузеры
-];
-
-function isAllowedAudioType(mimeType: string): boolean {
-  return ALLOWED_AUDIO_TYPES.some(t => mimeType.startsWith(t.split('/')[0]) && mimeType.includes(t.split('/')[1]));
-}
-```
-
-**Output JSON:**
-```json
-{
-  "text": "транскрипт...",
-  "language": "ru",
-  "model": "google/gemini-2.5-flash"
-}
-```
-
-**Коды ошибок:**
-| errorCode | HTTP | Условие |
-|-----------|------|---------|
-| too_large | 400 | file.size > 25MB |
-| unsupported_format | 400 | MIME не в списке |
-| auth_required | 401 | нет/невалидный X-AI-Token |
-| rate_limited | 429 | Lovable AI 429 |
-| payment_required | 402 | Lovable AI 402 |
-| transcription_failed | 500 | Gemini error |
-
-**Логирование (только метаданные):**
 ```typescript
 console.log({
   requestId,
-  action: "ai_transcribe_request",
-  mimeType: file.type,
-  sizeBytes: file.size,
-  languageHint,
-  // НЕ логировать transcript text
+  timestamp: new Date().toISOString(),
+  action: "ai_biography_success",
+  date,
+  model: effectiveModel,
+  effectiveMaxTokens,
+  title_length: biography.title.length,
+  narrative_length: biography.narrative.length,
+  highlights_count: biography.highlights.length,
+  timeline_count: biography.timeline.length,
+  tokens_used: biography.meta.tokens,
+  response_length: content.length,
 });
-```
-
-**Промпт для Gemini:**
-```
-Transcribe the following audio accurately.
-Return ONLY the transcription text, no commentary or timestamps.
-If language hint is provided, prioritize that language.
-Language hint: ${languageHint || 'auto-detect'}
-```
-
-### Обновление `supabase/config.toml`:
-```toml
-[functions.ai-transcribe]
-verify_jwt = false
-```
-
-**Smoke-test:** curl с валидным X-AI-Token возвращает текст.
-
----
-
-## Step 3 — Client Service audioTranscriptionService.ts
-
-### Новый файл: `src/lib/audioTranscriptionService.ts`
-
-**Импорты:**
-```typescript
-import { db, AudioTranscript } from './db';
-import { getAIToken, isAITokenValid } from './aiTokenService';
-import { requestPinDialog } from './aiAuthRecovery';
-```
-
-**API:**
-```typescript
-export async function getCachedTranscript(
-  attachmentId: number
-): Promise<AudioTranscript | undefined> {
-  return db.audioTranscripts.get(attachmentId);
-}
-
-export type TranscriptionResult = 
-  | { ok: true; text: string; language: string }
-  | { ok: false; errorCode: string };
-
-export async function requestTranscription(
-  attachmentId: number,
-  blob: Blob,
-  opts?: { 
-    languageHint?: string; 
-  }
-): Promise<TranscriptionResult>;
-```
-
-**Логика requestTranscription:**
-```
-1. Проверить кэш (db.audioTranscripts.get)
-2. Если status === 'done' → return { ok: true, text, language }
-3. Если status === 'pending' → return { ok: false, errorCode: 'pending' }
-4. Если status === 'error' → можно перезапустить
-
-5. Проверить isAITokenValid()
-   - Если нет → requestPinDialog() или return { ok: false, errorCode: 'auth_required' }
-
-6. Записать pending в БД:
-   db.audioTranscripts.put({
-     attachmentId,
-     createdAt: Date.now(),
-     updatedAt: Date.now(),
-     status: 'pending',
-     model: 'google/gemini-2.5-flash',
-     text: null,
-     language: null,
-     durationSec: null,
-     errorCode: null,
-   })
-
-7. Отправить FormData на edge:
-   const formData = new FormData();
-   formData.append('file', blob);
-   if (opts?.languageHint) formData.append('languageHint', opts.languageHint);
-   
-   const response = await fetch(AI_TRANSCRIBE_URL, {
-     method: 'POST',
-     headers: { 'X-AI-Token': token },
-     body: formData,
-   });
-
-8. Обработать ответ:
-   - 200 OK → update status='done', сохранить text/language
-   - 401 → return { ok: false, errorCode: 'auth_required' }
-   - 429 → return { ok: false, errorCode: 'rate_limited' }
-   - 402 → return { ok: false, errorCode: 'payment_required' }
-   - 400 → парсить errorCode из body
-   - 500 → return { ok: false, errorCode: 'transcription_failed' }
-```
-
-**Smoke-test:** Повторное нажатие не делает второй сетевой запрос.
-
----
-
-## Step 4 — UI: TranscribeSection в EntryAttachmentViewer
-
-### Изменения в `src/components/media/EntryAttachmentViewer.tsx`
-
-**Новые пропы для AttachmentCard:**
-```typescript
-interface AttachmentCardProps {
-  attachment: Attachment;
-  onInsertText?: (text: string) => void; // опционально, для вставки
-}
-```
-
-**Новый компонент TranscribeSection:**
-```typescript
-function TranscribeSection({ 
-  attachmentId, 
-  blob, 
-  onInsertText 
-}: { 
-  attachmentId: number; 
-  blob: Blob;
-  onInsertText?: (text: string) => void;
-}) {
-  const { t, language } = useI18n();
-  const [state, setState] = useState<'idle' | 'pending' | 'done' | 'error'>('idle');
-  const [transcript, setTranscript] = useState<AudioTranscript | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  // Load cached on mount
-  useEffect(() => {
-    getCachedTranscript(attachmentId).then(cached => {
-      if (cached) {
-        setTranscript(cached);
-        setState(cached.status);
-        if (cached.errorCode) setError(cached.errorCode);
-      }
-    });
-  }, [attachmentId]);
-
-  // ... render logic
-}
-```
-
-**UI состояния:**
-- `idle` → кнопка "Transcribe"
-- `pending` → Loader + "Transcribing..."
-- `done` → текст + кнопки Copy / Insert (Insert только если есть onInsertText)
-- `error` → сообщение об ошибке + Retry
-
-**Кнопки:**
-```typescript
-// Copy — всегда доступна при done
-<Button onClick={() => navigator.clipboard.writeText(transcript.text)}>
-  {t('audio.copy')}
-</Button>
-
-// Insert — только если есть callback
-{onInsertText && (
-  <Button onClick={() => onInsertText(transcript.text)}>
-    {t('audio.insert')}
-  </Button>
-)}
-```
-
----
-
-## Step 5 — Privacy Warning (однократно)
-
-**localStorage key:** `audio-transcribe-privacy-accepted`
-
-**Перед первой транскрипцией:**
-```typescript
-async function handleTranscribe() {
-  // Check privacy consent
-  if (!localStorage.getItem('audio-transcribe-privacy-accepted')) {
-    const confirmed = await showPrivacyDialog(); // AlertDialog
-    if (!confirmed) return;
-    localStorage.setItem('audio-transcribe-privacy-accepted', 'true');
-  }
-  
-  // Proceed with transcription
-  setState('pending');
-  const result = await requestTranscription(attachmentId, blob, { languageHint: language });
-  // ...
-}
-```
-
-**Текст диалога:**
-- RU: "Аудио будет отправлено на обработку"
-- EN: "Audio will be sent for processing"
-- HE: "האודיו יישלח לעיבוד"
-- AR: "سيتم إرسال الصوت للمعالجة"
-
----
-
-## Step 6 — i18n ключи
-
-### Добавить в `src/lib/i18n.tsx`:
-
-```typescript
-// Audio transcription
-'audio.transcribe': { 
-  ru: 'Транскрибировать', 
-  en: 'Transcribe', 
-  he: 'תמלל', 
-  ar: 'نسخ صوتي' 
-},
-'audio.transcribing': { 
-  ru: 'Транскрипция...', 
-  en: 'Transcribing...', 
-  he: 'מתמלל...', 
-  ar: 'جاري النسخ...' 
-},
-'audio.transcriptionReady': { 
-  ru: 'Транскрипция готова', 
-  en: 'Transcription ready', 
-  he: 'התמלול מוכן', 
-  ar: 'النسخ جاهز' 
-},
-'audio.copy': { 
-  ru: 'Копировать', 
-  en: 'Copy', 
-  he: 'העתק', 
-  ar: 'نسخ' 
-},
-'audio.insert': { 
-  ru: 'Вставить', 
-  en: 'Insert', 
-  he: 'הכנס', 
-  ar: 'إدراج' 
-},
-'audio.privacyTitle': { 
-  ru: 'Обработка аудио', 
-  en: 'Audio Processing', 
-  he: 'עיבוד אודיו', 
-  ar: 'معالجة الصوت' 
-},
-'audio.privacyWarning': { 
-  ru: 'Аудио будет отправлено на обработку', 
-  en: 'Audio will be sent for processing', 
-  he: 'האודיו יישלח לעיבוד', 
-  ar: 'سيتم إرسال الصوت للمعالجة' 
-},
-'audio.tooLarge': { 
-  ru: 'Файл слишком большой (макс. 25 МБ)', 
-  en: 'File too large (max 25 MB)', 
-  he: 'הקובץ גדול מדי (מקסימום 25 מ"ב)', 
-  ar: 'الملف كبير جداً (الحد 25 ميجابايت)' 
-},
-'audio.unsupportedFormat': { 
-  ru: 'Формат не поддерживается', 
-  en: 'Unsupported format', 
-  he: 'פורמט לא נתמך', 
-  ar: 'تنسيق غير مدعوم' 
-},
-'audio.transcriptionFailed': { 
-  ru: 'Не удалось транскрибировать', 
-  en: 'Transcription failed', 
-  he: 'התמלול נכשל', 
-  ar: 'فشل النسخ' 
-},
-'audio.authRequired': { 
-  ru: 'Требуется авторизация', 
-  en: 'Authorization required', 
-  he: 'נדרש אימות', 
-  ar: 'مطلوب التفويض' 
-},
-'common.retry': { 
-  ru: 'Повторить', 
-  en: 'Retry', 
-  he: 'נסה שוב', 
-  ar: 'إعادة المحاولة' 
-},
-'common.continue': { 
-  ru: 'Продолжить', 
-  en: 'Continue', 
-  he: 'המשך', 
-  ar: 'استمرار' 
-},
-'common.cancel': { 
-  ru: 'Отмена', 
-  en: 'Cancel', 
-  he: 'ביטול', 
-  ar: 'إلغاء' 
-},
 ```
 
 ---
 
 ## Файлы для изменения
 
-| Файл | Действие |
-|------|----------|
-| `src/lib/db.ts` | +AudioTranscript interface, +version(15), +audioTranscripts в clearAllData |
-| `supabase/functions/ai-transcribe/index.ts` | Создать (с X-AI-Token, multipart, CORS) |
-| `supabase/config.toml` | +[functions.ai-transcribe] |
-| `src/lib/audioTranscriptionService.ts` | Создать (кэш + edge call) |
-| `src/components/media/EntryAttachmentViewer.tsx` | +TranscribeSection для audio |
-| `src/lib/i18n.tsx` | +audio.* и common.* ключи |
+| Файл | Изменения |
+|------|-----------|
+| `supabase/functions/ai-biography/index.ts` | +extractJSON, +isValidBiographyShape, maxTokens 3072, улучшенный парсинг |
 
 ---
 
-## Порядок реализации
+## Ключевые улучшения
 
-1. **Step 1**: db.ts → smoke-test миграции (приложение стартует)
-2. **Step 2**: Edge function + config.toml → deploy → smoke-test curl
-3. **Step 3**: audioTranscriptionService.ts → smoke-test pending state
-4. **Step 4**: UI TranscribeSection → smoke-test на телефоне
-5. **Step 5**: Privacy warning → проверить показ один раз
-6. **Step 6**: i18n → проверить все 4 языка
+| Было | Стало |
+|------|-------|
+| Жадный regex `\{[\s\S]*\}` | Точный поиск first `{` → last `}` |
+| Markdown wrapper не снимается | Снимается ` ```json ``` ` |
+| Одна ошибка "Failed to parse" | Три разных: truncated, parse_error, invalid_schema |
+| Нет диагностики | braceBalance, bracketBalance, lastChar, contentLength |
+| maxTokens 2048 | maxTokens 3072 |
+| HTTP 500 для всего | 502 для truncated, 500 для остального |
 
 ---
 
-## Acceptance Checklist
+## Логика определения truncation
 
-- [ ] Кнопка "Transcribe" появляется только на аудио-вложениях
-- [ ] Первый раз показывает privacy warning
-- [ ] Pending/done/error сохраняются в IndexedDB
-- [ ] Done: повторно не вызывает сеть (кэш работает)
-- [ ] Без X-AI-Token → 401 auth_required
-- [ ] video/webm принимается как audio
-- [ ] Ошибка >25MB → too_large с понятным UI текстом
-- [ ] Hebrew RTL: UI не ломается
-- [ ] Insert кнопка скрыта если нет onInsertText callback
+```text
+1. Снять markdown fence (opening всегда, closing если есть)
+2. Найти first { или [ и last } или ]
+3. Если нет закрывающей → truncated = true
+4. Иначе: извлечь jsonText, попробовать JSON.parse
+   ✅ success → ok
+   ❌ fail → определить truncated по:
+      - unclosedFence (``` без закрытия)
+      - imbalanced (braceBalance ≠ 0 или bracketBalance ≠ 0)
+      - suspiciousTail (последний символ: ",:[{\\)
+```
 
+---
+
+## Smoke-test
+
+1. Открыть страницу "Сегодня" с записями
+2. Нажать "Повторить" на карточке биографии
+3. Проверить успешную генерацию
+4. Если ошибка — проверить логи edge function:
+   - `ai_biography_truncated` → повторить; если стабильно, увеличить maxTokens
+   - `ai_biography_invalid_schema` → модель вернула не ту структуру
+   - `ai_biography_parse_error` → синтаксическая ошибка в JSON
