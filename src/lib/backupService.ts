@@ -1,10 +1,11 @@
 /**
  * Backup Service for DaybookDB
- * Full export/import of IndexedDB with blob-to-base64 conversion
+ * Full export/import of IndexedDB with ZIP compression and blob handling
  */
 
 import { db } from './db';
 import { APP_VERSION } from './appVersion';
+import JSZip from 'jszip';
 
 // Types
 export interface BackupManifest {
@@ -39,6 +40,18 @@ export interface ExportProgress {
   total: number;
 }
 
+export interface DetailedProgress {
+  phase: 'reading' | 'processing' | 'compressing' | 'complete';
+  overallPercent: number;
+  currentTable?: string;
+  tables: Array<{
+    name: string;
+    status: 'pending' | 'processing' | 'done';
+    current?: number;
+    total?: number;
+  }>;
+}
+
 export interface ImportSummary {
   entries: number;
   attachments: number;
@@ -55,6 +68,24 @@ export interface ImportSummary {
   analysisQueue: number;
   scanLogs: number;
 }
+
+// Table names in order
+const TABLE_NAMES = [
+  'entries',
+  'attachments', 
+  'drafts',
+  'biographies',
+  'reminders',
+  'receipts',
+  'receiptItems',
+  'discussionSessions',
+  'discussionMessages',
+  'weeklyInsights',
+  'audioTranscripts',
+  'attachmentInsights',
+  'analysisQueue',
+  'scanLogs',
+] as const;
 
 // Blob <-> Base64 conversion
 async function blobToBase64(blob: Blob): Promise<string> {
@@ -78,8 +109,28 @@ function base64ToBlob(base64: string): Blob {
   return new Blob([bytes], { type: mime });
 }
 
+// Get file extension from MIME type
+function getMimeExtension(mimeType: string): string {
+  const map: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'audio/mpeg': 'mp3',
+    'audio/mp3': 'mp3',
+    'audio/wav': 'wav',
+    'audio/webm': 'webm',
+    'video/mp4': 'mp4',
+    'video/webm': 'webm',
+    'application/octet-stream': 'bin',
+  };
+  return map[mimeType] || 'bin';
+}
+
 // Last backup date storage
 const LAST_BACKUP_KEY = 'daybook-last-backup';
+const BACKUP_REMINDER_DISMISSED_KEY = 'daybook-backup-reminder-dismissed';
 
 export function getLastBackupDate(): string | null {
   return localStorage.getItem(LAST_BACKUP_KEY);
@@ -87,6 +138,59 @@ export function getLastBackupDate(): string | null {
 
 export function setLastBackupDate(date: string): void {
   localStorage.setItem(LAST_BACKUP_KEY, date);
+  // Clear any dismissed reminder when a backup is made
+  localStorage.removeItem(BACKUP_REMINDER_DISMISSED_KEY);
+}
+
+export function isBackupReminderDismissed(): boolean {
+  return localStorage.getItem(BACKUP_REMINDER_DISMISSED_KEY) === 'true';
+}
+
+export function dismissBackupReminder(): void {
+  localStorage.setItem(BACKUP_REMINDER_DISMISSED_KEY, 'true');
+}
+
+export function shouldShowBackupReminder(): boolean {
+  if (isBackupReminderDismissed()) return false;
+  
+  const lastBackup = getLastBackupDate();
+  if (!lastBackup) return true; // Never backed up
+  
+  const daysSince = Math.floor((Date.now() - new Date(lastBackup).getTime()) / (1000 * 60 * 60 * 24));
+  return daysSince >= 14;
+}
+
+export function getDaysSinceLastBackup(): number | null {
+  const lastBackup = getLastBackupDate();
+  if (!lastBackup) return null;
+  return Math.floor((Date.now() - new Date(lastBackup).getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Estimate backup size (for warning)
+ */
+export async function estimateBackupSize(): Promise<number> {
+  try {
+    const attachments = await db.attachments.toArray();
+    const drafts = await db.drafts.toArray();
+    
+    let total = 0;
+    for (const att of attachments) {
+      total += att.blob.size;
+      if (att.thumbnail) total += att.thumbnail.size;
+    }
+    for (const draft of drafts) {
+      for (const att of draft.attachments || []) {
+        total += att.blob.size;
+        if (att.thumbnail) total += att.thumbnail.size;
+      }
+    }
+    
+    // Add ~20% for JSON metadata overhead
+    return Math.round(total * 1.2);
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -252,7 +356,163 @@ export async function exportFullBackup(
 }
 
 /**
- * Validate backup file structure
+ * Export to ZIP file with separate files for each table
+ */
+export async function exportBackupZip(
+  onProgress?: (progress: DetailedProgress) => void
+): Promise<Blob> {
+  const zip = new JSZip();
+  const tablesFolder = zip.folder('tables');
+  const mediaFolder = zip.folder('media');
+  
+  if (!tablesFolder || !mediaFolder) {
+    throw new Error('Failed to create ZIP folders');
+  }
+
+  // Initialize progress - use mutable status
+  const tableStatuses: Array<{
+    name: string;
+    status: 'pending' | 'processing' | 'done';
+    current?: number;
+    total?: number;
+  }> = TABLE_NAMES.map(name => ({
+    name,
+    status: 'pending',
+    current: undefined,
+    total: undefined,
+  }));
+
+  const updateProgress = (phase: DetailedProgress['phase'], percent: number, tableName?: string) => {
+    if (onProgress) {
+      onProgress({
+        phase,
+        overallPercent: percent,
+        currentTable: tableName,
+        tables: tableStatuses,
+      });
+    }
+  };
+
+  const tableCounts: Record<string, number> = {};
+  let mediaIndex = 0;
+
+  // Process each table
+  for (let i = 0; i < TABLE_NAMES.length; i++) {
+    const tableName = TABLE_NAMES[i];
+    tableStatuses[i].status = 'processing';
+    updateProgress('reading', Math.round((i / TABLE_NAMES.length) * 80), tableName);
+
+    const table = db.table(tableName);
+    const rows = await table.toArray();
+    tableStatuses[i].total = rows.length;
+    tableCounts[tableName] = rows.length;
+
+    // Handle tables with blobs specially
+    if (tableName === 'attachments') {
+      const metadata: unknown[] = [];
+      
+      for (let j = 0; j < rows.length; j++) {
+        const att = rows[j];
+        tableStatuses[i].current = j + 1;
+        updateProgress('processing', Math.round((i / TABLE_NAMES.length) * 80 + (j / rows.length) * 5), tableName);
+        
+        const ext = getMimeExtension(att.mimeType);
+        const blobPath = `att_${att.id || j}.${ext}`;
+        
+        // Store blob as file
+        mediaFolder.file(blobPath, att.blob);
+        
+        // Store thumbnail if exists
+        let thumbPath: string | undefined;
+        if (att.thumbnail) {
+          thumbPath = `att_${att.id || j}_thumb.${ext}`;
+          mediaFolder.file(thumbPath, att.thumbnail);
+        }
+        
+        // Store metadata without blob
+        metadata.push({
+          ...att,
+          blob: undefined,
+          thumbnail: undefined,
+          _blobPath: blobPath,
+          _thumbPath: thumbPath,
+        });
+        
+        mediaIndex++;
+      }
+      
+      mediaFolder.file('attachments.json', JSON.stringify(metadata, null, 2));
+    } else if (tableName === 'drafts') {
+      const metadata: unknown[] = [];
+      
+      for (let j = 0; j < rows.length; j++) {
+        const draft = rows[j];
+        tableStatuses[i].current = j + 1;
+        
+        const processedAtts = [];
+        for (let k = 0; k < (draft.attachments || []).length; k++) {
+          const att = draft.attachments[k];
+          const ext = getMimeExtension(att.mimeType);
+          const blobPath = `draft_${draft.id}_${k}.${ext}`;
+          
+          mediaFolder.file(blobPath, att.blob);
+          
+          let thumbPath: string | undefined;
+          if (att.thumbnail) {
+            thumbPath = `draft_${draft.id}_${k}_thumb.${ext}`;
+            mediaFolder.file(thumbPath, att.thumbnail);
+          }
+          
+          processedAtts.push({
+            ...att,
+            blob: undefined,
+            thumbnail: undefined,
+            _blobPath: blobPath,
+            _thumbPath: thumbPath,
+          });
+        }
+        
+        metadata.push({
+          ...draft,
+          attachments: processedAtts,
+        });
+      }
+      
+      tablesFolder.file('drafts.json', JSON.stringify(metadata, null, 2));
+    } else {
+      // Regular table - just store as JSON
+      tablesFolder.file(`${tableName}.json`, JSON.stringify(rows, null, 2));
+    }
+
+    tableStatuses[i].status = 'done';
+    tableStatuses[i].current = rows.length;
+  }
+
+  // Create manifest
+  const manifest: BackupManifest = {
+    dbName: 'DaybookDB',
+    dbVersion: db.verno,
+    exportedAt: new Date().toISOString(),
+    appVersion: APP_VERSION,
+    tables: tableCounts,
+  };
+
+  zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+
+  // Generate ZIP
+  updateProgress('compressing', 90);
+  const zipBlob = await zip.generateAsync({ 
+    type: 'blob',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
+  });
+
+  updateProgress('complete', 100);
+  return zipBlob;
+}
+
+/**
+ * Validate backup file structure (JSON format)
  */
 export function validateBackupManifest(data: unknown): data is BackupPayload {
   if (!data || typeof data !== 'object') return false;
@@ -270,6 +530,20 @@ export function validateBackupManifest(data: unknown): data is BackupPayload {
   for (const table of requiredTables) {
     if (!Array.isArray(payload[table])) return false;
   }
+  
+  return true;
+}
+
+/**
+ * Validate ZIP manifest structure
+ */
+export function validateZipManifest(data: unknown): data is BackupManifest {
+  if (!data || typeof data !== 'object') return false;
+  
+  const manifest = data as Record<string, unknown>;
+  if (manifest.dbName !== 'DaybookDB') return false;
+  if (typeof manifest.dbVersion !== 'number') return false;
+  if (typeof manifest.exportedAt !== 'string') return false;
   
   return true;
 }
@@ -297,7 +571,29 @@ export function getImportSummary(payload: BackupPayload): ImportSummary {
 }
 
 /**
- * Import backup into DaybookDB
+ * Get import summary from manifest (for ZIP)
+ */
+export function getImportSummaryFromManifest(manifest: BackupManifest): ImportSummary {
+  return {
+    entries: manifest.tables.entries || 0,
+    attachments: manifest.tables.attachments || 0,
+    drafts: manifest.tables.drafts || 0,
+    biographies: manifest.tables.biographies || 0,
+    reminders: manifest.tables.reminders || 0,
+    receipts: manifest.tables.receipts || 0,
+    receiptItems: manifest.tables.receiptItems || 0,
+    discussionSessions: manifest.tables.discussionSessions || 0,
+    discussionMessages: manifest.tables.discussionMessages || 0,
+    weeklyInsights: manifest.tables.weeklyInsights || 0,
+    audioTranscripts: manifest.tables.audioTranscripts || 0,
+    attachmentInsights: manifest.tables.attachmentInsights || 0,
+    analysisQueue: manifest.tables.analysisQueue || 0,
+    scanLogs: manifest.tables.scanLogs || 0,
+  };
+}
+
+/**
+ * Import backup into DaybookDB (JSON format)
  */
 export async function importFullBackup(
   payload: BackupPayload,
@@ -382,7 +678,155 @@ export async function importFullBackup(
 }
 
 /**
- * Download backup as JSON file
+ * Import from ZIP file
+ */
+export async function importBackupZip(
+  zipBlob: Blob,
+  options: { wipeExisting: boolean } = { wipeExisting: true },
+  onProgress?: (progress: DetailedProgress) => void
+): Promise<void> {
+  const zip = await JSZip.loadAsync(zipBlob);
+
+  // Read and validate manifest
+  const manifestFile = zip.file('manifest.json');
+  if (!manifestFile) {
+    throw new Error('Invalid backup: missing manifest.json');
+  }
+
+  const manifestText = await manifestFile.async('text');
+  const manifest = JSON.parse(manifestText);
+
+  if (!validateZipManifest(manifest)) {
+    throw new Error('Invalid backup: manifest validation failed');
+  }
+
+  // Initialize progress - use mutable status
+  const tableStatuses: Array<{
+    name: string;
+    status: 'pending' | 'processing' | 'done';
+    current?: number;
+    total?: number;
+  }> = TABLE_NAMES.map(name => ({
+    name,
+    status: 'pending',
+    current: undefined,
+    total: manifest.tables[name] || 0,
+  }));
+
+  const updateProgress = (phase: DetailedProgress['phase'], percent: number, tableName?: string) => {
+    if (onProgress) {
+      onProgress({
+        phase,
+        overallPercent: percent,
+        currentTable: tableName,
+        tables: tableStatuses,
+      });
+    }
+  };
+
+  // Wipe existing data if requested
+  if (options.wipeExisting) {
+    await db.transaction('rw', db.tables, async () => {
+      for (const table of db.tables) {
+        await table.clear();
+      }
+    });
+  }
+
+  updateProgress('reading', 10);
+
+  // Import each table
+  for (let i = 0; i < TABLE_NAMES.length; i++) {
+    const tableName = TABLE_NAMES[i];
+    tableStatuses[i].status = 'processing';
+    updateProgress('processing', 10 + Math.round((i / TABLE_NAMES.length) * 80), tableName);
+
+    if (tableName === 'attachments') {
+      // Read attachments metadata from media folder
+      const metaFile = zip.file('media/attachments.json');
+      if (metaFile) {
+        const metaText = await metaFile.async('text');
+        const metadata = JSON.parse(metaText);
+        
+        const attachments = [];
+        for (let j = 0; j < metadata.length; j++) {
+          const att = metadata[j];
+          tableStatuses[i].current = j + 1;
+          
+          // Read blob file
+          const blobFile = zip.file(`media/${att._blobPath}`);
+          const blob = blobFile ? await blobFile.async('blob') : new Blob();
+          
+          // Read thumbnail if exists
+          let thumbnail: Blob | undefined;
+          if (att._thumbPath) {
+            const thumbFile = zip.file(`media/${att._thumbPath}`);
+            thumbnail = thumbFile ? await thumbFile.async('blob') : undefined;
+          }
+          
+          // Remove path metadata and add blobs
+          const { _blobPath, _thumbPath, ...rest } = att;
+          attachments.push({ ...rest, blob, thumbnail });
+        }
+        
+        if (attachments.length > 0) {
+          await db.attachments.bulkPut(attachments);
+        }
+      }
+    } else if (tableName === 'drafts') {
+      // Drafts are in tables folder but have media references
+      const tableFile = zip.file(`tables/drafts.json`);
+      if (tableFile) {
+        const tableText = await tableFile.async('text');
+        const drafts = JSON.parse(tableText);
+        
+        const processedDrafts = [];
+        for (const draft of drafts) {
+          const processedAtts = [];
+          for (const att of draft.attachments || []) {
+            const blobFile = zip.file(`media/${att._blobPath}`);
+            const blob = blobFile ? await blobFile.async('blob') : new Blob();
+            
+            let thumbnail: Blob | undefined;
+            if (att._thumbPath) {
+              const thumbFile = zip.file(`media/${att._thumbPath}`);
+              thumbnail = thumbFile ? await thumbFile.async('blob') : undefined;
+            }
+            
+            const { _blobPath, _thumbPath, ...rest } = att;
+            processedAtts.push({ ...rest, blob, thumbnail });
+          }
+          
+          processedDrafts.push({ ...draft, attachments: processedAtts });
+        }
+        
+        if (processedDrafts.length > 0) {
+          await db.drafts.bulkPut(processedDrafts);
+        }
+      }
+    } else {
+      // Regular table
+      const tableFile = zip.file(`tables/${tableName}.json`);
+      if (tableFile) {
+        const tableText = await tableFile.async('text');
+        const rows = JSON.parse(tableText);
+        
+        if (rows.length > 0) {
+          const table = db.table(tableName);
+          await table.bulkPut(rows);
+        }
+      }
+    }
+
+    tableStatuses[i].status = 'done';
+    tableStatuses[i].current = manifest.tables[tableName] || 0;
+  }
+
+  updateProgress('complete', 100);
+}
+
+/**
+ * Download backup as JSON file (legacy)
  */
 export function downloadBackupFile(payload: BackupPayload): void {
   const json = JSON.stringify(payload);
@@ -405,20 +849,66 @@ export function downloadBackupFile(payload: BackupPayload): void {
 }
 
 /**
- * Read backup file from user selection
+ * Download backup as ZIP file
  */
-export function readBackupFile(file: File): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const data = JSON.parse(reader.result as string);
-        resolve(data);
-      } catch {
-        reject(new Error('Invalid JSON file'));
-      }
-    };
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsText(file);
-  });
+export function downloadBackupZip(zipBlob: Blob): void {
+  const url = URL.createObjectURL(zipBlob);
+  
+  const date = new Date().toISOString().split('T')[0];
+  const filename = `daybook-backup-${date}.zip`;
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  // Save last backup date
+  setLastBackupDate(new Date().toISOString());
+}
+
+/**
+ * Read backup file from user selection (supports JSON and ZIP)
+ */
+export async function readBackupFile(file: File): Promise<{ type: 'json' | 'zip'; data: BackupPayload | Blob; manifest?: BackupManifest }> {
+  if (file.name.endsWith('.zip')) {
+    // Read ZIP manifest for validation/summary
+    const zip = await JSZip.loadAsync(file);
+    const manifestFile = zip.file('manifest.json');
+    
+    if (!manifestFile) {
+      throw new Error('Invalid backup: missing manifest.json');
+    }
+    
+    const manifestText = await manifestFile.async('text');
+    const manifest = JSON.parse(manifestText);
+    
+    if (!validateZipManifest(manifest)) {
+      throw new Error('Invalid backup: manifest validation failed');
+    }
+    
+    // Return the file as blob for later import
+    return { type: 'zip', data: file, manifest };
+  } else {
+    // JSON file
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result as string);
+          if (!validateBackupManifest(data)) {
+            reject(new Error('Invalid backup format'));
+            return;
+          }
+          resolve({ type: 'json', data });
+        } catch {
+          reject(new Error('Invalid JSON file'));
+        }
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
+  }
 }

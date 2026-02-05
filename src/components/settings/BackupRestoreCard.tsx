@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react';
-import { HardDrive, Upload, Download, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { HardDrive, Upload, Download, AlertTriangle, CheckCircle, Loader2, X } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,21 +16,84 @@ import {
 import { toast } from 'sonner';
 import { useI18n } from '@/lib/i18n';
 import {
-  exportFullBackup,
+  exportBackupZip,
+  importBackupZip,
   importFullBackup,
-  validateBackupManifest,
-  getImportSummary,
-  downloadBackupFile,
   readBackupFile,
   getLastBackupDate,
+  getImportSummary,
+  getImportSummaryFromManifest,
+  estimateBackupSize,
+  downloadBackupZip,
+  shouldShowBackupReminder,
+  dismissBackupReminder,
+  getDaysSinceLastBackup,
   BackupPayload,
+  BackupManifest,
   ImportSummary,
-  ExportProgress,
+  DetailedProgress,
 } from '@/lib/backupService';
 import { formatDistanceToNow } from 'date-fns';
 import { ru, enUS, he, ar } from 'date-fns/locale';
+import { formatFileSize } from '@/lib/mediaUtils';
+import { cn } from '@/lib/utils';
 
 const dateLocales = { ru, en: enUS, he, ar };
+
+// 50MB warning threshold
+const SIZE_WARNING_THRESHOLD = 50 * 1024 * 1024;
+
+export function BackupReminderBanner() {
+  const { language } = useI18n();
+  const [visible, setVisible] = useState(() => shouldShowBackupReminder());
+  
+  const daysSince = getDaysSinceLastBackup();
+  
+  const t = {
+    reminder: language === 'ru' 
+      ? `Последний бэкап: ${daysSince === null ? 'никогда' : `${daysSince} дн. назад`}`
+      : language === 'he'
+        ? `גיבוי אחרון: ${daysSince === null ? 'אף פעם' : `לפני ${daysSince} ימים`}`
+        : language === 'ar'
+          ? `آخر نسخة: ${daysSince === null ? 'أبداً' : `منذ ${daysSince} يوم`}`
+          : `Last backup: ${daysSince === null ? 'never' : `${daysSince} days ago`}`,
+    recommend: language === 'ru' 
+      ? 'Рекомендуем сделать новый бэкап'
+      : language === 'he'
+        ? 'מומלץ לבצע גיבוי חדש'
+        : language === 'ar'
+          ? 'ننصح بإنشاء نسخة احتياطية جديدة'
+          : 'We recommend creating a new backup',
+  };
+
+  const handleDismiss = () => {
+    dismissBackupReminder();
+    setVisible(false);
+  };
+
+  if (!visible) return null;
+
+  return (
+    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 mb-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium text-foreground">{t.reminder}</p>
+            <p className="text-muted-foreground text-xs">{t.recommend}</p>
+          </div>
+        </div>
+        <button
+          onClick={handleDismiss}
+          className="p-1 rounded hover:bg-muted/50"
+          aria-label="Dismiss"
+        >
+          <X className="h-4 w-4 text-muted-foreground" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function BackupRestoreCard() {
   const { language } = useI18n();
@@ -37,11 +101,16 @@ export function BackupRestoreCard() {
   
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
+  const [exportProgress, setExportProgress] = useState<DetailedProgress | null>(null);
+  const [importProgress, setImportProgress] = useState<DetailedProgress | null>(null);
+  
+  // Size warning state
+  const [showSizeWarning, setShowSizeWarning] = useState(false);
+  const [estimatedSize, setEstimatedSize] = useState(0);
   
   // Import confirmation dialog state
   const [showImportConfirm, setShowImportConfirm] = useState(false);
-  const [pendingImport, setPendingImport] = useState<BackupPayload | null>(null);
+  const [pendingImportFile, setPendingImportFile] = useState<{ type: 'json' | 'zip'; data: BackupPayload | Blob; manifest?: BackupManifest } | null>(null);
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
   
   const lastBackup = getLastBackupDate();
@@ -87,21 +156,43 @@ export function BackupRestoreCard() {
     confirm: language === 'ru' ? 'Восстановить' : language === 'he' ? 'שחזר' : language === 'ar' ? 'استعادة' : 'Restore',
     error: language === 'ru' ? 'Ошибка' : language === 'he' ? 'שגיאה' : language === 'ar' ? 'خطأ' : 'Error',
     processing: language === 'ru' ? 'Обработка' : language === 'he' ? 'מעבד' : language === 'ar' ? 'معالجة' : 'Processing',
+    sizeWarningTitle: language === 'ru' ? 'Большой бэкап' : language === 'he' ? 'גיבוי גדול' : language === 'ar' ? 'نسخة كبيرة' : 'Large Backup',
+    sizeWarningDesc: language === 'ru' 
+      ? 'Бэкап может быть большим. Убедитесь, что у вас достаточно места.'
+      : language === 'he'
+        ? 'הגיבוי עשוי להיות גדול. ודא שיש לך מספיק מקום.'
+        : language === 'ar'
+          ? 'قد تكون النسخة الاحتياطية كبيرة. تأكد من وجود مساحة كافية.'
+          : 'Backup may be large. Make sure you have enough space.',
+    continue: language === 'ru' ? 'Продолжить' : language === 'he' ? 'המשך' : language === 'ar' ? 'متابعة' : 'Continue',
   };
 
-  const handleExport = async () => {
+  const handleExportClick = async () => {
+    // Check size first
+    const size = await estimateBackupSize();
+    if (size > SIZE_WARNING_THRESHOLD) {
+      setEstimatedSize(size);
+      setShowSizeWarning(true);
+      return;
+    }
+    
+    await performExport();
+  };
+
+  const performExport = async () => {
+    setShowSizeWarning(false);
     setIsExporting(true);
     setExportProgress(null);
     
     try {
-      const payload = await exportFullBackup((progress) => {
+      const zipBlob = await exportBackupZip((progress) => {
         setExportProgress(progress);
       });
       
-      downloadBackupFile(payload);
+      downloadBackupZip(zipBlob);
       toast.success(t.exportSuccess);
     } catch (error) {
-      console.error('Export failed:', error);
+      console.error('[Backup] Export failed:', error);
       toast.error(t.error);
     } finally {
       setIsExporting(false);
@@ -117,43 +208,103 @@ export function BackupRestoreCard() {
     event.target.value = '';
     
     try {
-      const data = await readBackupFile(file);
+      const result = await readBackupFile(file);
       
-      if (!validateBackupManifest(data)) {
+      let summary: ImportSummary;
+      if (result.type === 'zip' && result.manifest) {
+        summary = getImportSummaryFromManifest(result.manifest);
+      } else if (result.type === 'json') {
+        summary = getImportSummary(result.data as BackupPayload);
+      } else {
         toast.error(t.invalidFile);
         return;
       }
       
-      const summary = getImportSummary(data);
       setImportSummary(summary);
-      setPendingImport(data);
+      setPendingImportFile(result);
       setShowImportConfirm(true);
     } catch (error) {
-      console.error('File read failed:', error);
+      console.error('[Backup] File read failed:', error);
       toast.error(t.invalidFile);
     }
   };
 
   const handleConfirmImport = async () => {
-    if (!pendingImport) return;
+    if (!pendingImportFile) return;
     
     setShowImportConfirm(false);
     setIsImporting(true);
+    setImportProgress(null);
     
     try {
-      await importFullBackup(pendingImport, { wipeExisting: true });
+      if (pendingImportFile.type === 'zip') {
+        await importBackupZip(
+          pendingImportFile.data as Blob, 
+          { wipeExisting: true },
+          (progress) => setImportProgress(progress)
+        );
+      } else {
+        await importFullBackup(
+          pendingImportFile.data as BackupPayload, 
+          { wipeExisting: true }
+        );
+      }
+      
       toast.success(t.importSuccess);
       
       // Reload to refresh all data
       setTimeout(() => window.location.reload(), 1000);
     } catch (error) {
-      console.error('Import failed:', error);
+      console.error('[Backup] Import failed:', error);
       toast.error(t.error);
     } finally {
       setIsImporting(false);
-      setPendingImport(null);
+      setPendingImportFile(null);
       setImportSummary(null);
+      setImportProgress(null);
     }
+  };
+
+  // Progress display component
+  const ProgressDisplay = ({ progress, label }: { progress: DetailedProgress | null; label: string }) => {
+    if (!progress) return null;
+    
+    return (
+      <div className="space-y-2 mt-3">
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>{label}</span>
+          <span>{progress.overallPercent}%</span>
+        </div>
+        <Progress value={progress.overallPercent} className="h-2" />
+        
+        {/* Table status list */}
+        <div className="max-h-32 overflow-y-auto space-y-1">
+          {progress.tables.map((table) => (
+            <div key={table.name} className="flex items-center gap-2 text-xs">
+              <span className={cn(
+                'w-4 text-center',
+                table.status === 'done' && 'text-green-500',
+                table.status === 'processing' && 'text-primary animate-pulse',
+                table.status === 'pending' && 'text-muted-foreground/50',
+              )}>
+                {table.status === 'done' ? '✓' : table.status === 'processing' ? '→' : '○'}
+              </span>
+              <span className={cn(
+                'flex-1',
+                table.status === 'pending' && 'text-muted-foreground/50'
+              )}>
+                {table.name}
+              </span>
+              {table.status !== 'pending' && table.total !== undefined && table.total > 0 && (
+                <span className="text-muted-foreground">
+                  ({table.current ?? 0}/{table.total})
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -175,7 +326,7 @@ export function BackupRestoreCard() {
             <Button
               variant="outline"
               className="flex-1 gap-2"
-              onClick={handleExport}
+              onClick={handleExportClick}
               disabled={isExporting || isImporting}
             >
               {isExporting ? (
@@ -203,26 +354,52 @@ export function BackupRestoreCard() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".json"
+              accept=".json,.zip"
               onChange={handleFileSelect}
               className="hidden"
             />
           </div>
           
           {/* Export progress */}
-          {exportProgress && (
-            <div className="text-xs text-muted-foreground">
-              {t.processing}: {exportProgress.table} ({exportProgress.current}/{exportProgress.total})
-            </div>
-          )}
+          {isExporting && <ProgressDisplay progress={exportProgress} label={t.exporting} />}
+          
+          {/* Import progress */}
+          {isImporting && <ProgressDisplay progress={importProgress} label={t.importing} />}
           
           {/* Last backup info */}
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CheckCircle className="h-4 w-4" />
-            <span>{t.lastBackup}: {lastBackupText}</span>
-          </div>
+          {!isExporting && !isImporting && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CheckCircle className="h-4 w-4" />
+              <span>{t.lastBackup}: {lastBackupText}</span>
+            </div>
+          )}
         </CardContent>
       </Card>
+      
+      {/* Size warning dialog */}
+      <AlertDialog open={showSizeWarning} onOpenChange={setShowSizeWarning}>
+        <AlertDialogContent className="panel-glass">
+          <AlertDialogHeader>
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10">
+              <AlertTriangle className="h-6 w-6 text-amber-500" />
+            </div>
+            <AlertDialogTitle className="text-center">
+              {t.sizeWarningTitle}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-center">
+              {t.sizeWarningDesc}
+              <br />
+              <span className="font-mono text-foreground">~{formatFileSize(estimatedSize)}</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+            <AlertDialogAction onClick={performExport} className="w-full">
+              {t.continue}
+            </AlertDialogAction>
+            <AlertDialogCancel className="w-full">{t.cancel}</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       
       {/* Import confirmation dialog */}
       <AlertDialog open={showImportConfirm} onOpenChange={setShowImportConfirm}>

@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { InstallButton } from '@/components/InstallPrompt';
 import { AISettingsCard } from '@/components/AISettingsCard';
-import { BackupRestoreCard } from '@/components/settings/BackupRestoreCard';
+import { BackupRestoreCard, BackupReminderBanner } from '@/components/settings/BackupRestoreCard';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -393,6 +393,9 @@ function SettingsContent() {
             </ul>
           </CardContent>
         </Card>
+
+        {/* Backup Reminder Banner */}
+        <BackupReminderBanner />
 
         {/* Backup & Restore */}
         <BackupRestoreCard />
