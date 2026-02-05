@@ -51,7 +51,7 @@ export const AI_PROFILES: Record<AIProfile, AIProfileConfig> = {
     name: 'БИОГРАФИЯ ДНЯ',
     description: 'Для генерации биографии',
     model: 'google/gemini-2.5-pro',
-    maxTokens: 2048,
+    maxTokens: 3072, // Increased for detailed chronicles
     temperature: 0.8,
   },
 };
