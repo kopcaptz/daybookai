@@ -1,193 +1,63 @@
 
-# План: Верификация и усиление Backup/Restore
+# План: Исправление критических багов в ZIP backup
 
-## Обзор текущей реализации
+## Обнаруженные проблемы
 
-### Что уже есть:
-- `backupService.ts` — экспорт/импорт всех 14 таблиц IndexedDB
-- Blob→base64 конвертация для attachments и drafts
-- UI карточка в Settings с Export/Import кнопками
-- Progress callback (частично используется)
-- Валидация manifest (dbName, dbVersion, exportedAt)
-
-### Что нужно улучшить:
-1. Добавить тесты для проверки цикла export→import
-2. ZIP формат вместо монолитного JSON
-3. Защита (предупреждение о размере, полный progress UI)
-4. Напоминание о бэкапе (14+ дней)
-
----
-
-## Шаг 1: Unit/Integration тест для backup цикла
-
-Создать файл `src/lib/backupService.test.ts`:
-
-```text
-describe('Backup Service')
-├── it('exports all tables with correct manifest')
-├── it('imports backup and restores data correctly')
-├── it('validates backup manifest structure')
-├── it('handles blob to base64 conversion')
-└── it('handles base64 to blob conversion')
-```
-
-**Тестовые данные:**
-- 3 entries (разные даты, mood, tags)
-- 2 attachments (image + audio, включая blob)
-- 1 biography
-
-**Проверки:**
-- manifest.tables counts === фактические counts после импорта
-- Blob attachments читаются после импорта
-- App не падает (нет исключений)
-
----
-
-## Шаг 2: ZIP формат бэкапа (с JSZip)
-
-### Установка зависимости
-```json
-"jszip": "^3.10.1"
-```
-
-### Структура ZIP файла
-```
-daybook-backup-2026-02-05.zip
-├── manifest.json           # BackupManifest (dbName, dbVersion, appVersion, exportedAt, tables)
-├── tables/
-│   ├── entries.json
-│   ├── biographies.json
-│   ├── reminders.json
-│   ├── receipts.json
-│   ├── receiptItems.json
-│   ├── discussionSessions.json
-│   ├── discussionMessages.json
-│   ├── weeklyInsights.json
-│   ├── audioTranscripts.json
-│   ├── attachmentInsights.json
-│   ├── analysisQueue.json
-│   └── scanLogs.json
-└── media/
-    ├── attachments.json     # metadata only (id, entryId, kind, mimeType, size, duration, createdAt)
-    ├── att_1.jpeg           # actual blob files
-    ├── att_1_thumb.jpeg     # thumbnails
-    ├── att_2.mp3
-    └── drafts.json          # includes draft attachments metadata
-```
-
-### Преимущества:
-- Сжатие в ~5-10x меньше (особенно для текста)
-- Медиа хранится как отдельные файлы (не base64 bloat)
-- Легче дебажить (можно открыть и посмотреть)
-
-### Новые функции в backupService.ts:
+### 1. Неявные пути в JSZip (потенциальный баг)
+**Текущий код:**
 ```typescript
-// New exports
-export async function exportBackupZip(onProgress?): Promise<Blob>
-export async function importBackupZip(zipBlob: Blob, options, onProgress?): Promise<void>
-export function validateZipManifest(data: unknown): boolean
-
-// Helper
-function getMimeExtension(mimeType: string): string
+const tablesFolder = zip.folder('tables');
+const mediaFolder = zip.folder('media');
+mediaFolder.file('attachments.json', ...);  // неявно создаёт media/attachments.json
 ```
 
----
+**Проблема:** Хотя JSZip folder() работает корректно (создаёт media/attachments.json), это неявное поведение. При рефакторинге или смене версии JSZip может сломаться.
 
-## Шаг 3: Улучшения UI в BackupRestoreCard
-
-### 3.1 Предупреждение о большом размере
-При экспорте, если оценочный размер > 50MB:
-```
-⚠️ Бэкап может быть большим (~XX MB)
-   Убедитесь, что у вас достаточно места.
-   [Продолжить] [Отмена]
-```
-
-Оценка размера:
+**Решение:** Использовать абсолютные пути через `zip.file()`:
 ```typescript
-// Quick estimate before export
-async function estimateBackupSize(): Promise<number> {
-  const attachments = await db.attachments.toArray();
-  let total = 0;
-  for (const att of attachments) {
-    total += att.blob.size;
-    if (att.thumbnail) total += att.thumbnail.size;
-  }
-  // Add ~10% for JSON overhead
-  return Math.round(total * 1.1);
+zip.file('media/attachments.json', ...);
+zip.file(`media/${blobPath}`, blob);
+zip.file('tables/drafts.json', ...);
+```
+
+### 2. bulkPut без чанков (критично для мобильных)
+**Текущий код (строки 772-774):**
+```typescript
+const attachments = [];
+// ... накапливаем все вложения ...
+await db.attachments.bulkPut(attachments);  // ВСЕ СРАЗУ
+```
+
+**Проблема:** При 2000+ вложений с blob'ами это разнесёт память на мобильных устройствах.
+
+**Решение:** Импорт чанками по 50 (меньше чем для JSON, т.к. blob'ы тяжелее):
+```typescript
+const CHUNK_SIZE = 50;
+for (let i = 0; i < attachments.length; i += CHUNK_SIZE) {
+  const chunk = attachments.slice(i, i + CHUNK_SIZE);
+  await db.attachments.bulkPut(chunk);
 }
 ```
 
-### 3.2 Полный Progress UI
-Текущее состояние показывает только текущую таблицу. Улучшаем:
+### 3. Отсутствие тестов структуры ZIP
+**Проблема:** Текущие тесты не проверяют, что ZIP содержит правильные файлы.
 
-```
-┌─────────────────────────────────────┐
-│ Экспорт бэкапа...                   │
-│                                     │
-│ [■■■■■■■■□□□□□□□□] 52%              │
-│                                     │
-│ ✓ entries (142)                     │
-│ ✓ biographies (45)                  │
-│ → attachments (23/47)               │
-│ ○ reminders                         │
-│ ○ receipts                          │
-│ ...                                 │
-└─────────────────────────────────────┘
-```
-
-Новый тип для детального прогресса:
+**Решение:** Добавить тесты без IndexedDB (мокаем db.table().toArray()):
 ```typescript
-export interface DetailedProgress {
-  phase: 'reading' | 'processing' | 'compressing' | 'complete';
-  overallPercent: number;
-  tables: Array<{
-    name: string;
-    status: 'pending' | 'processing' | 'done';
-    current?: number;
-    total?: number;
-  }>;
-}
-```
-
-### 3.3 Приватность — никаких логов с данными
-```typescript
-// ❌ НЕЛЬЗЯ
-console.log('Processing entry:', entry.text);
-
-// ✅ МОЖНО
-console.log('[Backup] Processing entries:', entries.length);
-```
-
-Добавить ESLint правило или code review note.
-
----
-
-## Шаг 4: Напоминание о бэкапе (14+ дней)
-
-### Логика
-```typescript
-function shouldShowBackupReminder(): boolean {
-  const lastBackup = getLastBackupDate();
-  if (!lastBackup) return true; // Never backed up
+it('exports ZIP with correct structure', async () => {
+  // Mock db tables
+  vi.spyOn(db, 'table').mockImplementation((name) => ({
+    toArray: () => Promise.resolve(mockData[name] || [])
+  }));
   
-  const daysSince = differenceInDays(new Date(), new Date(lastBackup));
-  return daysSince >= 14;
-}
+  const zipBlob = await exportBackupZip();
+  const zip = await JSZip.loadAsync(zipBlob);
+  
+  expect(zip.file('manifest.json')).toBeTruthy();
+  expect(zip.file('tables/entries.json')).toBeTruthy();
+  expect(zip.file('media/attachments.json')).toBeTruthy();
+});
 ```
-
-### UI в SettingsPage
-Маленький баннер над BackupRestoreCard:
-
-```
-┌─────────────────────────────────────┐
-│ ⚠️ Последний бэкап: 18 дней назад   │
-│    Рекомендуем сделать новый бэкап  │
-│                          [Скрыть]   │
-└─────────────────────────────────────┘
-```
-
-Dismiss сохраняет в localStorage (игнорировать до следующего бэкапа).
 
 ---
 
@@ -195,72 +65,154 @@ Dismiss сохраняет в localStorage (игнорировать до сле
 
 | Файл | Изменения |
 |------|-----------|
-| `package.json` | Добавить `jszip: ^3.10.1` |
-| `src/lib/backupService.ts` | Добавить ZIP export/import, estimateSize, DetailedProgress |
-| `src/lib/backupService.test.ts` | **Новый** — unit тесты |
-| `src/components/settings/BackupRestoreCard.tsx` | Улучшенный progress UI, size warning, file accept=".json,.zip" |
-| `src/pages/SettingsPage.tsx` | Добавить BackupReminderBanner |
+| `src/lib/backupService.ts` | Абсолютные пути, chunked import |
+| `src/lib/backupService.test.ts` | Добавить ZIP structure тесты |
 
 ---
 
-## Техническая детализация
+## Детальные правки
 
-### JSZip API (для справки)
+### backupService.ts — exportBackupZip()
+
+**Строки 420-444 (attachments export):**
+```typescript
+// БЫЛО:
+mediaFolder.file(blobPath, att.blob);
+mediaFolder.file(thumbPath, att.thumbnail);
+mediaFolder.file('attachments.json', JSON.stringify(metadata, null, 2));
+
+// СТАНЕТ:
+zip.file(`media/${blobPath}`, att.blob);
+zip.file(`media/${thumbPath}`, att.thumbnail);
+zip.file('media/attachments.json', JSON.stringify(metadata, null, 2));
+```
+
+**Строки 456-481 (drafts export):**
+```typescript
+// БЫЛО:
+mediaFolder.file(blobPath, att.blob);
+mediaFolder.file(thumbPath, att.thumbnail);
+tablesFolder.file('drafts.json', ...);
+
+// СТАНЕТ:
+zip.file(`media/${blobPath}`, att.blob);
+zip.file(`media/${thumbPath}`, att.thumbnail);
+zip.file('tables/drafts.json', ...);
+```
+
+**Строка 484 (regular tables):**
+```typescript
+// БЫЛО:
+tablesFolder.file(`${tableName}.json`, JSON.stringify(rows, null, 2));
+
+// СТАНЕТ:
+zip.file(`tables/${tableName}.json`, JSON.stringify(rows, null, 2));
+```
+
+### backupService.ts — importBackupZip()
+
+**Строки 750-774 (attachments import) — добавить chunked bulkPut:**
+```typescript
+const CHUNK_SIZE = 50;
+const attachments: Array<...> = [];
+
+for (let j = 0; j < metadata.length; j++) {
+  // ... собираем attachment ...
+  attachments.push({ ...rest, blob, thumbnail });
+  
+  // Flush chunk to DB
+  if (attachments.length >= CHUNK_SIZE) {
+    await db.attachments.bulkPut(attachments);
+    attachments.length = 0; // clear array
+  }
+}
+
+// Flush remaining
+if (attachments.length > 0) {
+  await db.attachments.bulkPut(attachments);
+}
+```
+
+**Аналогично для drafts (строки 783-805).**
+
+### backupService.test.ts — добавить ZIP structure тесты
+
 ```typescript
 import JSZip from 'jszip';
 
-// Create
-const zip = new JSZip();
-zip.file('manifest.json', JSON.stringify(manifest));
-zip.file('tables/entries.json', JSON.stringify(entries));
-zip.file('media/att_1.jpeg', blob);
+describe('ZIP Structure', () => {
+  it('exports ZIP with manifest.json', async () => {
+    // Используем real export но с пустой DB
+    const zipBlob = await exportBackupZip();
+    const zip = await JSZip.loadAsync(zipBlob);
+    
+    const manifestFile = zip.file('manifest.json');
+    expect(manifestFile).toBeTruthy();
+    
+    const manifestText = await manifestFile!.async('text');
+    const manifest = JSON.parse(manifestText);
+    expect(manifest.dbName).toBe('DaybookDB');
+    expect(manifest.dbVersion).toBeGreaterThan(0);
+  });
 
-// Generate
-const zipBlob = await zip.generateAsync({ 
-  type: 'blob',
-  compression: 'DEFLATE',
-  compressionOptions: { level: 6 }
+  it('exports tables/*.json for each table', async () => {
+    const zipBlob = await exportBackupZip();
+    const zip = await JSZip.loadAsync(zipBlob);
+    
+    expect(zip.file('tables/entries.json')).toBeTruthy();
+    expect(zip.file('tables/biographies.json')).toBeTruthy();
+    expect(zip.file('tables/reminders.json')).toBeTruthy();
+  });
+
+  it('exports media/attachments.json for attachment metadata', async () => {
+    const zipBlob = await exportBackupZip();
+    const zip = await JSZip.loadAsync(zipBlob);
+    
+    expect(zip.file('media/attachments.json')).toBeTruthy();
+  });
 });
-
-// Read
-const zip = await JSZip.loadAsync(file);
-const manifest = JSON.parse(await zip.file('manifest.json').async('text'));
-const attBlob = await zip.file('media/att_1.jpeg').async('blob');
 ```
 
-### Обратная совместимость
-Import должен поддерживать оба формата:
-1. `.json` — старый формат (монолитный JSON)
-2. `.zip` — новый формат
+---
+
+## Контракт ZIP структуры (документация в коде)
+
+Добавить комментарий в начало exportBackupZip():
 
 ```typescript
-async function readBackupFile(file: File): Promise<BackupPayload> {
-  if (file.name.endsWith('.zip')) {
-    return readBackupZip(file);
-  } else {
-    return readBackupJson(file);
-  }
-}
+/**
+ * ZIP Structure Contract:
+ * 
+ * daybook-backup-YYYY-MM-DD.zip
+ * ├── manifest.json              # BackupManifest
+ * ├── tables/
+ * │   ├── entries.json           # Entry[]
+ * │   ├── biographies.json       
+ * │   ├── reminders.json         
+ * │   ├── receipts.json          
+ * │   ├── receiptItems.json      
+ * │   ├── discussionSessions.json
+ * │   ├── discussionMessages.json
+ * │   ├── weeklyInsights.json    
+ * │   ├── audioTranscripts.json  
+ * │   ├── attachmentInsights.json
+ * │   ├── analysisQueue.json     
+ * │   ├── scanLogs.json          
+ * │   └── drafts.json            # Draft[] with _blobPath references
+ * └── media/
+ *     ├── attachments.json       # Attachment metadata with _blobPath
+ *     ├── att_<id>.<ext>         # Attachment blobs
+ *     ├── att_<id>_thumb.<ext>   # Thumbnails
+ *     └── draft_<id>_<idx>.<ext> # Draft attachment blobs
+ */
 ```
 
 ---
 
 ## Порядок реализации
 
-1. **Тесты** — написать тесты для текущей JSON-версии
-2. **JSZip интеграция** — добавить ZIP export/import
-3. **UI улучшения** — progress, size warning
-4. **Напоминание** — 14-day banner
-5. **Smoke test** — ручная проверка полного цикла
-
----
-
-## Ожидаемый результат
-
-После реализации:
-- ✅ Тесты подтверждают, что export→import сохраняет все данные
-- ✅ ZIP файлы в ~5x меньше JSON
-- ✅ Пользователь видит прогресс каждой таблицы
-- ✅ Предупреждение если бэкап > 50MB
-- ✅ Напоминание если прошло 14+ дней
-- ✅ Никаких приватных данных в console.log
+1. Исправить пути в exportBackupZip (абсолютные пути)
+2. Добавить chunked import для attachments и drafts
+3. Добавить ZIP structure тесты
+4. Добавить контракт-комментарий
+5. Прогнать тесты + ручной smoke test
