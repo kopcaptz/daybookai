@@ -76,8 +76,8 @@ export async function requestNotificationPermission(): Promise<boolean> {
       nativePermissionDenied = true;
       return false;
     }
-  } catch (error) {
-    console.log('Native notifications not available:', error);
+  } catch {
+    // Native notifications not available
     return false;
   }
 }
@@ -136,8 +136,8 @@ export async function ensureNotificationChannel(): Promise<void> {
     });
     
     channelCreated = true;
-  } catch (error) {
-    console.log('Failed to create notification channel:', error);
+  } catch {
+    // Failed to create notification channel
   }
 }
 
@@ -187,8 +187,8 @@ export async function scheduleTestNotification(): Promise<boolean> {
     });
     
     return true;
-  } catch (error) {
-    console.log('Test notification failed:', error);
+  } catch {
+    // Test notification failed
     return false;
   }
 }
@@ -262,8 +262,8 @@ async function showCapacitorNotification(
         },
       ],
     });
-  } catch (error) {
-    console.log('Capacitor notification error, falling back to banner:', error);
+  } catch {
+    // Capacitor notification failed, fallback to banner
     showInAppBanner(title, body, deepLink, date);
   }
 }
@@ -331,8 +331,8 @@ export async function scheduleDailyReminder(
     });
     
     return true;
-  } catch (error) {
-    console.log('Failed to schedule daily reminder:', error);
+  } catch {
+    // Failed to schedule daily reminder
     return false;
   }
 }
