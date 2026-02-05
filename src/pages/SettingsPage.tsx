@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Sun, Moon, Monitor, Download, Trash2, AlertTriangle, HardDrive, Smartphone, Globe, Clock, Shield, Receipt, Bell, Coffee, Zap } from 'lucide-react';
+import { Sun, Moon, Monitor, Trash2, AlertTriangle, HardDrive, Smartphone, Globe, Clock, Shield, Receipt, Bell, Coffee, Zap } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
-import { exportAllData, clearAllData, STORAGE_WARNINGS, loadBioSettings, saveBioSettings } from '@/lib/db';
+import { clearAllData, STORAGE_WARNINGS, loadBioSettings, saveBioSettings } from '@/lib/db';
 import { useStorageUsage } from '@/hooks/useStorageUsage';
 import { formatFileSize } from '@/lib/mediaUtils';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { InstallButton } from '@/components/InstallPrompt';
 import { AISettingsCard } from '@/components/AISettingsCard';
+import { BackupRestoreCard } from '@/components/settings/BackupRestoreCard';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,7 +42,6 @@ function SettingsContent() {
   const { theme, setTheme } = useTheme();
   const { t, language, setLanguage } = useI18n();
   const navigate = useNavigate();
-  const [isExporting, setIsExporting] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [bioTime, setBioTime] = useState(() => loadBioSettings().bioTime);
   
@@ -118,28 +118,6 @@ function SettingsContent() {
   const handleBioTimeChange = (value: string) => {
     setBioTime(value);
     saveBioSettings({ bioTime: value });
-  };
-
-  const handleExport = async () => {
-    setIsExporting(true);
-    try {
-      const data = await exportAllData();
-      const blob = new Blob([data], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `cyber-grimoire-export-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success(t('settings.exportSuccess'));
-    } catch (error) {
-      console.error('Export failed:', error);
-      toast.error(t('common.error'));
-    } finally {
-      setIsExporting(false);
-    }
   };
 
   const handleClearData = async () => {
@@ -362,7 +340,7 @@ function SettingsContent() {
               <span>{t('settings.storageUsed')}:</span>
               <span className={cn(
                 'font-medium font-mono',
-                storage.warning === 'warning' && 'text-yellow-500',
+                storage.warning === 'warning' && 'text-muted-foreground',
                 storage.warning === 'critical' && 'text-destructive'
               )}>
                 {storage.formatted}
@@ -416,26 +394,8 @@ function SettingsContent() {
           </CardContent>
         </Card>
 
-        {/* Export Data */}
-        <Card className="panel-glass border-cyber-glow/20">
-          <CardHeader>
-            <CardTitle className="text-lg">{t('settings.export')}</CardTitle>
-            <CardDescription>
-              {t('settings.exportHint')}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={handleExport}
-              disabled={isExporting}
-              variant="outline"
-              className="w-full gap-2"
-            >
-              <Download className="h-4 w-4" />
-              {isExporting ? t('common.loading') : t('settings.export')}
-            </Button>
-          </CardContent>
-        </Card>
+        {/* Backup & Restore */}
+        <BackupRestoreCard />
 
         {/* Clear Data */}
         <Card className="panel-glass border-destructive/30">
