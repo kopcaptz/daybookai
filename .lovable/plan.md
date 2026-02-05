@@ -1,12 +1,15 @@
-
 # ТЗ: Исправление трёх критических пунктов
 
-## Обзор
+## Статус: ✅ ВЫПОЛНЕНО
 
-Реализация трёх обязательных улучшений для production-ready приложения:
-1. **Централизованный логгер** — замена 285+ console.log на production-safe логгер
-2. **Retention policy для ethereal_chronicle_revisions** — Edge Function cron для удаления старых ревизий
-3. **End-to-end backup тесты** — интеграционные тесты с fake-indexeddb
+### Реализовано:
+1. ✅ **Централизованный логгер** (`src/lib/logger.ts`) — production-safe с маскированием данных
+2. ✅ **Retention policy** (`supabase/functions/cleanup-revisions/index.ts`) — Edge Function + cron daily 03:00 UTC
+3. ✅ **Backup тесты** (`src/lib/backupService.test.ts`) — 15 тестов валидации
+
+---
+
+## Обзор (оригинал)
 
 ---
 
