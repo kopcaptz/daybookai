@@ -215,6 +215,154 @@ function getConfidence(itemCount: number): "low" | "medium" | "high" {
   return "high";
 }
 
+// ============ JSON extraction with truncation detection ============
+
+type ExtractJSONSuccess = { ok: true; value: unknown; jsonText: string };
+type ExtractJSONFail = {
+  ok: false;
+  error: string;
+  truncated: boolean;
+  diagnostics: {
+    contentLength: number;
+    startsWithFence: boolean;
+    endsWithFence: boolean;
+    hasFenceAnywhere: boolean;
+    braceBalance: number;
+    bracketBalance: number;
+    lastChar: string;
+  };
+};
+
+const SUSPICIOUS_TAIL_CHARS = ['"', ',', ':', '[', '{', '\\'];
+
+function extractJSON(content: string): ExtractJSONSuccess | ExtractJSONFail {
+  const trimmed = content.trim();
+
+  const startsWithFence = trimmed.startsWith("```");
+  const endsWithFence = trimmed.endsWith("```");
+  const hasFenceAnywhere = trimmed.includes("```");
+
+  // Strip opening fence if present; strip closing only if it exists at the end.
+  let cleaned = trimmed;
+  if (startsWithFence) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, "").trim();
+  }
+  if (endsWithFence) {
+    cleaned = cleaned.replace(/\n?```\s*$/, "").trim();
+  }
+
+  // Find JSON start: object or array (whichever appears first)
+  const firstBrace = cleaned.indexOf("{");
+  const firstBracket = cleaned.indexOf("[");
+  if (firstBrace === -1 && firstBracket === -1) {
+    return {
+      ok: false,
+      error: "No JSON object/array start found",
+      truncated: false,
+      diagnostics: {
+        contentLength: content.length,
+        startsWithFence,
+        endsWithFence,
+        hasFenceAnywhere,
+        braceBalance: 0,
+        bracketBalance: 0,
+        lastChar: cleaned.slice(-1) || "",
+      },
+    };
+  }
+
+  const isObject =
+    firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket);
+
+  const jsonStart = isObject ? firstBrace : firstBracket;
+  const jsonEnd = isObject ? cleaned.lastIndexOf("}") : cleaned.lastIndexOf("]");
+
+  // If no closing token found, it's almost certainly truncated.
+  if (jsonEnd <= jsonStart) {
+    const tail = cleaned.trim().slice(-1);
+    return {
+      ok: false,
+      error: "JSON appears truncated (no closing brace/bracket)",
+      truncated: true,
+      diagnostics: {
+        contentLength: content.length,
+        startsWithFence,
+        endsWithFence,
+        hasFenceAnywhere,
+        braceBalance: 1,
+        bracketBalance: 1,
+        lastChar: tail,
+      },
+    };
+  }
+
+  const jsonText = cleaned.slice(jsonStart, jsonEnd + 1);
+
+  // Balances (separate)
+  const openBraces = (jsonText.match(/\{/g) || []).length;
+  const closeBraces = (jsonText.match(/\}/g) || []).length;
+  const openBrackets = (jsonText.match(/\[/g) || []).length;
+  const closeBrackets = (jsonText.match(/\]/g) || []).length;
+  const braceBalance = openBraces - closeBraces;
+  const bracketBalance = openBrackets - closeBrackets;
+
+  const lastChar = cleaned.trim().slice(-1);
+  const suspiciousTail = SUSPICIOUS_TAIL_CHARS.includes(lastChar);
+
+  // Parse first; decide truncated only if parse fails + heuristics suggest truncation
+  try {
+    return { ok: true, value: JSON.parse(jsonText), jsonText };
+  } catch (e) {
+    const unclosedFence = startsWithFence && !endsWithFence;
+    const imbalanced = braceBalance !== 0 || bracketBalance !== 0;
+    const likelyTruncated = unclosedFence || imbalanced || suspiciousTail;
+
+    return {
+      ok: false,
+      error: String(e),
+      truncated: likelyTruncated,
+      diagnostics: {
+        contentLength: content.length,
+        startsWithFence,
+        endsWithFence,
+        hasFenceAnywhere,
+        braceBalance,
+        bracketBalance,
+        lastChar,
+      },
+    };
+  }
+}
+
+function isValidBiographyShape(parsed: unknown): parsed is Record<string, unknown> {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return false;
+  }
+  
+  const obj = parsed as Record<string, unknown>;
+  
+  // Must have narrative or story (string)
+  const hasNarrative = typeof obj.narrative === "string" || typeof obj.story === "string";
+  
+  // highlights and timeline should be arrays if present
+  const validHighlights = obj.highlights === undefined || Array.isArray(obj.highlights);
+  const validTimeline = obj.timeline === undefined || Array.isArray(obj.timeline);
+  
+  // Basic timeline element validation
+  if (Array.isArray(obj.timeline) && obj.timeline.length > 0) {
+    const firstItem = obj.timeline[0];
+    if (!firstItem || typeof firstItem !== "object") {
+      return false;
+    }
+    const hasTimelineFields = "summary" in firstItem || "timeLabel" in firstItem;
+    if (!hasTimelineFields) {
+      return false;
+    }
+  }
+  
+  return hasNarrative && validHighlights && validTimeline;
+}
+
 // Build the biography prompt from preprocessed items (Daybook Biography v1 - Privacy-Safe)
 function buildBiographyPrompt(
   items: BiographyItem[],
@@ -531,7 +679,7 @@ serve(async (req) => {
     const systemPrompt = buildBiographyPrompt(items, date, language);
     const userMessage = language === "ru" ? "Создай биографию дня." : "Create a biography of the day.";
 
-    const effectiveMaxTokens = Math.min(maxTokens || 2048, MAX_TOKENS_LIMIT);
+    const effectiveMaxTokens = Math.min(maxTokens || 3072, MAX_TOKENS_LIMIT);
     const effectiveTemperature = temperature ?? 0.8;
 
     // Retryable status codes (transient upstream errors)
@@ -631,47 +779,96 @@ serve(async (req) => {
 
     // Parse JSON from AI response
     let biography: BiographyResponse;
-    try {
-      // Extract JSON from potential markdown wrapper
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error("No JSON found in response");
-      }
-      const parsed = JSON.parse(jsonMatch[0]);
+
+    const parseResult = extractJSON(content);
+
+    if (!parseResult.ok) {
+      const { error, truncated, diagnostics } = parseResult;
       
-      // Calculate confidence
-      const confidence = getConfidence(items.length);
+      console.error({
+        requestId,
+        action: truncated ? "ai_biography_truncated" : "ai_biography_parse_error",
+        error,
+        truncated,
+        effectiveMaxTokens,
+        model: effectiveModel,
+        diagnostics,
+        content_preview: content.slice(0, 500),
+      });
       
-      biography = {
-        title: parsed.title || (language === "ru" ? "Тихий день" : "A Quiet Day"),
-        narrative: parsed.narrative || parsed.story || "",
-        highlights: parsed.highlights || [],
-        timeline: parsed.timeline || parsed.moments || [],
-        meta: {
-          model: effectiveModel,
-          tokens: aiResponse.usage?.total_tokens,
-          requestId,
-          style: "daybook_biography_v1",
-          confidence: parsed.meta?.confidence || confidence,
-        },
-      };
-    } catch (parseError) {
-      console.error({ requestId, action: "ai_biography_parse_error", error: String(parseError), content });
+      // 502 for truncation (upstream issue), 500 for parse error
+      const httpStatus = truncated ? 502 : 500;
+      const userMessage = truncated
+        ? (language === "ru" 
+            ? "Ответ AI был обрезан. Повторите попытку." 
+            : "AI response was truncated. Please retry.")
+        : (language === "ru"
+            ? "Не удалось разобрать ответ AI"
+            : "Failed to parse AI response");
+      
       return new Response(
-        JSON.stringify({ error: "Failed to parse AI response", requestId }),
+        JSON.stringify({ 
+          error: userMessage, 
+          errorCode: truncated ? "truncated" : "parse_error",
+          requestId 
+        }),
+        { status: httpStatus, headers: responseHeaders() }
+      );
+    }
+
+    // Validate structure
+    if (!isValidBiographyShape(parseResult.value)) {
+      console.error({
+        requestId,
+        action: "ai_biography_invalid_schema",
+        keys: Object.keys(parseResult.value as object),
+        content_preview: content.slice(0, 500),
+      });
+      
+      return new Response(
+        JSON.stringify({ 
+          error: language === "ru" 
+            ? "AI вернул некорректную структуру" 
+            : "AI returned invalid structure",
+          errorCode: "invalid_schema",
+          requestId 
+        }),
         { status: 500, headers: responseHeaders() }
       );
     }
+
+    const parsed = parseResult.value as Record<string, unknown>;
+
+    // Calculate confidence
+    const confidence = getConfidence(items.length);
+
+    biography = {
+      title: (parsed.title as string) || (language === "ru" ? "Тихий день" : "A Quiet Day"),
+      narrative: (parsed.narrative as string) || (parsed.story as string) || "",
+      highlights: (parsed.highlights as string[]) || [],
+      timeline: (parsed.timeline as Array<{timeLabel: string; summary: string}>) || [],
+      meta: {
+        model: effectiveModel,
+        tokens: aiResponse.usage?.total_tokens,
+        requestId,
+        style: "daybook_biography_v2",
+        confidence: (parsed.meta as Record<string, unknown>)?.confidence as "low" | "medium" | "high" || confidence,
+      },
+    };
+
     console.log({
       requestId,
       timestamp: new Date().toISOString(),
       action: "ai_biography_success",
       date,
+      model: effectiveModel,
+      effectiveMaxTokens,
       title_length: biography.title.length,
       narrative_length: biography.narrative.length,
       highlights_count: biography.highlights.length,
       timeline_count: biography.timeline.length,
-      tokens: biography.meta.tokens,
+      tokens_used: biography.meta.tokens,
+      response_length: content.length,
     });
 
     return new Response(
