@@ -65,6 +65,32 @@ async function verifyToken(token: string): Promise<TokenPayload | null> {
   }
 }
 
+// Validate session exists in database (for kick support)
+async function validateSession(
+  supabase: any,
+  payload: TokenPayload
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('ethereal_sessions')
+    .select('id, expires_at')
+    .eq('id', payload.sessionId)
+    .eq('room_id', payload.roomId)
+    .eq('member_id', payload.memberId)
+    .maybeSingle();
+
+  if (error || !data) {
+    console.log('[ethereal_tasks] Session not found or revoked');
+    return false;
+  }
+
+  if (new Date(data.expires_at as string) < new Date()) {
+    console.log('[ethereal_tasks] Session expired in DB');
+    return false;
+  }
+
+  return true;
+}
+
 // ============ Main Handler ============
 
 Deno.serve(async (req) => {
@@ -89,13 +115,22 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { roomId, memberId } = payload;
-
   // Create Supabase client with service role
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   );
+
+  // Validate session exists in database (for kick/revoke support)
+  const sessionValid = await validateSession(supabase, payload);
+  if (!sessionValid) {
+    return new Response(JSON.stringify({ error: 'Session revoked' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const { roomId, memberId } = payload;
 
   // Parse URL for routing
   const url = new URL(req.url);
