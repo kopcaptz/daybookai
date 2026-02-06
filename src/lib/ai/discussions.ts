@@ -2,6 +2,7 @@ import { ContextPackResult, EvidenceRef } from '@/lib/librarian/contextPack';
 import { DiscussionMessage, DiscussionMode } from '@/lib/db';
 import { getAIToken, isAITokenValid } from '@/lib/aiTokenService';
 import { isAuthError, requestPinDialog, AIAuthRetryError } from '@/lib/aiAuthRecovery';
+import { logger } from '@/lib/logger';
 
 const AI_CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 
@@ -421,7 +422,7 @@ export async function sendDiscussionMessage(
     
     return parseAIResponse(fullText, contextPack.evidence);
   } catch (error) {
-    console.error('[discussions] AI request failed:', error);
+    logger.error('Discussions', 'AI request failed', error as Error);
     throw error;
   }
 }

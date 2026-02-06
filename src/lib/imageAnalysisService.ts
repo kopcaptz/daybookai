@@ -7,6 +7,7 @@ import {
   requestPinDialog,
   getErrorMessage,
 } from './aiAuthRecovery';
+import { logger } from './logger';
 
 const AI_CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 const PROMPT_VERSION = 'v1.0';
@@ -221,7 +222,7 @@ export async function analyzeImage(
     
     callbacks.onComplete(result);
   } catch (error) {
-    console.error('Image analysis failed:', error);
+    logger.error('ImageAnalysis', 'Analysis failed', error as Error);
     callbacks.onError(error instanceof Error ? error : new Error('Analysis failed'));
   }
 }

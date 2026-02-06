@@ -5,6 +5,7 @@ import { db, DiaryEntry } from './db';
 import { getAIToken, isAITokenValid } from './aiTokenService';
 import { startOfWeek, subDays, format } from 'date-fns';
 import { Language, getBaseLanguage } from './i18n';
+import { logger } from './logger';
 
 export interface WeeklyInsight {
   weekStart: string;       // YYYY-MM-DD (Monday)
@@ -65,7 +66,7 @@ export async function getCachedWeeklyInsight(): Promise<WeeklyInsight | null> {
     
     return cached as WeeklyInsight;
   } catch (e) {
-    console.warn('Failed to get cached weekly insight:', e);
+    logger.warn('WeeklyInsights', 'Failed to get cached insight', e);
     return null;
   }
 }
@@ -77,7 +78,7 @@ async function saveWeeklyInsight(insight: WeeklyInsight): Promise<void> {
   try {
     await db.table('weeklyInsights').put(insight);
   } catch (e) {
-    console.warn('Failed to save weekly insight:', e);
+    logger.warn('WeeklyInsights', 'Failed to save insight', e);
   }
 }
 
@@ -130,7 +131,7 @@ export async function generateWeeklyInsight(
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       const error = data.error || `http_${response.status}`;
-      console.error('Weekly insights API error:', error);
+      logger.error('WeeklyInsights', 'API error', new Error(error));
       return { success: false, error };
     }
 
@@ -153,7 +154,7 @@ export async function generateWeeklyInsight(
 
     return { success: true, insight };
   } catch (e) {
-    console.error('Weekly insights generation failed:', e);
+    logger.error('WeeklyInsights', 'Generation failed', e as Error);
     return { success: false, error: 'network_error' };
   }
 }

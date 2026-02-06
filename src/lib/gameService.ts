@@ -1,4 +1,5 @@
 import { getEtherealApiHeaders } from './etherealTokenService';
+import { logger } from './logger';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const BASE_URL = `${SUPABASE_URL}/functions/v1/ethereal_games`;
@@ -86,7 +87,7 @@ async function apiCall<T>(
 
     return { success: true, data };
   } catch (error) {
-    console.error('Game API error:', error);
+    logger.error('GameService', 'API error', error as Error);
     return { success: false, error: 'network_error' };
   }
 }

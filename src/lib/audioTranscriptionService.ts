@@ -3,6 +3,7 @@
 
 import { db, AudioTranscript } from './db';
 import { getAIToken, isAITokenValid } from './aiTokenService';
+import { logger } from './logger';
 
 const AI_TRANSCRIBE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-transcribe`;
 
@@ -136,7 +137,7 @@ export async function requestTranscription(
     return { ok: false, errorCode };
   } catch (error) {
     // Network or other error
-    console.error('Transcription request failed:', error);
+    logger.error('Transcription', 'Request failed', error as Error);
 
     await db.audioTranscripts.put({
       attachmentId,
