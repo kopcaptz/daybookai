@@ -1,3 +1,5 @@
+import { logger } from './logger';
+
 /**
  * AI Auth Recovery - Global event-based system for 401 retry
  * 
@@ -97,7 +99,7 @@ export function requestPinDialog(requestId?: string, errorCode?: string): Promis
   // If already pending, return the existing shared promise
   // All callers will resolve/reject together
   if (pendingPinState) {
-    console.log('[aiAuthRecovery] PIN dialog already pending, joining existing request');
+    logger.debug('AuthRecovery', 'PIN dialog already pending, joining existing request');
     return pendingPinState.promise;
   }
   
@@ -124,7 +126,7 @@ export function requestPinDialog(requestId?: string, errorCode?: string): Promis
     try {
       listener(event);
     } catch (e) {
-      console.error('PIN dialog listener error:', e);
+      logger.error('AuthRecovery', 'PIN dialog listener error', e as Error);
     }
   });
   
@@ -145,7 +147,7 @@ export function requestPinDialog(requestId?: string, errorCode?: string): Promis
  */
 export function notifyPinSuccess(): void {
   if (pendingPinState) {
-    console.log('[aiAuthRecovery] PIN success, resolving all waiters');
+    logger.debug('AuthRecovery', 'PIN success, resolving all waiters');
     pendingPinState.resolve();
     pendingPinState = null;
   }
@@ -157,7 +159,7 @@ export function notifyPinSuccess(): void {
  */
 export function notifyPinCancelled(): void {
   if (pendingPinState) {
-    console.log('[aiAuthRecovery] PIN cancelled, rejecting all waiters');
+    logger.debug('AuthRecovery', 'PIN cancelled, rejecting all waiters');
     pendingPinState.reject(new Error('pin_cancelled'));
     pendingPinState = null;
   }

@@ -1,4 +1,5 @@
 import { db, ScanLog, addScanLog, getAllScanLogs, clearScanLogs } from './db';
+import { logger } from './logger';
 
 /**
  * Log a scan attempt (privacy-safe: no image content, only metadata)
@@ -6,7 +7,7 @@ import { db, ScanLog, addScanLog, getAllScanLogs, clearScanLogs } from './db';
 export async function logScanAttempt(data: Omit<ScanLog, 'id'>): Promise<void> {
   try {
     await addScanLog(data);
-    console.info('[ScanDiagnostics] Logged scan attempt:', {
+    logger.info('ScanDiagnostics', 'Logged scan attempt', {
       timestamp: new Date(data.timestamp).toISOString(),
       originalKB: Math.round(data.originalImageBytes / 1024),
       compressedKB: Math.round(data.compressedBytes / 1024),
@@ -16,7 +17,7 @@ export async function logScanAttempt(data: Omit<ScanLog, 'id'>): Promise<void> {
       requestId: data.requestId.slice(0, 8),
     });
   } catch (error) {
-    console.error('[ScanDiagnostics] Failed to log scan attempt:', error);
+    logger.error('ScanDiagnostics', 'Failed to log scan attempt', error as Error);
   }
 }
 

@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { logger } from './logger';
 
 // Fallback whispers for when AI is unavailable
 const FALLBACK_WHISPERS = {
@@ -167,7 +168,7 @@ export async function fetchWhisper(language: string): Promise<string> {
     
     return whisper;
   } catch (error) {
-    console.log('Whisper AI unavailable, using fallback');
+    logger.debug('Whisper', 'AI unavailable, using fallback');
     const fallback = getFallbackWhisper(language, today);
     cacheWhisper(today, fallback);
     return fallback;
