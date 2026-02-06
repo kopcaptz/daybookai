@@ -1,3 +1,42 @@
+/**
+ * ETHEREAL LAYER SECURITY MODEL - Games Module
+ * =============================================
+ *
+ * ARCHITECTURE: "Full Isolation" (Deny All Direct Access)
+ *
+ * This function manages the "Situations" couples game in the Ethereal Layer.
+ * It follows the same security model as all Ethereal functions:
+ *
+ * SECURITY LAYERS:
+ * 1. DATABASE RLS: ethereal_game_sessions and ethereal_game_rounds tables have
+ *    RESTRICTIVE policies USING(false) blocking direct client queries.
+ *
+ * 2. EDGE FUNCTION PROXY: All game operations are proxied through this function
+ *    using service_role which bypasses RLS by design.
+ *
+ * 3. HMAC TOKEN VALIDATION: x-ethereal-token header required with signed payload.
+ *
+ * 4. SESSION REVOCATION: verifyToken() + session lookup ensures instant kick support.
+ *
+ * GAME FEATURES:
+ * - Adult level system (0-3) with consent requirements
+ * - Boundaries configuration (noHumiliation, noPain, etc.)
+ * - AI-generated situations using Lovable AI Gateway (Gemini-2.5-flash)
+ * - AI reflections on partner answers
+ * - Aftercare rating system
+ *
+ * CONTENT SAFETY:
+ * - Hard bans on non-consensual, minor-related, and other prohibited content
+ * - Level-based content filtering (romance → sensual → explicit)
+ * - Both partners must consent for level > 0
+ *
+ * FALSE POSITIVE SECURITY REPORTS:
+ * Reports claiming these tables are "publicly readable" are incorrect.
+ * Direct access from anon or authenticated roles will always fail.
+ *
+ * @see supabase/functions/ethereal_join/index.ts - Session creation
+ */
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 

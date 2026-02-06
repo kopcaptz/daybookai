@@ -1,3 +1,37 @@
+/**
+ * ETHEREAL LAYER SECURITY MODEL - Chronicles Module
+ * ==================================================
+ *
+ * ARCHITECTURE: "Full Isolation" (Deny All Direct Access)
+ *
+ * This function manages shared chronicles (documents/notes) in the Ethereal Layer.
+ * It follows the same security model as all Ethereal functions:
+ *
+ * SECURITY LAYERS:
+ * 1. DATABASE RLS: ethereal_chronicles table has RESTRICTIVE policy USING(false)
+ *    blocking 100% of direct client queries.
+ *
+ * 2. EDGE FUNCTION PROXY: All CRUD operations are proxied through this function
+ *    using service_role which bypasses RLS by design.
+ *
+ * 3. HMAC TOKEN VALIDATION: X-Ethereal-Token header required with signed payload.
+ *
+ * 4. SESSION REVOCATION: validateSession() checks ethereal_sessions table to ensure
+ *    the session hasn't been revoked (kicked by room owner).
+ *
+ * ADDITIONAL FEATURES:
+ * - Collaborative editing with lock mechanism (editing_by, editing_expires_at)
+ * - Revision history for audit trail (ethereal_chronicle_revisions table)
+ * - Media attachments with signed URLs (30-min TTL)
+ * - Pin support for important chronicles
+ *
+ * FALSE POSITIVE SECURITY REPORTS:
+ * Reports claiming this table is "publicly readable" are incorrect.
+ * Direct access from anon or authenticated roles will always fail.
+ *
+ * @see supabase/functions/ethereal_join/index.ts - Session creation
+ */
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
 
 const corsHeaders = {

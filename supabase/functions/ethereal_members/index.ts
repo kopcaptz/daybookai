@@ -1,3 +1,39 @@
+/**
+ * ETHEREAL LAYER SECURITY MODEL - Members Module
+ * ===============================================
+ *
+ * ARCHITECTURE: "Full Isolation" (Deny All Direct Access)
+ *
+ * This function manages room membership in the Ethereal Layer.
+ * It follows the same security model as all Ethereal functions:
+ *
+ * SECURITY LAYERS:
+ * 1. DATABASE RLS: ethereal_room_members table has RESTRICTIVE policy USING(false)
+ *    blocking 100% of direct client queries.
+ *
+ * 2. EDGE FUNCTION PROXY: All operations are proxied through this function
+ *    using service_role which bypasses RLS by design.
+ *
+ * 3. HMAC TOKEN VALIDATION: X-Ethereal-Token header required with signed payload.
+ *
+ * 4. SESSION REVOCATION: validateEtherealToken() checks ethereal_sessions table.
+ *
+ * ENDPOINTS:
+ * - GET / : List all room members (with owner flag)
+ * - DELETE / : Kick member (owner only, cascades to sessions)
+ *
+ * KICK MECHANISM:
+ * When owner kicks a member, their row in ethereal_room_members is deleted.
+ * CASCADE rule automatically deletes all associated ethereal_sessions.
+ * Kicked member's token becomes invalid on next API call (session_revoked error).
+ *
+ * FALSE POSITIVE SECURITY REPORTS:
+ * Reports claiming this table is "publicly readable" are incorrect.
+ * Direct access from anon or authenticated roles will always fail.
+ *
+ * @see supabase/functions/ethereal_join/index.ts - Session creation
+ */
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {

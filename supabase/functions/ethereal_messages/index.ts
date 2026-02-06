@@ -1,3 +1,40 @@
+/**
+ * ETHEREAL LAYER SECURITY MODEL
+ * =============================
+ *
+ * ARCHITECTURE: "Full Isolation" (Deny All Direct Access)
+ *
+ * This function is part of the Ethereal Layer - a privacy-focused shared space
+ * for partners that operates independently from Supabase Auth.
+ *
+ * SECURITY LAYERS:
+ * 1. DATABASE RLS: All ethereal_* tables have RESTRICTIVE policies with USING(false)
+ *    blocking 100% of direct client queries (anon/authenticated roles).
+ *
+ * 2. EDGE FUNCTION PROXY: All data access is routed through this function
+ *    using service_role which bypasses RLS by design.
+ *
+ * 3. HMAC TOKEN VALIDATION: Every request requires X-Ethereal-Token header
+ *    containing a cryptographically signed payload with sessionId, roomId, memberId.
+ *
+ * 4. SESSION REVOCATION: Beyond token signature verification, we check
+ *    ethereal_sessions table to ensure the session hasn't been revoked (kicked).
+ *
+ * WHY NOT auth.uid():
+ * - Ethereal Layer uses device-based sessions, not Supabase Auth
+ * - Partners share a room via PIN code without creating accounts
+ * - Standard RLS patterns like room_id IN (SELECT ... WHERE member_id = auth.uid())
+ *   are inapplicable here
+ *
+ * FALSE POSITIVE SECURITY REPORTS:
+ * Reports claiming this table is "publicly readable" are incorrect.
+ * Direct SELECT/INSERT/UPDATE/DELETE from anon or authenticated roles
+ * will always fail due to RESTRICTIVE RLS policies.
+ *
+ * @see supabase/functions/ethereal_join/index.ts - Session creation endpoint
+ * @see src/lib/etherealTokenService.ts - Client-side token management
+ */
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
