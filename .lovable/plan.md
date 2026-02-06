@@ -1,147 +1,40 @@
 
-# План: Миграция console.* на logger
+Контекст и диагноз (почему «Сетевая ошибка» не ушла)
+- На странице /settings кнопка «Проверить соединение» в AISettingsCard вызывает `testAIConnection()` → `src/lib/aiService.ts` делает `fetch` на `/functions/v1/ai-test`.
+- Сейчас backend‑функция `ai-test` фактически отсутствует в окружении: прямой вызов `/ai-test` возвращает 404 `Requested function was not found`.
+- Из‑за этого браузерный `fetch` превращается в «Failed to fetch»/«Сетевая ошибка» (особенно когда 404 приходит без ожидаемых CORS-заголовков на шлюзе).
 
-## Цель
-Завершить миграцию 15 вызовов `console.*` в 8 файлах на централизованный `logger` для:
-- Скрытия debug/info логов в production
-- Автоматической маскировки чувствительных данных
-- Отправки ошибок в crash reporter
+Цель
+- Вернуть работу проверки соединения в настройках: чтобы «Тест соединения» не давал «Сетевая ошибка», а корректно показывал success/error.
 
----
+Что будет сделано (минимальный фикс)
+1) Подтвердить проблему
+   - Проверить через серверный вызов, что `/ai-test` отвечает 404 (уже воспроизводится).
+   - Убедиться, что `supabase/functions/ai-test/index.ts` существует в репозитории (он есть).
 
-## Файлы и изменения
+2) Задеплоить отсутствующую backend‑функцию `ai-test`
+   - Выполнить деплой только `ai-test` (точечно), чтобы не трогать остальное.
+   - Сразу после деплоя сделать тестовый POST на `/ai-test` с валидным `X-AI-Token` и убедиться, что возвращается JSON `{"success": true/false, ...}` (не 404).
 
-### 1. src/lib/aiAuthRecovery.ts (4 замены)
+3) Проверка в UI (end-to-end)
+   - Открыть /settings → блок AI → нажать «Тест соединения».
+   - Ожидаемое поведение:
+     - больше нет «Сетевая ошибка»
+     - появляется либо «Соединение установлено!», либо понятная ошибка от сервиса (rate limit/ключ/и т.п.)
 
-**Добавить импорт:**
-```typescript
-import { logger } from './logger';
-```
+Усиление надежности (необязательно, но рекомендую)
+4) Сделать UI-обработку 404 более «человечной» (чтобы в будущем не выглядело как «сломался интернет»)
+   - В `testAIConnection()` добавить спец-кейс: если ответ 404/NOT_FOUND (или JSON с code=NOT_FOUND), показывать сообщение вида:
+     - RU: «Сервис проверки временно недоступен. Обновите приложение или попробуйте позже.»
+     - EN: аналогично
+   - Это не заменяет деплой, но делает UX устойчивым.
 
-**Замены:**
-| Строка | Было | Стало |
-|--------|------|-------|
-| 100 | `console.log('[aiAuthRecovery] PIN dialog already pending, joining existing request')` | `logger.debug('AuthRecovery', 'PIN dialog already pending, joining existing request')` |
-| 127 | `console.error('PIN dialog listener error:', e)` | `logger.error('AuthRecovery', 'PIN dialog listener error', e)` |
-| 148 | `console.log('[aiAuthRecovery] PIN success, resolving all waiters')` | `logger.debug('AuthRecovery', 'PIN success, resolving all waiters')` |
-| 160 | `console.log('[aiAuthRecovery] PIN cancelled, rejecting all waiters')` | `logger.debug('AuthRecovery', 'PIN cancelled, rejecting all waiters')` |
+Какие файлы/объекты затронем
+- Деплой: backend‑функция `ai-test` (существующий код `supabase/functions/ai-test/index.ts`).
+- (Опционально) Frontend: `src/lib/aiService.ts` (улучшить сообщение при 404).
 
----
+Порядок работ
+- Сначала деплой `ai-test` → потом проверка `/ai-test` → потом проверка в /settings → затем (по желанию) улучшение обработки 404 в UI.
 
-### 2. src/lib/ai/discussions.ts (1 замена)
-
-**Добавить импорт:**
-```typescript
-import { logger } from '../logger';
-```
-
-**Замены:**
-| Строка | Было | Стало |
-|--------|------|-------|
-| 424 | `console.error('[discussions] AI request failed:', error)` | `logger.error('Discussions', 'AI request failed', error as Error)` |
-
----
-
-### 3. src/lib/audioTranscriptionService.ts (1 замена)
-
-**Добавить импорт:**
-```typescript
-import { logger } from './logger';
-```
-
-**Замены:**
-| Строка | Было | Стало |
-|--------|------|-------|
-| 76 | `console.error('Transcription request failed:', error)` | `logger.error('Transcription', 'Request failed', error as Error)` |
-
----
-
-### 4. src/lib/gameService.ts (1 замена)
-
-**Добавить импорт:**
-```typescript
-import { logger } from './logger';
-```
-
-**Замены:**
-| Строка | Было | Стало |
-|--------|------|-------|
-| 89 | `console.error('Game API error:', error)` | `logger.error('GameService', 'API error', error as Error)` |
-
----
-
-### 5. src/lib/imageAnalysisService.ts (1 замена)
-
-**Добавить импорт:**
-```typescript
-import { logger } from './logger';
-```
-
-**Замены:**
-| Строка | Было | Стало |
-|--------|------|-------|
-| 224 | `console.error('Image analysis failed:', error)` | `logger.error('ImageAnalysis', 'Analysis failed', error as Error)` |
-
----
-
-### 6. src/lib/scanDiagnostics.ts (2 замены)
-
-**Добавить импорт:**
-```typescript
-import { logger } from './logger';
-```
-
-**Замены:**
-| Строка | Было | Стало |
-|--------|------|-------|
-| 12 | `console.info('[ScanDiagnostics] Logged scan attempt:', {...})` | `logger.info('ScanDiagnostics', 'Logged scan attempt', {...})` |
-| 15 | `console.error('[ScanDiagnostics] Failed to log scan attempt:', error)` | `logger.error('ScanDiagnostics', 'Failed to log scan attempt', error as Error)` |
-
----
-
-### 7. src/lib/weeklyInsightsService.ts (4 замены)
-
-**Добавить импорт:**
-```typescript
-import { logger } from './logger';
-```
-
-**Замены:**
-| Строка | Было | Стало |
-|--------|------|-------|
-| 68 | `console.warn('Failed to get cached weekly insight:', e)` | `logger.warn('WeeklyInsights', 'Failed to get cached insight', e)` |
-| 80 | `console.warn('Failed to save weekly insight:', e)` | `logger.warn('WeeklyInsights', 'Failed to save insight', e)` |
-| 133 | `console.error('Weekly insights API error:', error)` | `logger.error('WeeklyInsights', 'API error', new Error(String(error)))` |
-| 156 | `console.error('Weekly insights generation failed:', e)` | `logger.error('WeeklyInsights', 'Generation failed', e as Error)` |
-
----
-
-### 8. src/lib/whisperService.ts (1 замена)
-
-**Добавить импорт:**
-```typescript
-import { logger } from './logger';
-```
-
-**Замены:**
-| Строка | Было | Стало |
-|--------|------|-------|
-| 170 | `console.log('Whisper AI unavailable, using fallback')` | `logger.debug('Whisper', 'AI unavailable, using fallback')` |
-
----
-
-## Результат после миграции
-
-| Уровень | Production | Dev | Crash Reporter |
-|---------|------------|-----|----------------|
-| `logger.debug` | Скрыт | Видим | - |
-| `logger.info` | Скрыт | Видим | - |
-| `logger.warn` | Видим | Видим | - |
-| `logger.error` | Видим | Видим | Автоотправка |
-
-**Итого: 15 замен в 8 файлах + 8 импортов**
-
----
-
-## Оценка времени
-~10 минут (параллельные изменения)
+Критерий готовности
+- В /settings кнопка «Тест соединения» отрабатывает без «Сетевая ошибка» и показывает корректный результат.
