@@ -1,3 +1,31 @@
+/**
+ * ETHEREAL JOIN - Session Creation Endpoint
+ * ==========================================
+ *
+ * This is the ONLY entry point to the Ethereal Layer.
+ *
+ * SECURITY FLOW:
+ * 1. Client provides: PIN (shared secret), deviceId, displayName
+ * 2. PIN is hashed with ETHEREAL_PIN_SALT (never stored in plain text)
+ * 3. Room lookup/creation via pin_hash
+ * 4. Session creation with 256-bit channelKey for Realtime broadcasts
+ * 5. HMAC token generation with ETHEREAL_TOKEN_SECRET
+ *
+ * The returned accessToken is required for ALL subsequent Ethereal operations.
+ * Without valid token -> 401 Unauthorized from Edge Functions.
+ * Without valid session in DB -> 401 "session_revoked" (supports instant kick).
+ *
+ * SECURITY NOTES:
+ * - PIN is salted and hashed (SHA-256) before storage or lookup
+ * - channelKey is 256-bit random, unique per session, used for Realtime channel names
+ * - Token TTL: 7 days (configurable via p_ttl_seconds parameter)
+ * - Session limits: max 3 active sessions per member, max 5 members per room
+ * - Inactive members (>30 days) are automatically cleaned up to free slots
+ *
+ * @see supabase/functions/ethereal_messages/index.ts - Token validation example
+ * @see src/lib/etherealTokenService.ts - Client-side token storage
+ */
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {

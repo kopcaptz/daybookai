@@ -1,3 +1,36 @@
+/**
+ * ETHEREAL DATABASE (IndexedDB via Dexie)
+ * =======================================
+ *
+ * DATA ISOLATION: Completely separate from main app data (DaybookDB)
+ *
+ * This database stores local copies of Ethereal Layer data:
+ * - messages: Chat history (synced from server)
+ * - chronicles: Shared notes/documents
+ * - tasks: Shared todo items
+ * - events: Shared calendar events
+ * - members: Cached member info
+ *
+ * SECURITY NOTES:
+ * 1. All data here mirrors server state - source of truth is Supabase
+ * 2. Server data is protected by RLS (USING false) + Edge Function proxy
+ * 3. Local data is protected by browser same-origin policy
+ * 4. clearEtherealData() removes all local data on session end
+ *
+ * This separation ensures Ethereal Layer data never mixes with
+ * personal diary entries in the main application database.
+ *
+ * SCHEMA HISTORY:
+ * - v1: Original schema with auto-increment IDs
+ * - v2: Messages with serverId as primary key (deduplication fix)
+ * - v3: Added image fields to messages
+ * - v4: Chronicles with serverId as primary key
+ * - v5-v6: Tasks table recreation with serverId as primary key
+ *
+ * @see src/lib/db.ts - Main application database (DaybookDB)
+ * @see src/lib/etherealTokenService.ts - Session management
+ */
+
 import Dexie, { type EntityTable } from 'dexie';
 
 // Ethereal message stored locally
