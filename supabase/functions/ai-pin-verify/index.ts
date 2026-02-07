@@ -66,7 +66,6 @@ async function checkRateLimit(
   const record = data as RateLimitRecord | null;
   if (!record) return { allowed: true, remainingAttempts: RATE_LIMIT.MAX_ATTEMPTS };
 
-  // Check if blocked
   if (record.blocked_until && new Date(record.blocked_until) > new Date()) {
     const retryAfter = Math.ceil(
       (new Date(record.blocked_until).getTime() - Date.now()) / 1000
@@ -74,7 +73,6 @@ async function checkRateLimit(
     return { allowed: false, retryAfter };
   }
 
-  // If block expired, reset counter
   if (record.blocked_until && new Date(record.blocked_until) <= new Date()) {
     await supabase
       .from("rate_limits")
@@ -140,6 +138,32 @@ async function clearRateLimit(
     .eq("endpoint", endpoint);
 }
 
+// Hash PIN using HMAC-SHA256 (must match admin-ai-pin-manage)
+async function hashPin(secret: string, pin: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(pin));
+  return Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// Constant-time string comparison
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
 // Token generation using HMAC-SHA256
 async function createToken(secret: string, ttlMs: number): Promise<{ token: string; expiresAt: number }> {
   const now = Date.now();
@@ -200,7 +224,7 @@ serve(async (req) => {
     );
   }
 
-  // Initialize Supabase client with service role for rate limiting
+  // Initialize Supabase client with service role
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -238,10 +262,9 @@ serve(async (req) => {
       );
     }
 
-    const AI_ACCESS_PIN = Deno.env.get("AI_ACCESS_PIN");
     const AI_TOKEN_SECRET = Deno.env.get("AI_TOKEN_SECRET");
 
-    if (!AI_ACCESS_PIN || !AI_TOKEN_SECRET) {
+    if (!AI_TOKEN_SECRET) {
       console.error({ requestId, action: "pin_verify_not_configured" });
       return new Response(
         JSON.stringify({ success: false, error: "service_not_configured", requestId }),
@@ -249,14 +272,39 @@ serve(async (req) => {
       );
     }
 
-    // Validate PIN (constant-time comparison)
-    const pinBuffer = new TextEncoder().encode(pin.padEnd(16, "\0"));
-    const expectedBuffer = new TextEncoder().encode(AI_ACCESS_PIN.padEnd(16, "\0"));
+    // ---- PIN verification: DB hash first, env fallback ----
+    let match = false;
 
-    let match = true;
-    for (let i = 0; i < 16; i++) {
-      if (pinBuffer[i] !== expectedBuffer[i]) {
-        match = false;
+    // 1. Try DB hash (dynamic PIN from admin panel)
+    const { data: pinSetting } = await supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "ai_pin_hash")
+      .maybeSingle();
+
+    if (pinSetting?.value) {
+      // Hash the input PIN the same way and compare
+      const inputHash = await hashPin(AI_TOKEN_SECRET, pin);
+      match = timingSafeEqual(inputHash, pinSetting.value);
+      console.log({ requestId, action: "pin_verify_method", method: "db_hash", match });
+    }
+
+    // 2. Fallback: env variable (legacy static PIN)
+    if (!match) {
+      const AI_ACCESS_PIN = Deno.env.get("AI_ACCESS_PIN");
+      if (AI_ACCESS_PIN) {
+        const pinBuffer = new TextEncoder().encode(pin.padEnd(16, "\0"));
+        const expectedBuffer = new TextEncoder().encode(AI_ACCESS_PIN.padEnd(16, "\0"));
+        let envMatch = true;
+        for (let i = 0; i < 16; i++) {
+          if (pinBuffer[i] !== expectedBuffer[i]) {
+            envMatch = false;
+          }
+        }
+        match = envMatch;
+        if (match) {
+          console.log({ requestId, action: "pin_verify_method", method: "env_fallback" });
+        }
       }
     }
 

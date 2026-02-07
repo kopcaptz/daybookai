@@ -10,12 +10,17 @@ import {
   XCircle,
   Clock,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  KeyRound,
+  Copy,
+  Check,
+  ShieldAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
 import { cn } from '@/lib/utils';
 
@@ -56,6 +61,13 @@ export default function AdminSystemPage() {
     FUNCTIONS_TO_CHECK.map(f => ({ ...f, status: 'checking' }))
   );
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
+
+  // AI PIN management state
+  const [pinStatus, setPinStatus] = useState<{ configured: boolean; updatedAt: string | null } | null>(null);
+  const [isPinLoading, setIsPinLoading] = useState(false);
+  const [generatedPin, setGeneratedPin] = useState<string | null>(null);
+  const [invalidateSessions, setInvalidateSessions] = useState(false);
+  const [pinCopied, setPinCopied] = useState(false);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -110,9 +122,87 @@ export default function AdminSystemPage() {
     }
   }, [tokenData]);
 
+  // Fetch AI PIN status
+  const fetchPinStatus = useCallback(async () => {
+    if (!tokenData?.token) return;
+    
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-ai-pin-manage`,
+        {
+          method: 'GET',
+          headers: {
+            'x-admin-token': tokenData.token,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      const data = await response.json();
+      if (data.success) {
+        setPinStatus({ configured: data.configured, updatedAt: data.updatedAt });
+      }
+    } catch (error) {
+      console.error('Failed to fetch PIN status:', error);
+    }
+  }, [tokenData]);
+
+  // Generate new PIN
+  const handleGeneratePin = useCallback(async () => {
+    if (!tokenData?.token) return;
+
+    setIsPinLoading(true);
+    setGeneratedPin(null);
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-ai-pin-manage`,
+        {
+          method: 'POST',
+          headers: {
+            'x-admin-token': tokenData.token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ invalidateSessions }),
+        }
+      );
+
+      const data = await response.json();
+      if (data.success && data.pin) {
+        setGeneratedPin(data.pin);
+        // Refresh status
+        fetchPinStatus();
+      }
+    } catch (error) {
+      console.error('Failed to generate PIN:', error);
+    } finally {
+      setIsPinLoading(false);
+    }
+  }, [tokenData, invalidateSessions, fetchPinStatus]);
+
+  // Copy PIN to clipboard
+  const handleCopyPin = useCallback(async () => {
+    if (!generatedPin) return;
+    try {
+      await navigator.clipboard.writeText(generatedPin);
+      setPinCopied(true);
+      setTimeout(() => setPinCopied(false), 2000);
+    } catch {
+      // Fallback for insecure context
+      const textArea = document.createElement('textarea');
+      textArea.value = generatedPin;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setPinCopied(true);
+      setTimeout(() => setPinCopied(false), 2000);
+    }
+  }, [generatedPin]);
+
   useEffect(() => {
     checkSystemHealth();
-  }, [checkSystemHealth]);
+    fetchPinStatus();
+  }, [checkSystemHealth, fetchPinStatus]);
 
   const getStatusIcon = (status: 'ok' | 'error' | 'checking') => {
     switch (status) {
@@ -179,6 +269,100 @@ export default function AdminSystemPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+        {/* AI PIN Management Card */}
+        <Card className="bg-card/60 backdrop-blur-sm border-violet-500/20">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-violet-400" />
+              <CardTitle className="text-base">AI PIN-код</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Status */}
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Статус</span>
+              {pinStatus === null ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              ) : pinStatus.configured ? (
+                <Badge variant="secondary" className="bg-green-500/10 text-green-500 border-green-500/30">
+                  Настроен
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="bg-amber-500/10 text-amber-500 border-amber-500/30">
+                  Используется статический
+                </Badge>
+              )}
+            </div>
+
+            {pinStatus?.updatedAt && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Последняя смена</span>
+                <span className="text-foreground text-xs">
+                  {new Date(pinStatus.updatedAt).toLocaleString('ru-RU')}
+                </span>
+              </div>
+            )}
+
+            <Separator />
+
+            {/* Generated PIN display */}
+            {generatedPin && (
+              <div className="rounded-lg bg-violet-500/10 border border-violet-500/30 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm text-violet-300">
+                  <ShieldAlert className="h-4 w-4" />
+                  <span>Новый PIN-код (покажется один раз)</span>
+                </div>
+                <div className="flex items-center justify-center gap-3">
+                  <span className="text-4xl font-mono font-bold tracking-[0.3em] text-foreground">
+                    {generatedPin}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleCopyPin}
+                    className="shrink-0"
+                  >
+                    {pinCopied ? (
+                      <Check className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  Старый PIN перестал работать. Запишите новый.
+                </p>
+              </div>
+            )}
+
+            {/* Invalidate sessions checkbox */}
+            <label className="flex items-center gap-3 cursor-pointer">
+              <Checkbox
+                checked={invalidateSessions}
+                onCheckedChange={(checked) => setInvalidateSessions(checked === true)}
+              />
+              <span className="text-sm text-muted-foreground">
+                Отозвать все активные AI-сессии
+              </span>
+            </label>
+
+            {/* Generate button */}
+            <Button
+              onClick={handleGeneratePin}
+              disabled={isPinLoading}
+              className="w-full gap-2"
+              variant="secondary"
+            >
+              {isPinLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <KeyRound className="h-4 w-4" />
+              )}
+              Сгенерировать новый PIN
+            </Button>
+          </CardContent>
+        </Card>
+
         {/* Database & Storage Status */}
         <div className="grid gap-4 sm:grid-cols-2">
           <Card className="bg-card/60 backdrop-blur-sm">
