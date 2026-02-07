@@ -83,6 +83,113 @@ export type Database = {
         }
         Relationships: []
       }
+      diary_attachments: {
+        Row: {
+          created_at: string
+          duration: number | null
+          entry_id: string | null
+          id: string
+          kind: string
+          local_entry_id: number
+          mime_type: string
+          size: number
+          storage_path: string | null
+          thumbnail_path: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration?: number | null
+          entry_id?: string | null
+          id?: string
+          kind: string
+          local_entry_id: number
+          mime_type: string
+          size?: number
+          storage_path?: string | null
+          thumbnail_path?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duration?: number | null
+          entry_id?: string | null
+          id?: string
+          kind?: string
+          local_entry_id?: number
+          mime_type?: string
+          size?: number
+          storage_path?: string | null
+          thumbnail_path?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_attachments_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diary_entries: {
+        Row: {
+          attachment_counts: Json | null
+          created_at: string
+          date: string
+          deleted_at: string | null
+          id: string
+          is_private: boolean
+          local_id: number
+          mood: number
+          mood_source: string | null
+          semantic_tags: string[]
+          tags: string[]
+          text: string
+          title: string | null
+          title_source: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attachment_counts?: Json | null
+          created_at?: string
+          date: string
+          deleted_at?: string | null
+          id?: string
+          is_private?: boolean
+          local_id: number
+          mood?: number
+          mood_source?: string | null
+          semantic_tags?: string[]
+          tags?: string[]
+          text?: string
+          title?: string | null
+          title_source?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attachment_counts?: Json | null
+          created_at?: string
+          date?: string
+          deleted_at?: string | null
+          id?: string
+          is_private?: boolean
+          local_id?: number
+          mood?: number
+          mood_source?: string | null
+          semantic_tags?: string[]
+          tags?: string[]
+          text?: string
+          title?: string | null
+          title_source?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ethereal_calendar_events: {
         Row: {
           all_day: boolean | null

@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { InstallButton } from '@/components/InstallPrompt';
 import { AISettingsCard } from '@/components/AISettingsCard';
 import { BackupRestoreCard, BackupReminderBanner } from '@/components/settings/BackupRestoreCard';
+import { SyncSettingsCard } from '@/components/SyncSettingsCard';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -172,6 +173,8 @@ function SettingsContent() {
       </header>
 
       <main className="space-y-4 px-4 pt-4">
+        {/* Cloud Sync */}
+        <SyncSettingsCard />
         {/* Language Settings */}
         <Card className="panel-glass border-cyber-glow/20">
           <CardHeader>

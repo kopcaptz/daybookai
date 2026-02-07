@@ -47,6 +47,7 @@ const AdminFeedbackPage = lazyWithRetry(() => import("./pages/AdminFeedbackPage"
 const AdminSystemPage = lazyWithRetry(() => import("./pages/AdminSystemPage"));
 const AdminCrashesPage = lazyWithRetry(() => import("./pages/AdminCrashesPage"));
 const AdminAnalyticsPage = lazyWithRetry(() => import("./pages/AdminAnalyticsPage"));
+const AuthPage = lazyWithRetry(() => import("./pages/AuthPage"));
 
 // Ethereal Layer (hidden feature)
 const EtherealGate = lazyWithRetry(() => import("./components/ethereal/EtherealGate").then(m => ({ default: m.EtherealGate })));
@@ -121,14 +122,16 @@ function AppContent() {
     location.pathname.startsWith('/discussions/') ||
     location.pathname.startsWith('/admin') ||
     location.pathname.startsWith('/e/') ||
-    location.pathname === '/onboarding';
+    location.pathname === '/onboarding' ||
+    location.pathname === '/auth';
 
   const hideFloatingChat = location.pathname === '/chat' || 
     location.pathname === '/new' || 
     location.pathname.startsWith('/entry/') ||
     location.pathname.startsWith('/admin') ||
     location.pathname.startsWith('/e/') ||
-    location.pathname === '/onboarding';
+    location.pathname === '/onboarding' ||
+    location.pathname === '/auth';
   
   // Hide feedback modal on admin pages, onboarding, ethereal, and entry editor
   const hideFeedback = location.pathname.startsWith('/admin') || 
@@ -166,6 +169,9 @@ function AppContent() {
               <Route path="/receipts/analytics" element={<OnboardingGuard><ReceiptAnalyticsPage /></OnboardingGuard>} />
               <Route path="/receipts/:id" element={<OnboardingGuard><ReceiptDetailPage /></OnboardingGuard>} />
               <Route path="/reminder/:id" element={<OnboardingGuard><ReminderDetailPage /></OnboardingGuard>} />
+              
+              {/* Auth route */}
+              <Route path="/auth" element={<AuthPage />} />
               
               {/* Admin routes - no onboarding guard */}
               <Route path="/admin" element={<AdminLoginPage />} />
