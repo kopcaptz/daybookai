@@ -4,27 +4,18 @@ import {
   AI_PROFILES, 
   loadAISettings,
 } from './aiConfig';
-import { getAIToken, isAITokenValid } from './aiTokenService';
+import { isAITokenValid } from './aiTokenService';
 import { 
-  isAuthError, 
   createAIAuthError, 
   requestPinDialog,
   getErrorMessage,
   AIAuthRetryError,
 } from './aiAuthRecovery';
+import { getAITokenHeader, parseAIError, collectSSEStream } from './aiUtils';
 
 // Edge function URLs - all AI goes through server
 const AI_CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 const AI_TEST_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-test`;
-
-// Get AI token header (returns empty object if no valid token)
-function getAITokenHeader(): Record<string, string> {
-  const tokenData = getAIToken();
-  if (tokenData?.token) {
-    return { 'X-AI-Token': tokenData.token };
-  }
-  return {};
-}
 
 // Types for AI chat - supports multimodal
 export type MessageContentPart = 
@@ -182,25 +173,7 @@ VISION CAPABILITY:
   return prompt;
 }
 
-// Parse AI error responses for user-friendly messages
-function parseAIError(status: number, language: 'ru' | 'en' = 'ru'): string {
-  const messages: Record<number, { ru: string; en: string }> = {
-    401: { ru: 'Ошибка авторизации сервиса', en: 'Service authorization error' },
-    402: { ru: 'Требуется оплата сервиса', en: 'Payment required' },
-    403: { ru: 'Доступ запрещён', en: 'Access denied' },
-    429: { ru: 'Слишком много запросов. Подождите немного.', en: 'Too many requests. Please wait.' },
-    500: { ru: 'Сервер временно недоступен', en: 'Server temporarily unavailable' },
-    502: { ru: 'Сервер временно недоступен', en: 'Server temporarily unavailable' },
-    503: { ru: 'Сервер временно недоступен', en: 'Server temporarily unavailable' },
-  };
-  
-  const msg = messages[status];
-  if (msg) return msg[language];
-  
-  return language === 'ru' 
-    ? `Ошибка сервиса: ${status}` 
-    : `Service error: ${status}`;
-}
+// parseAIError is now imported from ./aiUtils
 
 // Stream chat completion via edge function (with auto-PIN retry)
 export async function streamChatCompletion(
@@ -286,42 +259,7 @@ export async function streamChatCompletion(
       throw new Error('Нет ответа от сервера');
     }
     
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let fullResponse = '';
-    let buffer = '';
-    
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      
-      buffer += decoder.decode(value, { stream: true });
-      
-      let newlineIndex: number;
-      while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
-        let line = buffer.slice(0, newlineIndex);
-        buffer = buffer.slice(newlineIndex + 1);
-        
-        if (line.endsWith('\r')) line = line.slice(0, -1);
-        if (line.startsWith(':') || line.trim() === '') continue;
-        if (!line.startsWith('data: ')) continue;
-        
-        const jsonStr = line.slice(6).trim();
-        if (jsonStr === '[DONE]') continue;
-        
-        try {
-          const parsed = JSON.parse(jsonStr);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) {
-            fullResponse += content;
-            callbacks.onToken(content);
-          }
-        } catch {
-          // Incomplete JSON
-        }
-      }
-    }
-    
+    const fullResponse = await collectSSEStream(response, callbacks.onToken);
     callbacks.onComplete(fullResponse);
   } catch (error) {
     callbacks.onError(error instanceof Error ? error : new Error(String(error)));

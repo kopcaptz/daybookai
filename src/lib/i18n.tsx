@@ -424,7 +424,15 @@ export const translations = {
   'audio.copied': { ru: 'Скопировано', en: 'Copied', he: 'הועתק', ar: 'تم النسخ' },
   'common.retry': { ru: 'Повторить', en: 'Retry', he: 'נסה שוב', ar: 'إعادة المحاولة' },
   'common.continue': { ru: 'Продолжить', en: 'Continue', he: 'המשך', ar: 'استمرار' },
-  
+
+  // Error Boundary
+  'error.newVersion': { ru: 'Доступна новая версия', en: 'New version available', he: 'גרסה חדשה זמינה', ar: 'يتوفر إصدار جديد' },
+  'error.newVersionDesc': { ru: 'Приложение было обновлено. Нажмите кнопку для загрузки новой версии.', en: 'The app has been updated. Click the button to load the new version.', he: 'האפליקציה עודכנה. לחץ על הכפתור כדי לטעון את הגרסה החדשה.', ar: 'تم تحديث التطبيق. اضغط على الزر لتحميل الإصدار الجديد.' },
+  'error.reload': { ru: 'Обновить приложение', en: 'Reload app', he: 'רענן אפליקציה', ar: 'إعادة تحميل التطبيق' },
+  'error.title': { ru: 'Что-то пошло не так', en: 'Something went wrong', he: 'משהו השתבש', ar: 'حدث خطأ ما' },
+  'error.desc': { ru: 'Произошла ошибка при отображении этого компонента', en: 'An error occurred while rendering this component', he: 'אירעה שגיאה בעת הצגת רכיב זה', ar: 'حدث خطأ أثناء عرض هذا المكون' },
+  'error.retry': { ru: 'Попробовать снова', en: 'Try again', he: 'נסה שוב', ar: 'حاول مرة أخرى' },
+
 } as const;
 
 export type TranslationKey = keyof typeof translations;
