@@ -1,12 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadSyncMeta, syncEntries } from './syncService';
 
-const mockGetSession = vi.fn();
-const mockFrom = vi.fn();
-const mockEntriesToArray = vi.fn();
-const mockEntriesUpdate = vi.fn();
-const mockEntriesAdd = vi.fn();
-const mockAttachmentsToArray = vi.fn();
+const {
+  mockGetSession,
+  mockFrom,
+  mockEntriesToArray,
+  mockEntriesUpdate,
+  mockEntriesAdd,
+  mockAttachmentsToArray,
+} = vi.hoisted(() => ({
+  mockGetSession: vi.fn(),
+  mockFrom: vi.fn(),
+  mockEntriesToArray: vi.fn(),
+  mockEntriesUpdate: vi.fn(),
+  mockEntriesAdd: vi.fn(),
+  mockAttachmentsToArray: vi.fn(),
+}));
 
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
