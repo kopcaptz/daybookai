@@ -1,93 +1,132 @@
 
 
-# ТЗ: Три приоритетных исправления
+# Динамическая генерация AI PIN из админки
 
----
+## Суть изменения
 
-## 1. Исправление Build Timestamp в настройках
+Вместо статического секрета `AI_ACCESS_PIN` в переменных окружения, PIN будет храниться в виде хеша в базе данных. Админ сможет в любой момент сгенерировать новый PIN прямо из панели управления. Старый PIN моментально перестанет работать.
 
-**Проблема:** В разделе "О приложении" на странице настроек строка `Build:` показывает **текущее время рендера** вместо реального времени сборки.
-
-Текущий код (строка 483 в `SettingsPage.tsx`):
-```
-Build: {import.meta.env.MODE === 'production' ? new Date().toISOString()... : 'dev'}
-```
-
-При этом в `vite.config.ts` уже определена константа `__BUILD_TIMESTAMP__`, а в `vite-env.d.ts` она объявлена как тип. Просто никто не подключил её к UI.
-
-**Исправление:** Заменить `new Date().toISOString()` на `__BUILD_TIMESTAMP__` в одной строке файла `SettingsPage.tsx`.
-
-**Файлы:** `src/pages/SettingsPage.tsx` (1 строка)
-
----
-
-## 2. Интернационализация ErrorBoundary
-
-**Проблема:** Компонент `ErrorBoundary` содержит 6 захардкоженных русских строк. Пользователи на EN, HE, AR видят русский текст при ошибках.
-
-Захардкоженные строки:
-- "Доступна новая версия"
-- "Приложение было обновлено. Нажмите кнопку для загрузки новой версии."
-- "Обновить приложение"
-- "Что-то пошло не так"
-- "Произошла ошибка при отображении этого компонента"
-- "Попробовать снова"
-
-**Сложность:** `ErrorBoundary` -- это class component, поэтому нельзя использовать хук `useI18n()`. Решение -- читать язык из `localStorage` напрямую (ключ `daybook-language`, как делает `I18nProvider`).
-
-**Исправление:**
-1. Добавить 6 ключей в объект `translations` в `src/lib/i18n.tsx`:
-   - `error.newVersion`, `error.newVersionDesc`, `error.reload`
-   - `error.title`, `error.desc`, `error.retry`
-2. В `ErrorBoundary.tsx` создать вспомогательную функцию `getLanguage()`, которая читает из `localStorage` и возвращает `Language`.
-3. Создать функцию `translate(key)`, которая получает нужную строку из `translations` по текущему языку.
-4. Заменить все 6 строк на вызовы `translate()`.
-
-**Файлы:** `src/components/ErrorBoundary.tsx`, `src/lib/i18n.tsx`
-
----
-
-## 3. Дедупликация AI-утилит
-
-**Проблема:** Три файла содержат идентичный код:
-
-| Функция / Паттерн | aiService.ts | biographyService.ts | imageAnalysisService.ts |
-|---|---|---|---|
-| `getAITokenHeader()` | строки 21-27 | строки 26-32 | строки 16-22 |
-| `parseAIError()` | строки 186-203 | строки 144-158 | -- |
-| SSE-парсинг потока | строки 289-323 | -- | строки 245-283 |
-
-Это 3 копии `getAITokenHeader()`, 2 копии `parseAIError()`, 2 копии SSE-парсера. Примерно 90 строк дублированного кода.
-
-**Исправление:** Создать `src/lib/aiUtils.ts` с тремя экспортируемыми функциями:
+## Как это будет работать
 
 ```text
-src/lib/aiUtils.ts
-  - getAITokenHeader(): Record<string, string>
-  - parseAIError(status, language): string  
-  - collectSSEStream(response, onToken?): Promise<string>
+Текущий поток:
+  Пользователь вводит PIN --> ai-pin-verify --> сравнение с Deno.env.get("AI_ACCESS_PIN") --> токен
+
+Новый поток:
+  Пользователь вводит PIN --> ai-pin-verify --> хеширование --> сравнение с хешем из БД --> токен
+
+Генерация нового PIN:
+  Админ нажимает "Сгенерировать" --> admin-ai-pin-manage --> генерация 4-значного PIN --> 
+  хеширование --> сохранение хеша в БД --> показ PIN админу (один раз)
 ```
 
-Затем заменить все дубликаты на импорты из `aiUtils.ts`:
+## Детали реализации
 
-- `aiService.ts` -- удалить локальные `getAITokenHeader()`, `parseAIError()`, вынести SSE-парсинг
-- `biographyService.ts` -- удалить локальные `getAITokenHeader()`, `parseAIError()`
-- `imageAnalysisService.ts` -- удалить локальную `getAITokenHeader()`, заменить `collectStreamResponse()` на `collectSSEStream()`
+### 1. Миграция БД: таблица `app_settings`
 
-**Файлы:** Новый `src/lib/aiUtils.ts`, + изменения в 3 файлах
+Создание таблицы для хранения настроек приложения (ключ-значение):
+
+```sql
+CREATE TABLE public.app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
+
+-- Полная блокировка прямого доступа (как у остальных системных таблиц)
+CREATE POLICY "Deny all direct access" ON public.app_settings
+  AS RESTRICTIVE FOR ALL TO public USING (false);
+```
+
+Начальное значение -- хеш текущего PIN (чтобы не было downtime):
+
+```sql
+-- Захешировать текущий AI_ACCESS_PIN и записать как начальное значение
+-- (будет выполнено в edge function при первой генерации)
+```
+
+### 2. Новая Edge Function: `admin-ai-pin-manage`
+
+Защищенная функция (проверка admin-токена), которая:
+
+- **POST** с `action: "generate"`:
+  1. Генерирует случайный 4-значный PIN (crypto.getRandomValues)
+  2. Хеширует его с `AI_TOKEN_SECRET` через SHA-256
+  3. Сохраняет хеш в `app_settings` (ключ `ai_pin_hash`)
+  4. Возвращает PIN в открытом виде (показывается админу один раз)
+  5. Опционально: инвалидирует все текущие AI-токены
+
+- **GET** (статус):
+  1. Проверяет, есть ли запись `ai_pin_hash` в `app_settings`
+  2. Возвращает `updated_at` (когда последний раз менялся PIN)
+
+### 3. Изменение `ai-pin-verify`
+
+Вместо:
+```typescript
+const AI_ACCESS_PIN = Deno.env.get("AI_ACCESS_PIN");
+// ... сравнение
+```
+
+Новый подход:
+```typescript
+// Читаем хеш из БД
+const { data } = await supabase
+  .from("app_settings")
+  .select("value")
+  .eq("key", "ai_pin_hash")
+  .single();
+
+// Хешируем введенный PIN тем же способом
+const inputHash = await hashPin(AI_TOKEN_SECRET, pin);
+
+// Сравниваем хеши (constant-time)
+const match = timingSafeEqual(inputHash, data.value);
+```
+
+Fallback: если в БД нет записи, проверяем старый `AI_ACCESS_PIN` из env (для обратной совместимости при первом деплое).
+
+### 4. UI в админке: карточка управления PIN
+
+На странице `AdminSystemPage.tsx` добавляется новая карточка "AI PIN-код":
+
+- Показывает дату последней смены PIN
+- Кнопка "Сгенерировать новый PIN"
+- После генерации: модальное окно с крупным отображением нового PIN (с кнопкой копирования)
+- Предупреждение: "Старый PIN перестанет работать. Запишите новый."
+- Опция "Отозвать все активные сессии AI" (checkbox)
+
+### 5. Инвалидация старых токенов (опционально)
+
+При смене PIN можно автоматически обнулить все выданные AI-токены. Для этого добавляем в `app_settings` ещё одну запись -- `ai_token_epoch` (timestamp). При проверке токена в edge-функциях, если `token.iat < ai_token_epoch`, токен считается недействительным.
 
 ---
+
+## Файлы, которые будут изменены / созданы
+
+| Файл | Действие |
+|---|---|
+| Миграция SQL (app_settings) | Новый |
+| `supabase/functions/admin-ai-pin-manage/index.ts` | Новый |
+| `supabase/functions/ai-pin-verify/index.ts` | Изменение (чтение хеша из БД) |
+| `src/pages/AdminSystemPage.tsx` | Изменение (добавление карточки PIN) |
+
+## Безопасность
+
+- PIN никогда не хранится в открытом виде -- только SHA-256 хеш
+- Таблица `app_settings` закрыта RLS-политикой "Deny all" -- доступ только через service_role
+- Генерация доступна только с валидным admin-токеном
+- Rate limiting на `ai-pin-verify` сохраняется без изменений
+- Constant-time сравнение хешей (защита от timing-атак)
+- Fallback на старый env-переменную при переходном периоде
 
 ## Порядок реализации
 
-1. **Build Timestamp** (1 минута, 1 файл) -- мгновенный результат, 0 рисков
-2. **ErrorBoundary i18n** (5 минут, 2 файла) -- улучшение UX для 3/4 языков
-3. **AI Utils дедупликация** (10 минут, 4 файла) -- снижение техдолга, облегчение сопровождения
-
-## Технические детали
-
-- Никаких новых зависимостей
-- Никаких миграций БД
-- Никаких изменений в Edge Functions
-- Полная обратная совместимость -- внешнее поведение не меняется
+1. Миграция БД (создание `app_settings`)
+2. Edge Function `admin-ai-pin-manage`
+3. Изменение `ai-pin-verify` (чтение из БД + fallback)
+4. UI в `AdminSystemPage`
+5. Тестирование: генерация PIN из админки, вход по новому PIN
 
