@@ -1,135 +1,93 @@
 
 
-# План: Обновление RLS-политик Ethereal Layer для явного указания ролей
+# ТЗ: Три приоритетных исправления
 
-## Проблема
-Текущие RESTRICTIVE RLS-политики для ethereal_* таблиц используют роль `{public}` вместо явного указания `{anon, authenticated}`. Хотя безопасность не нарушена (USING false блокирует все запросы), сканеры безопасности интерпретируют `{public}` как "открытый доступ" и выдают ложноположительные предупреждения.
+---
 
-## Текущее состояние политик
+## 1. Исправление Build Timestamp в настройках
 
-| Таблица | Роли | Статус |
-|---------|------|--------|
-| ethereal_calendar_events | {public} | Требует обновления |
-| ethereal_chronicle_revisions | {public} | Требует обновления |
-| ethereal_chronicles | {public} | Требует обновления |
-| ethereal_game_rounds | {public} | Требует обновления |
-| ethereal_game_sessions | {public} | Требует обновления |
-| ethereal_messages | {public} | Требует обновления |
-| ethereal_room_members | {anon, authenticated} | OK |
-| ethereal_rooms | {public} | Требует обновления |
-| ethereal_sessions | {public} | Требует обновления |
-| ethereal_tasks | {public} | Требует обновления |
+**Проблема:** В разделе "О приложении" на странице настроек строка `Build:` показывает **текущее время рендера** вместо реального времени сборки.
 
-## Что будет сделано
-
-Для 9 таблиц (все кроме ethereal_room_members) выполним:
-1. Удаление старой политики с `{public}`
-2. Создание новой RESTRICTIVE политики с явным указанием `TO anon, authenticated`
-
-## SQL-миграция
-
-```sql
--- ethereal_calendar_events
-DROP POLICY IF EXISTS "Deny all direct access" ON public.ethereal_calendar_events;
-CREATE POLICY "Deny all direct access"
-  ON public.ethereal_calendar_events
-  AS RESTRICTIVE
-  FOR ALL
-  TO anon, authenticated
-  USING (false)
-  WITH CHECK (false);
-
--- ethereal_chronicle_revisions
-DROP POLICY IF EXISTS "Deny all direct access" ON public.ethereal_chronicle_revisions;
-CREATE POLICY "Deny all direct access"
-  ON public.ethereal_chronicle_revisions
-  AS RESTRICTIVE
-  FOR ALL
-  TO anon, authenticated
-  USING (false)
-  WITH CHECK (false);
-
--- ethereal_chronicles
-DROP POLICY IF EXISTS "Deny all direct access" ON public.ethereal_chronicles;
-CREATE POLICY "Deny all direct access"
-  ON public.ethereal_chronicles
-  AS RESTRICTIVE
-  FOR ALL
-  TO anon, authenticated
-  USING (false)
-  WITH CHECK (false);
-
--- ethereal_game_rounds
-DROP POLICY IF EXISTS "Deny all direct access for ethereal_game_rounds" ON public.ethereal_game_rounds;
-CREATE POLICY "Deny all direct access"
-  ON public.ethereal_game_rounds
-  AS RESTRICTIVE
-  FOR ALL
-  TO anon, authenticated
-  USING (false)
-  WITH CHECK (false);
-
--- ethereal_game_sessions
-DROP POLICY IF EXISTS "Deny all direct access for ethereal_game_sessions" ON public.ethereal_game_sessions;
-CREATE POLICY "Deny all direct access"
-  ON public.ethereal_game_sessions
-  AS RESTRICTIVE
-  FOR ALL
-  TO anon, authenticated
-  USING (false)
-  WITH CHECK (false);
-
--- ethereal_messages
-DROP POLICY IF EXISTS "Deny all direct access" ON public.ethereal_messages;
-CREATE POLICY "Deny all direct access"
-  ON public.ethereal_messages
-  AS RESTRICTIVE
-  FOR ALL
-  TO anon, authenticated
-  USING (false)
-  WITH CHECK (false);
-
--- ethereal_rooms
-DROP POLICY IF EXISTS "Deny all direct access" ON public.ethereal_rooms;
-CREATE POLICY "Deny all direct access"
-  ON public.ethereal_rooms
-  AS RESTRICTIVE
-  FOR ALL
-  TO anon, authenticated
-  USING (false)
-  WITH CHECK (false);
-
--- ethereal_sessions
-DROP POLICY IF EXISTS "Deny all direct access" ON public.ethereal_sessions;
-CREATE POLICY "Deny all direct access"
-  ON public.ethereal_sessions
-  AS RESTRICTIVE
-  FOR ALL
-  TO anon, authenticated
-  USING (false)
-  WITH CHECK (false);
-
--- ethereal_tasks
-DROP POLICY IF EXISTS "Deny all direct access" ON public.ethereal_tasks;
-CREATE POLICY "Deny all direct access"
-  ON public.ethereal_tasks
-  AS RESTRICTIVE
-  FOR ALL
-  TO anon, authenticated
-  USING (false)
-  WITH CHECK (false);
+Текущий код (строка 483 в `SettingsPage.tsx`):
+```
+Build: {import.meta.env.MODE === 'production' ? new Date().toISOString()... : 'dev'}
 ```
 
-## Результат
+При этом в `vite.config.ts` уже определена константа `__BUILD_TIMESTAMP__`, а в `vite-env.d.ts` она объявлена как тип. Просто никто не подключил её к UI.
 
-После миграции:
-- Все ethereal_* таблицы будут иметь явное указание ролей `{anon, authenticated}`
-- Сканеры безопасности перестанут выдавать ложноположительные предупреждения о "публичном доступе"
-- Фактический уровень безопасности не изменится (USING false по-прежнему блокирует все прямые запросы)
+**Исправление:** Заменить `new Date().toISOString()` на `__BUILD_TIMESTAMP__` в одной строке файла `SettingsPage.tsx`.
 
-## Критерий готовности
+**Файлы:** `src/pages/SettingsPage.tsx` (1 строка)
 
-- Все 10 ethereal_* таблиц имеют политики с `roles = {anon, authenticated}`
-- Повторное сканирование безопасности не показывает предупреждений о "публичном доступе"
-- Edge Functions продолжают работать корректно (используют service_role, который обходит RLS)
+---
+
+## 2. Интернационализация ErrorBoundary
+
+**Проблема:** Компонент `ErrorBoundary` содержит 6 захардкоженных русских строк. Пользователи на EN, HE, AR видят русский текст при ошибках.
+
+Захардкоженные строки:
+- "Доступна новая версия"
+- "Приложение было обновлено. Нажмите кнопку для загрузки новой версии."
+- "Обновить приложение"
+- "Что-то пошло не так"
+- "Произошла ошибка при отображении этого компонента"
+- "Попробовать снова"
+
+**Сложность:** `ErrorBoundary` -- это class component, поэтому нельзя использовать хук `useI18n()`. Решение -- читать язык из `localStorage` напрямую (ключ `daybook-language`, как делает `I18nProvider`).
+
+**Исправление:**
+1. Добавить 6 ключей в объект `translations` в `src/lib/i18n.tsx`:
+   - `error.newVersion`, `error.newVersionDesc`, `error.reload`
+   - `error.title`, `error.desc`, `error.retry`
+2. В `ErrorBoundary.tsx` создать вспомогательную функцию `getLanguage()`, которая читает из `localStorage` и возвращает `Language`.
+3. Создать функцию `translate(key)`, которая получает нужную строку из `translations` по текущему языку.
+4. Заменить все 6 строк на вызовы `translate()`.
+
+**Файлы:** `src/components/ErrorBoundary.tsx`, `src/lib/i18n.tsx`
+
+---
+
+## 3. Дедупликация AI-утилит
+
+**Проблема:** Три файла содержат идентичный код:
+
+| Функция / Паттерн | aiService.ts | biographyService.ts | imageAnalysisService.ts |
+|---|---|---|---|
+| `getAITokenHeader()` | строки 21-27 | строки 26-32 | строки 16-22 |
+| `parseAIError()` | строки 186-203 | строки 144-158 | -- |
+| SSE-парсинг потока | строки 289-323 | -- | строки 245-283 |
+
+Это 3 копии `getAITokenHeader()`, 2 копии `parseAIError()`, 2 копии SSE-парсера. Примерно 90 строк дублированного кода.
+
+**Исправление:** Создать `src/lib/aiUtils.ts` с тремя экспортируемыми функциями:
+
+```text
+src/lib/aiUtils.ts
+  - getAITokenHeader(): Record<string, string>
+  - parseAIError(status, language): string  
+  - collectSSEStream(response, onToken?): Promise<string>
+```
+
+Затем заменить все дубликаты на импорты из `aiUtils.ts`:
+
+- `aiService.ts` -- удалить локальные `getAITokenHeader()`, `parseAIError()`, вынести SSE-парсинг
+- `biographyService.ts` -- удалить локальные `getAITokenHeader()`, `parseAIError()`
+- `imageAnalysisService.ts` -- удалить локальную `getAITokenHeader()`, заменить `collectStreamResponse()` на `collectSSEStream()`
+
+**Файлы:** Новый `src/lib/aiUtils.ts`, + изменения в 3 файлах
+
+---
+
+## Порядок реализации
+
+1. **Build Timestamp** (1 минута, 1 файл) -- мгновенный результат, 0 рисков
+2. **ErrorBoundary i18n** (5 минут, 2 файла) -- улучшение UX для 3/4 языков
+3. **AI Utils дедупликация** (10 минут, 4 файла) -- снижение техдолга, облегчение сопровождения
+
+## Технические детали
+
+- Никаких новых зависимостей
+- Никаких миграций БД
+- Никаких изменений в Edge Functions
+- Полная обратная совместимость -- внешнее поведение не меняется
 
