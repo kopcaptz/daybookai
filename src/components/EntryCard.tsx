@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { DiaryEntry } from '@/lib/db';
 import { MoodBadge } from './MoodSelector';
 import { TagBadge } from './TagSelector';
+import { SyncIndicator } from './SyncIndicator';
 import { useI18n } from '@/lib/i18n';
 
 interface EntryCardProps {
@@ -81,6 +82,7 @@ export function EntryCard({ entry, showDate = false, selectable = false, selecte
             {entry.isPrivate && (
               <Lock className="h-3 w-3 ms-auto text-cyber-rune/60" />
             )}
+            <SyncIndicator />
           </div>
           
           {/* Text preview */}
