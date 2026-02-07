@@ -42,6 +42,7 @@ function makeQuery(data: unknown[] = []) {
   return {
     eq: vi.fn().mockReturnThis(),
     gte: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(),
     then: (onFulfilled: (value: any) => any, onRejected?: (reason: any) => any) =>
       Promise.resolve({ data, error: null }).then(onFulfilled, onRejected),
   };
