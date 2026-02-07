@@ -39,6 +39,9 @@ verify_jwt = false
 [functions.admin-system-health]
 verify_jwt = false
 
+[functions.admin-ai-pin-manage]
+verify_jwt = false
+
 [functions.crash-report]
 verify_jwt = false
 
