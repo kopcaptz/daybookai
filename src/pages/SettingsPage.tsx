@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { InstallButton } from '@/components/InstallPrompt';
 import { AISettingsCard } from '@/components/AISettingsCard';
 import { BackupRestoreCard, BackupReminderBanner } from '@/components/settings/BackupRestoreCard';
+import { CloudSyncCard } from '@/components/settings/CloudSyncCard';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -393,6 +394,9 @@ function SettingsContent() {
             </ul>
           </CardContent>
         </Card>
+
+        {/* Cloud Sync */}
+        <CloudSyncCard />
 
         {/* Backup Reminder Banner */}
         <BackupReminderBanner />
