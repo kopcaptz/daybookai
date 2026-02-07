@@ -4,6 +4,7 @@ import { loadSyncMeta, syncEntries } from './syncService';
 const {
   mockGetSession,
   mockFrom,
+  mockStorageFrom,
   mockEntriesToArray,
   mockEntriesUpdate,
   mockEntriesAdd,
@@ -11,6 +12,7 @@ const {
 } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockFrom: vi.fn(),
+  mockStorageFrom: vi.fn(),
   mockEntriesToArray: vi.fn(),
   mockEntriesUpdate: vi.fn(),
   mockEntriesAdd: vi.fn(),
@@ -21,7 +23,7 @@ vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     auth: { getSession: mockGetSession },
     from: mockFrom,
-    storage: { from: vi.fn() },
+    storage: { from: mockStorageFrom },
   },
 }));
 
@@ -38,41 +40,58 @@ vi.mock('./db', () => ({
   },
 }));
 
-function makeQuery(data: unknown[] = []) {
-  return {
-    eq: vi.fn().mockReturnThis(),
-    gte: vi.fn().mockReturnThis(),
-    is: vi.fn().mockReturnThis(),
-    then: (onFulfilled: (value: any) => any, onRejected?: (reason: any) => any) =>
+type QueryBuilder = {
+  select: ReturnType<typeof vi.fn>;
+  upsert: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+  eq: ReturnType<typeof vi.fn>;
+  gte: ReturnType<typeof vi.fn>;
+  is: ReturnType<typeof vi.fn>;
+  then: (onFulfilled: (value: any) => any, onRejected?: (reason: any) => any) => Promise<any>;
+};
+
+function createQueryBuilder(data: unknown[] = []): QueryBuilder {
+  const builder: QueryBuilder = {
+    select: vi.fn(),
+    upsert: vi.fn(),
+    update: vi.fn(),
+    eq: vi.fn(),
+    gte: vi.fn(),
+    is: vi.fn(),
+    then: (onFulfilled, onRejected) =>
       Promise.resolve({ data, error: null }).then(onFulfilled, onRejected),
   };
+
+  builder.select.mockImplementation(() => builder);
+  builder.upsert.mockImplementation(() => builder);
+  builder.update.mockImplementation(() => builder);
+  builder.eq.mockImplementation(() => builder);
+  builder.gte.mockImplementation(() => builder);
+  builder.is.mockImplementation(() => builder);
+
+  return builder;
 }
 
 describe('syncService', () => {
-  let mockUpsert: ReturnType<typeof vi.fn>;
-  let mockSelect: ReturnType<typeof vi.fn>;
+  let query: QueryBuilder;
 
   beforeEach(() => {
     localStorage.clear();
     mockGetSession.mockReset();
     mockFrom.mockReset();
+    mockStorageFrom.mockReset();
     mockEntriesToArray.mockReset();
     mockEntriesUpdate.mockReset();
     mockEntriesAdd.mockReset();
     mockAttachmentsToArray.mockReset();
 
-    mockUpsert = vi.fn().mockResolvedValue({ error: null });
-    mockSelect = vi.fn(() => makeQuery([]));
-    const mockUpdate = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
+    mockEntriesToArray.mockResolvedValue([]);
 
-    mockFrom.mockReturnValue({
-      select: mockSelect,
-      upsert: mockUpsert,
-      update: mockUpdate,
-    });
+    query = createQueryBuilder([]);
+    mockFrom.mockReturnValue(query);
   });
 
-  it('loadSyncMeta returns defaults when storage is empty', () => {
+  it('loadSyncMeta returns defaults when localStorage is empty', () => {
     const meta = loadSyncMeta();
     expect(meta).toEqual({ lastSyncedAt: null, pendingCount: 0 });
   });
@@ -114,7 +133,7 @@ describe('syncService', () => {
 
     await syncEntries();
 
-    expect(mockUpsert).toHaveBeenCalledTimes(1);
-    expect(mockUpsert.mock.calls[0][0]).toEqual(expect.objectContaining({ local_id: 1 }));
+    expect(query.upsert).toHaveBeenCalledTimes(1);
+    expect(query.upsert.mock.calls[0][0]).toEqual(expect.objectContaining({ local_id: 1 }));
   });
 });
