@@ -480,7 +480,7 @@ function SettingsContent() {
             <p className="text-xs uppercase tracking-widest text-cyber-sigil/60">{t('app.tagline')}</p>
             <p>{t('settings.version')}: 1.0.0</p>
             <p className="text-xs text-muted-foreground/60 font-mono">
-              Build: {import.meta.env.MODE === 'production' ? new Date().toISOString().slice(0, 16).replace('T', ' ') : 'dev'}
+              Build: {import.meta.env.MODE === 'production' ? __BUILD_TIMESTAMP__ : 'dev'}
             </p>
           </CardContent>
         </Card>

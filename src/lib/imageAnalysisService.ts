@@ -1,25 +1,17 @@
 import { compressImage } from './mediaUtils';
 import { getModelForProfile, loadAISettings } from './aiConfig';
 import { saveAttachmentInsight, getAttachmentInsight, AttachmentInsight } from './db';
-import { getAIToken, isAITokenValid } from './aiTokenService';
+import { isAITokenValid } from './aiTokenService';
 import { 
   createAIAuthError, 
   requestPinDialog,
   getErrorMessage,
 } from './aiAuthRecovery';
 import { logger } from './logger';
+import { getAITokenHeader, collectSSEStream } from './aiUtils';
 
 const AI_CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 const PROMPT_VERSION = 'v1.0';
-
-// Get AI token header (returns empty object if no valid token)
-function getAITokenHeader(): Record<string, string> {
-  const tokenData = getAIToken();
-  if (tokenData?.token) {
-    return { 'X-AI-Token': tokenData.token };
-  }
-  return {};
-}
 
 export interface ImageAnalysisResult {
   description: string;
@@ -205,7 +197,7 @@ export async function analyzeImage(
     }
     
     // Parse SSE stream to collect full response
-    const fullText = await collectStreamResponse(response);
+    const fullText = await collectSSEStream(response);
     
     // Parse the response
     const result = parseAnalysisResponse(fullText, language);
@@ -242,45 +234,7 @@ async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-async function collectStreamResponse(response: Response): Promise<string> {
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No response body');
-  
-  const decoder = new TextDecoder();
-  let fullText = '';
-  let buffer = '';
-  
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    
-    buffer += decoder.decode(value, { stream: true });
-    
-    // Process complete lines
-    let newlineIndex: number;
-    while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
-      let line = buffer.slice(0, newlineIndex);
-      buffer = buffer.slice(newlineIndex + 1);
-      
-      if (line.endsWith('\r')) line = line.slice(0, -1);
-      if (line.startsWith(':') || line.trim() === '') continue;
-      if (!line.startsWith('data: ')) continue;
-      
-      const jsonStr = line.slice(6).trim();
-      if (jsonStr === '[DONE]') break;
-      
-      try {
-        const parsed = JSON.parse(jsonStr);
-        const content = parsed.choices?.[0]?.delta?.content;
-        if (content) fullText += content;
-      } catch {
-        // Ignore parse errors
-      }
-    }
-  }
-  
-  return fullText;
-}
+// collectStreamResponse removed — now using collectSSEStream from aiUtils.ts
 
 // Check if insight exists
 export async function hasInsight(attachmentId: number): Promise<boolean> {

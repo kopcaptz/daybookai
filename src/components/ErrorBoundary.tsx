@@ -2,6 +2,23 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { reportCrash } from '@/lib/crashReporter';
+import { translations, type Language } from '@/lib/i18n';
+
+// Read language from localStorage (class component can't use hooks)
+function getStoredLanguage(): Language {
+  try {
+    const saved = localStorage.getItem('daybook-language');
+    if (saved === 'ru' || saved === 'en' || saved === 'he' || saved === 'ar') return saved;
+  } catch { /* SSR or access error */ }
+  return 'ru';
+}
+
+function t(key: keyof typeof translations): string {
+  const lang = getStoredLanguage();
+  const entry = translations[key];
+  if (!entry) return key;
+  return (entry[lang] ?? entry['en'] ?? entry['ru'] ?? key) as string;
+}
 
 interface Props {
   children: ReactNode;
@@ -65,14 +82,14 @@ export class ErrorBoundary extends Component<Props, State> {
               <Download className="h-8 w-8 text-primary" />
             </div>
             <div className="space-y-2">
-              <h3 className="text-lg font-semibold">Доступна новая версия</h3>
+              <h3 className="text-lg font-semibold">{t('error.newVersion')}</h3>
               <p className="text-sm text-muted-foreground">
-                Приложение было обновлено. Нажмите кнопку для загрузки новой версии.
+                {t('error.newVersionDesc')}
               </p>
             </div>
             <Button onClick={this.handleReload} className="gap-2">
               <RefreshCw className="h-4 w-4" />
-              Обновить приложение
+              {t('error.reload')}
             </Button>
           </div>
         );
@@ -85,14 +102,14 @@ export class ErrorBoundary extends Component<Props, State> {
             <AlertTriangle className="h-8 w-8 text-destructive" />
           </div>
           <div className="space-y-2">
-            <h3 className="text-lg font-semibold">Что-то пошло не так</h3>
+            <h3 className="text-lg font-semibold">{t('error.title')}</h3>
             <p className="text-sm text-muted-foreground">
-              Произошла ошибка при отображении этого компонента
+              {t('error.desc')}
             </p>
           </div>
           <Button onClick={this.handleReset} variant="outline" className="gap-2">
             <RefreshCw className="h-4 w-4" />
-            Попробовать снова
+            {t('error.retry')}
           </Button>
         </div>
       );

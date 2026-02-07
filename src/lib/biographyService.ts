@@ -1,16 +1,15 @@
 import { format } from 'date-fns';
 import { db, StoredBiography, DiaryEntry, loadBioSettings, saveBioSettings } from './db';
 import { loadAISettings, AI_PROFILES, AIProfile } from './aiConfig';
-import { getAIToken, isAITokenValid } from './aiTokenService';
+import { isAITokenValid } from './aiTokenService';
 import { 
-  isAuthError, 
   createAIAuthError, 
   requestPinDialog,
   getErrorMessage,
-  AIAuthRetryError,
 } from './aiAuthRecovery';
 import { toast } from 'sonner';
 import type { Language } from './i18n';
+import { getAITokenHeader, parseAIError } from './aiUtils';
 
 // Helper to get base language for AI services (ru/en only)
 const getBaseLanguage = (lang: Language): 'ru' | 'en' => 
@@ -21,15 +20,6 @@ export type { StoredBiography } from './db';
 
 // Edge function URLs
 const AI_BIOGRAPHY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-biography`;
-
-// Get AI token header (returns empty object if no valid token)
-function getAITokenHeader(): Record<string, string> {
-  const tokenData = getAIToken();
-  if (tokenData?.token) {
-    return { 'X-AI-Token': tokenData.token };
-  }
-  return {};
-}
 
 // Entry summary for AI (no raw text, privacy-safe)
 interface EntrySummary {
@@ -140,22 +130,7 @@ async function prepareEntrySummaries(
   return { summaries, entryIds };
 }
 
-// Parse AI error with localization
-function parseAIError(status: number, language: Language): string {
-  const baseLang = getBaseLanguage(language);
-  const messages: Record<number, { ru: string; en: string }> = {
-    401: { ru: 'Ошибка авторизации сервиса', en: 'Service authorization error' },
-    402: { ru: 'Требуется оплата сервиса', en: 'Payment required' },
-    403: { ru: 'Доступ запрещён', en: 'Access denied' },
-    429: { ru: 'Слишком много запросов. Подождите.', en: 'Too many requests. Please wait.' },
-    500: { ru: 'Сервер временно недоступен', en: 'Server temporarily unavailable' },
-    502: { ru: 'Сервер временно недоступен', en: 'Server temporarily unavailable' },
-    503: { ru: 'Сервер временно недоступен', en: 'Server temporarily unavailable' },
-  };
-  
-  return messages[status]?.[baseLang] || 
-    (baseLang === 'ru' ? `Ошибка: ${status}` : `Error: ${status}`);
-}
+// parseAIError is now imported from ./aiUtils
 
 // Generate biography via dedicated edge function (non-streaming, with auto-PIN retry)
 export async function generateBiography(
@@ -232,7 +207,7 @@ export async function generateBiography(
   
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    const error = new Error(errorData.error || parseAIError(response.status, language)) as BiographyError;
+    const error = new Error(errorData.error || parseAIError(response.status, getBaseLanguage(language))) as BiographyError;
     error.requestId = requestId || errorData.requestId;
     error.statusCode = response.status;
     throw error;
