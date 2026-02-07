@@ -205,6 +205,24 @@ export const translations = {
   'settings.clearDataSuccess': { ru: 'Все данные удалены', en: 'All data cleared', he: 'כל הנתונים נמחקו', ar: 'تم مسح جميع البيانات' },
   'settings.version': { ru: 'Версия', en: 'Version', he: 'גרסה', ar: 'الإصدار' },
   
+  // Sync
+  'sync.title': { ru: 'Облачная синхронизация', en: 'Cloud Sync', he: 'סנכרון ענן', ar: 'مزامنة سحابية' },
+  'sync.status.idle': { ru: 'Синхронизировано', en: 'Synced', he: 'מסונכרן', ar: 'تمت المزامنة' },
+  'sync.status.syncing': { ru: 'Синхронизация...', en: 'Syncing...', he: 'מסנכרן...', ar: 'جارٍ المزامنة...' },
+  'sync.status.error': { ru: 'Ошибка синхронизации', en: 'Sync Error', he: 'שגיאת סנכרון', ar: 'خطأ في المزامنة' },
+  'sync.lastSynced': { ru: 'Последняя синхронизация', en: 'Last synced', he: 'סנכרון אחרון', ar: 'آخر مزامنة' },
+  'sync.syncNow': { ru: 'Синхронизировать', en: 'Sync Now', he: 'סנכרן עכשיו', ar: 'مزامنة الآن' },
+  'sync.privateToggle': { ru: 'Синхронизировать приватные', en: 'Sync private entries', he: 'סנכרן רשומות פרטיות', ar: 'مزامنة المدخلات الخاصة' },
+  'sync.login': { ru: 'Войти для синхронизации', en: 'Sign in to sync', he: 'היכנס כדי לסנכרן', ar: 'سجّل الدخول للمزامنة' },
+  'sync.migrate': { ru: 'Загрузить в облако', en: 'Upload to cloud', he: 'העלה לענן', ar: 'رفع إلى السحابة' },
+  
+  // Auth
+  'auth.login': { ru: 'Вход', en: 'Sign In', he: 'התחברות', ar: 'تسجيل الدخول' },
+  'auth.register': { ru: 'Регистрация', en: 'Sign Up', he: 'הרשמה', ar: 'إنشاء حساب' },
+  'auth.email': { ru: 'Email', en: 'Email', he: 'אימייל', ar: 'البريد الإلكتروني' },
+  'auth.password': { ru: 'Пароль', en: 'Password', he: 'סיסמה', ar: 'كلمة المرور' },
+  'auth.logout': { ru: 'Выйти', en: 'Sign Out', he: 'התנתק', ar: 'تسجيل الخروج' },
+  
   // AI - Sigil Assistant
   'ai.title': { ru: 'Сигил-ассистент', en: 'Sigil Assistant', he: 'עוזר סיגיל', ar: 'مساعد سيجيل' },
   'ai.sigilTitle': { ru: 'Сигил', en: 'Sigil', he: 'סיגיל', ar: 'سيجيل' },
