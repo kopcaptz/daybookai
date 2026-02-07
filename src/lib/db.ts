@@ -26,6 +26,10 @@ export interface DiaryEntry {
   // Smart Titles (v13)
   title?: string;                   // AI-generated or user-set title
   titleSource?: 'ai' | 'user';      // Who created the title
+  // Cloud sync fields (v16)
+  cloudId?: string;                 // Cloud UUID (null/undefined if not synced)
+  syncStatus?: 'synced' | 'pending' | 'conflict';
+  lastSyncedAt?: number;            // Timestamp of last sync
 }
 
 // Типы для вложений
@@ -579,6 +583,30 @@ class DaybookDatabase extends Dexie {
       analysisQueue: '++id, entryId, status, createdAt',
       weeklyInsights: 'weekStart, generatedAt',
       audioTranscripts: 'attachmentId, status, createdAt',
+    });
+
+    // Version 16: Add sync status tracking for cloud sync
+    this.version(16).stores({
+      entries: '++id, date, mood, *tags, *semanticTags, isPrivate, aiAllowed, createdAt, updatedAt, aiAnalyzedAt, syncStatus',
+      attachments: '++id, entryId, kind, createdAt',
+      drafts: 'id, updatedAt',
+      biographies: 'date, status, generatedAt',
+      attachmentInsights: 'attachmentId, createdAt',
+      receipts: '++id, entryId, date, storeName, createdAt, updatedAt',
+      receiptItems: '++id, receiptId, category',
+      scanLogs: '++id, timestamp',
+      reminders: '++id, entryId, status, dueAt, createdAt',
+      discussionSessions: '++id, updatedAt, lastMessageAt, pinned',
+      discussionMessages: '++id, sessionId, [sessionId+createdAt]',
+      analysisQueue: '++id, entryId, status, createdAt',
+      weeklyInsights: 'weekStart, generatedAt',
+      audioTranscripts: 'attachmentId, status, createdAt',
+    }).upgrade(tx => {
+      return tx.table('entries').toCollection().modify(entry => {
+        if (entry.syncStatus === undefined) {
+          entry.syncStatus = 'pending';
+        }
+      });
     });
   }
 }
