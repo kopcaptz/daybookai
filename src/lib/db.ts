@@ -24,8 +24,18 @@ export interface DiaryEntry {
   semanticTags?: string[];          // AI-generated hidden tags for search
   aiAnalyzedAt?: number;            // Timestamp of last AI analysis
   // Smart Titles (v13)
-  title?: string;                   // AI-generated or user-set title
+  title?: string | null;            // AI-generated or user-set title
   titleSource?: 'ai' | 'user';      // Who created the title
+  // Cloud sync fields (v16)
+  syncId?: string;                  // Stable UUID for cloud sync
+  syncUpdatedAt?: number;           // Last synced timestamp (ms)
+}
+
+// Entry deletion tombstone for cloud sync
+export interface EntryDelete {
+  syncId: string;
+  deletedAt: number;
+  syncedAt?: number;
 }
 
 // Типы для вложений
@@ -353,6 +363,7 @@ class DaybookDatabase extends Dexie {
   analysisQueue!: EntityTable<AnalysisQueueItem, 'id'>;
   weeklyInsights!: EntityTable<WeeklyInsight, 'weekStart'>;
   audioTranscripts!: EntityTable<AudioTranscript, 'attachmentId'>;
+  entryDeletes!: EntityTable<EntryDelete, 'syncId'>;
 
   constructor() {
     super('DaybookDB');
@@ -580,6 +591,34 @@ class DaybookDatabase extends Dexie {
       weeklyInsights: 'weekStart, generatedAt',
       audioTranscripts: 'attachmentId, status, createdAt',
     });
+
+    // Version 16: Add cloud sync fields and deletion tombstones
+    this.version(16).stores({
+      entries: '++id, syncId, date, mood, *tags, *semanticTags, isPrivate, aiAllowed, createdAt, updatedAt, aiAnalyzedAt, syncUpdatedAt',
+      attachments: '++id, entryId, kind, createdAt',
+      drafts: 'id, updatedAt',
+      biographies: 'date, status, generatedAt',
+      attachmentInsights: 'attachmentId, createdAt',
+      receipts: '++id, entryId, date, storeName, createdAt, updatedAt',
+      receiptItems: '++id, receiptId, category',
+      scanLogs: '++id, timestamp',
+      reminders: '++id, entryId, status, dueAt, createdAt',
+      discussionSessions: '++id, updatedAt, lastMessageAt, pinned',
+      discussionMessages: '++id, sessionId, [sessionId+createdAt]',
+      analysisQueue: '++id, entryId, status, createdAt',
+      weeklyInsights: 'weekStart, generatedAt',
+      audioTranscripts: 'attachmentId, status, createdAt',
+      entryDeletes: 'syncId, deletedAt, syncedAt',
+    }).upgrade(tx => {
+      return tx.table('entries').toCollection().modify(entry => {
+        if (!entry.syncId) {
+          entry.syncId = crypto.randomUUID();
+        }
+        if (entry.syncUpdatedAt === undefined) {
+          entry.syncUpdatedAt = 0;
+        }
+      });
+    });
   }
 }
 
@@ -599,11 +638,14 @@ db.open().catch((error) => {
 });
 
 // CRUD операции для записей
-export async function createEntry(entry: Omit<DiaryEntry, 'id' | 'createdAt' | 'updatedAt' | 'aiAllowed'>): Promise<number> {
+export async function createEntry(entry: Omit<DiaryEntry, 'id' | 'createdAt' | 'updatedAt' | 'aiAllowed' | 'syncId' | 'syncUpdatedAt'>): Promise<number> {
   const now = Date.now();
+  const syncId = crypto.randomUUID();
   return await db.entries.add({
     ...entry,
     aiAllowed: !entry.isPrivate,
+    syncId,
+    syncUpdatedAt: 0,
     createdAt: now,
     updatedAt: now,
   });
@@ -624,7 +666,16 @@ export async function updateEntry(id: number, updates: Partial<Omit<DiaryEntry, 
 }
 
 export async function deleteEntry(id: number): Promise<void> {
-  await db.transaction('rw', [db.entries, db.attachments, db.attachmentInsights], async () => {
+  await db.transaction('rw', [db.entries, db.attachments, db.attachmentInsights, db.entryDeletes], async () => {
+    const entry = await db.entries.get(id);
+    if (entry?.syncId) {
+      await db.entryDeletes.put({
+        syncId: entry.syncId,
+        deletedAt: Date.now(),
+        syncedAt: 0,
+      });
+    }
+
     // Delete insights first (cascade from attachments)
     const attachments = await db.attachments.where('entryId').equals(id).toArray();
     for (const attachment of attachments) {
@@ -637,6 +688,21 @@ export async function deleteEntry(id: number): Promise<void> {
     // Delete entry
     await db.entries.delete(id);
   });
+}
+
+export async function getEntryBySyncId(syncId: string): Promise<DiaryEntry | undefined> {
+  return await db.entries.where('syncId').equals(syncId).first();
+}
+
+export async function getPendingEntryDeletes(): Promise<EntryDelete[]> {
+  return await db.entryDeletes
+    .filter((item) => !item.syncedAt || item.syncedAt < item.deletedAt)
+    .toArray();
+}
+
+export async function clearEntryDeletes(syncIds: string[]): Promise<void> {
+  if (syncIds.length === 0) return;
+  await db.entryDeletes.where('syncId').anyOf(syncIds).delete();
 }
 
 export async function getEntryById(id: number): Promise<DiaryEntry | undefined> {
@@ -893,13 +959,14 @@ export async function exportAllData(): Promise<string> {
 
 export async function clearAllData(): Promise<void> {
   await db.transaction('rw', [
-    db.entries, db.attachments, db.drafts, 
+    db.entries, db.attachments, db.drafts, db.entryDeletes,
     db.receipts, db.receiptItems, db.scanLogs,
     db.audioTranscripts,
   ], async () => {
     await db.entries.clear();
     await db.attachments.clear();
     await db.drafts.clear();
+    await db.entryDeletes.clear();
     await db.receipts.clear();
     await db.receiptItems.clear();
     await db.scanLogs.clear();

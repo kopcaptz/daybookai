@@ -22,6 +22,7 @@ import { isOnboarded } from "@/lib/onboarding";
 import { initUsageTracker, trackPageVisit } from "@/lib/usageTracker";
 import { trackNavigation } from "@/lib/crashReporter";
 import { lazyWithRetry, clearChunkReloadFlag } from "@/lib/lazyWithRetry";
+import { initCloudSyncScheduler } from "@/lib/cloudSyncService";
 
 // Lazy load pages with retry logic for handling stale chunks after deployments
 const Today = lazyWithRetry(() => import("./pages/Today"));
@@ -99,6 +100,9 @@ function AppContent() {
     
     // Initialize usage tracker
     initUsageTracker();
+
+    // Initialize cloud sync scheduler
+    initCloudSyncScheduler();
     
     // Reconcile reminder notifications on app start
     // Get language from localStorage or default to 'ru'
