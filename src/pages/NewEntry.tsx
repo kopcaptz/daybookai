@@ -621,7 +621,7 @@ function EntryEditorContent() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={t('entry.placeholder')}
-            className="min-h-[150px] resize-none text-base leading-relaxed border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
+            className="min-h-[150px] resize-none text-base leading-relaxed border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50 select-text"
             autoFocus={!isEditing}
           />
         </div>

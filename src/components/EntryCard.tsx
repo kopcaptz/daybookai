@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ru, enUS } from 'date-fns/locale';
 import { Lock, ChevronRight, Check } from 'lucide-react';
@@ -20,6 +20,7 @@ interface EntryCardProps {
 export function EntryCard({ entry, showDate = false, selectable = false, selected = false, onSelect }: EntryCardProps) {
   const { t, language } = useI18n();
   const locale = language === 'ru' ? ru : enUS;
+  const navigate = useNavigate();
   
   const timeFormatted = format(new Date(entry.createdAt), 'HH:mm', { locale });
   const dateFormatted = showDate 
@@ -30,6 +31,23 @@ export function EntryCard({ entry, showDate = false, selectable = false, selecte
     if (selectable && onSelect && entry.id) {
       e.preventDefault();
       onSelect(entry.id);
+    }
+  };
+
+  const hasSelection = () => {
+    const selection = window.getSelection?.();
+    return selection && selection.type === 'Range' && selection.toString().trim().length > 0;
+  };
+
+  const handleOpen = () => {
+    if (!entry.id || hasSelection()) return;
+    navigate(`/entry/${entry.id}`);
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleOpen();
     }
   };
 
@@ -62,7 +80,7 @@ export function EntryCard({ entry, showDate = false, selectable = false, selecte
         <div className="flex-1 min-w-0">
           {/* Title row (if exists) */}
           {entry.title && (
-            <h4 className="text-sm font-medium text-foreground mb-1 line-clamp-1">
+            <h4 className="text-sm font-medium text-foreground mb-1 line-clamp-1 select-text">
               {entry.title}
               {entry.titleSource === 'ai' && (
                 <span className="ms-1 text-xs text-cyber-glow/60">✨</span>
@@ -86,7 +104,7 @@ export function EntryCard({ entry, showDate = false, selectable = false, selecte
           </div>
           
           {/* Text preview */}
-          <p className="text-sm text-foreground/90 line-clamp-2 leading-relaxed">
+          <p className="text-sm text-foreground/90 line-clamp-2 leading-relaxed select-text">
             {entry.text || (
               <span className="text-muted-foreground italic">{t('entry.empty')}</span>
             )}
@@ -130,11 +148,14 @@ export function EntryCard({ entry, showDate = false, selectable = false, selecte
   }
 
   return (
-    <Link 
-      to={`/entry/${entry.id}`}
-      className="block group"
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={handleOpen}
+      onKeyDown={handleKeyDown}
+      className="block group cursor-pointer"
     >
       {content}
-    </Link>
+    </div>
   );
 }
