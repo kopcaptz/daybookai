@@ -6,6 +6,7 @@ import { getAIToken, isAITokenValid } from './aiTokenService';
 import { startOfWeek, subDays, format } from 'date-fns';
 import { Language, getBaseLanguage } from './i18n';
 import { logger } from './logger';
+import { loadAISettings } from './aiConfig';
 
 export interface WeeklyInsight {
   weekStart: string;       // YYYY-MM-DD (Monday)
@@ -100,14 +101,21 @@ export async function generateWeeklyInsight(
     return { success: false, error: 'not_enough_entries' };
   }
 
-  // Prepare data for API (privacy-safe: no full text)
-  const entryData = entries.map(e => ({
-    date: e.date,
-    mood: e.mood,
-    semanticTags: e.semanticTags || [],
-    title: e.title || undefined,
-    text: e.text.slice(0, 100), // Just a short preview
-  }));
+  // Prepare data for API (privacy-safe)
+  const aiSettings = loadAISettings();
+  const entryData = entries.map(e => {
+    const base: Record<string, unknown> = {
+      date: e.date,
+      mood: e.mood,
+      semanticTags: e.semanticTags || [],
+      title: e.title || undefined,
+    };
+    // In strict privacy mode, omit text entirely
+    if (!aiSettings.strictPrivacy) {
+      base.text = e.text.slice(0, 100); // Short preview only
+    }
+    return base;
+  });
 
   try {
     const token = getAIToken();

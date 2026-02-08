@@ -12,6 +12,7 @@ import { db, updateEntry, type DiaryEntry, type AnalysisQueueItem } from '@/lib/
 import { supabase } from '@/integrations/supabase/client';
 import { isAITokenValid } from '@/lib/aiTokenService';
 import { loadAISettings } from '@/lib/aiConfig';
+import { getAITokenHeader } from '@/lib/aiUtils';
 
 interface AnalysisResult {
   mood: number;
@@ -29,8 +30,18 @@ async function callAnalyzeEdgeFunction(
   tags: string[],
   language: string
 ): Promise<AnalysisResult> {
+  // Check strictPrivacy: if enabled, send generalized data instead of raw text
+  const aiSettings = loadAISettings();
+  let bodyText = text;
+  
+  if (aiSettings.strictPrivacy) {
+    // In strict privacy mode, extract only generalized themes instead of raw text
+    bodyText = extractGeneralizedThemes(text, language);
+  }
+
   const { data, error } = await supabase.functions.invoke('ai-entry-analyze', {
-    body: { text, tags, language },
+    body: { text: bodyText, tags, language },
+    headers: getAITokenHeader(),
   });
 
   if (error) {
@@ -42,6 +53,45 @@ async function callAnalyzeEdgeFunction(
   }
 
   return data as AnalysisResult;
+}
+
+/**
+ * Extract generalized themes from text for strict privacy mode.
+ * Instead of sending raw text, we send a summary of detected themes/emotions.
+ */
+function extractGeneralizedThemes(text: string, language: string): string {
+  const themes: string[] = [];
+  const lowerText = text.toLowerCase();
+  
+  // Detect common themes (works for both ru/en)
+  const themePatterns: Record<string, RegExp[]> = {
+    'work': [/работ[аеы]/i, /офис/i, /проект/i, /коллег/i, /work/i, /office/i, /project/i, /colleague/i],
+    'family': [/семь[яиюе]/i, /родител/i, /мам[аеу]/i, /пап[аеу]/i, /family/i, /parent/i, /mom/i, /dad/i],
+    'health': [/здоров/i, /болезн/i, /врач/i, /тренировк/i, /health/i, /doctor/i, /exercise/i, /gym/i],
+    'mood_positive': [/радост/i, /счаст/i, /отлично/i, /happy/i, /great/i, /wonderful/i, /joy/i],
+    'mood_negative': [/грус[ть]/i, /устал/i, /стресс/i, /тревог/i, /sad/i, /tired/i, /stress/i, /anxious/i],
+    'social': [/друзь/i, /встреч/i, /компани/i, /friends/i, /meeting/i, /party/i],
+    'hobby': [/хобби/i, /книг/i, /фильм/i, /игр/i, /hobby/i, /book/i, /movie/i, /game/i],
+    'food': [/еда/i, /готов/i, /ресторан/i, /food/i, /cook/i, /restaurant/i, /dinner/i],
+    'travel': [/путешеств/i, /поездк/i, /travel/i, /trip/i, /journey/i],
+    'finance': [/деньг/i, /покупк/i, /money/i, /purchase/i, /budget/i],
+  };
+
+  for (const [theme, patterns] of Object.entries(themePatterns)) {
+    if (patterns.some(p => p.test(lowerText))) {
+      themes.push(theme);
+    }
+  }
+
+  // Build a generalized summary
+  const wordCount = text.split(/\s+/).length;
+  const isLong = wordCount > 50;
+  
+  const lang = language === 'ru' ? 'ru' : 'en';
+  if (lang === 'ru') {
+    return `Запись дневника (${wordCount} слов). Обнаруженные темы: ${themes.length > 0 ? themes.join(', ') : 'общее'}. ${isLong ? 'Подробная запись.' : 'Краткая запись.'}`;
+  }
+  return `Diary entry (${wordCount} words). Detected themes: ${themes.length > 0 ? themes.join(', ') : 'general'}. ${isLong ? 'Detailed entry.' : 'Brief entry.'}`;
 }
 
 // ============================================================
