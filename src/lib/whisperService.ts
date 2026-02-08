@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { logger } from './logger';
+import { isAITokenValid, getAIToken } from './aiTokenService';
 
 // Fallback whispers for when AI is unavailable
 const FALLBACK_WHISPERS = {
@@ -137,15 +138,30 @@ export async function fetchWhisper(language: string): Promise<string> {
     return cached;
   }
   
+  // If no valid AI token, use fallback immediately
+  if (!isAITokenValid()) {
+    logger.debug('Whisper', 'No valid AI token, using fallback');
+    const fallback = getFallbackWhisper(language, today);
+    cacheWhisper(today, fallback);
+    return fallback;
+  }
+
   try {
+    // Build headers with AI token
+    const tokenData = getAIToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+    };
+    if (tokenData?.token) {
+      headers['X-AI-Token'] = tokenData.token;
+    }
+
     const response = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-whisper`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
+        headers,
         body: JSON.stringify({
           language,
           date: today,

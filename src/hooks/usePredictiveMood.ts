@@ -12,6 +12,8 @@ import {
 import { loadAISettings } from '@/lib/aiConfig';
 import { trackUsageEvent } from '@/lib/usageTracker';
 import { supabase } from '@/integrations/supabase/client';
+import { isAITokenValid } from '@/lib/aiTokenService';
+import { getAITokenHeader } from '@/lib/aiUtils';
 
 export interface PredictiveMoodResult {
   // Current suggested mood from analysis (different from current)
@@ -114,6 +116,12 @@ export function usePredictiveMood({
 
   // AI analysis function
   const callQuickMoodAnalysis = useCallback(async (textToAnalyze: string) => {
+    // Check AI token validity before calling
+    if (!isAITokenValid()) {
+      console.log('[PredictiveMood] AI token not valid, skipping');
+      return;
+    }
+
     // Rate limiting checks
     if (aiCallCount >= maxAICallsPerEntry) {
       console.log('[PredictiveMood] Max AI calls reached');
@@ -145,7 +153,8 @@ export function usePredictiveMood({
           tags: [], 
           language, 
           mode: 'quick' 
-        }
+        },
+        headers: getAITokenHeader(),
       });
 
       if (error) {

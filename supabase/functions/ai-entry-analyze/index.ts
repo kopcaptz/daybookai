@@ -1,22 +1,99 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+// CORS configuration - allow known origins (matches ai-chat)
+const ALLOWED_ORIGINS = [
+  "https://local-heart-diary.lovable.app",
+  "https://daybookai.lovable.app",
+  "http://localhost:5173",
+  "http://localhost:8080",
+  "http://127.0.0.1:5173",
+];
+const LOVABLE_PREVIEW_PATTERN = /^https:\/\/[a-z0-9-]+\.lovable\.app$/;
+const LOVABLE_PROJECT_PATTERN = /^https:\/\/[a-z0-9-]+\.lovableproject\.com$/;
+
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  if (LOVABLE_PREVIEW_PATTERN.test(origin)) return true;
+  if (LOVABLE_PROJECT_PATTERN.test(origin)) return true;
+  return false;
+}
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = origin && isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-ai-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
+
+// AI Token validation (same as ai-chat)
+async function validateAIToken(token: string | null, requestId: string): Promise<{ valid: boolean; error?: string }> {
+  if (!token) {
+    return { valid: false, error: "ai_token_required" };
+  }
+
+  const AI_TOKEN_SECRET = Deno.env.get("AI_TOKEN_SECRET");
+  if (!AI_TOKEN_SECRET) {
+    console.error({ requestId, action: "token_validation_error", error: "AI_TOKEN_SECRET not configured" });
+    return { valid: false, error: "service_not_configured" };
+  }
+
+  const parts = token.split(".");
+  if (parts.length !== 2) {
+    return { valid: false, error: "invalid_token_format" };
+  }
+
+  const [payloadBase64, signatureBase64] = parts;
+
+  try {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(AI_TOKEN_SECRET),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
+
+    const signatureBytes = Uint8Array.from(atob(signatureBase64), c => c.charCodeAt(0));
+    const isValid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      signatureBytes,
+      encoder.encode(payloadBase64)
+    );
+
+    if (!isValid) {
+      return { valid: false, error: "invalid_token_signature" };
+    }
+
+    const payload = JSON.parse(atob(payloadBase64));
+    if (typeof payload.exp !== "number" || payload.exp <= Date.now()) {
+      return { valid: false, error: "token_expired" };
+    }
+
+    return { valid: true };
+  } catch (e) {
+    console.error({ requestId, action: "token_validation_error", error: String(e) });
+    return { valid: false, error: "invalid_token" };
+  }
+}
 
 interface AnalyzeRequest {
   text: string;
   tags: string[];
   language: "ru" | "en";
-  mode?: "full" | "quick"; // NEW: quick mode for live prediction
+  mode?: "full" | "quick";
 }
 
 interface AnalyzeResponse {
   mood: number;
   confidence: number;
   semanticTags: string[];
-  titleSuggestion?: string; // NEW: for Phase 2
+  titleSuggestion?: string;
   requestId: string;
 }
 
@@ -27,12 +104,26 @@ interface QuickResponse {
 }
 
 serve(async (req) => {
+  const requestId = crypto.randomUUID().slice(0, 8);
+  const origin = req.headers.get("Origin");
+  const corsHeaders = getCorsHeaders(origin);
+
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const requestId = crypto.randomUUID().slice(0, 8);
+  // Validate AI token
+  const aiToken = req.headers.get("X-AI-Token");
+  const tokenValidation = await validateAIToken(aiToken, requestId);
+  if (!tokenValidation.valid) {
+    console.log({ requestId, action: "ai_entry_analyze_unauthorized", error: tokenValidation.error });
+    return new Response(
+      JSON.stringify({ error: tokenValidation.error, requestId }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   const startTime = Date.now();
 
   try {
@@ -57,11 +148,11 @@ serve(async (req) => {
 
     // Quick mode: shorter prompt, mood + confidence only, faster response
     if (mode === "quick") {
-      return await handleQuickMode(text, language, requestId, startTime, LOVABLE_API_KEY);
+      return await handleQuickMode(text, language, requestId, startTime, LOVABLE_API_KEY, corsHeaders);
     }
 
     // Full mode: complete analysis with semantic tags and title suggestion
-    return await handleFullMode(text, tags, language, requestId, startTime, LOVABLE_API_KEY);
+    return await handleFullMode(text, tags, language, requestId, startTime, LOVABLE_API_KEY, corsHeaders);
 
   } catch (err) {
     console.error(`[${requestId}] Unexpected error:`, err);
@@ -74,16 +165,15 @@ serve(async (req) => {
 
 /**
  * Quick mode: Fast mood prediction for live typing analysis
- * ~50 tokens, ~200ms latency
  */
 async function handleQuickMode(
   text: string,
   language: "ru" | "en",
   requestId: string,
   startTime: number,
-  apiKey: string
+  apiKey: string,
+  corsHeaders: Record<string, string>
 ): Promise<Response> {
-  // Truncate text for quick analysis (max 500 chars)
   const truncatedText = text.length > 500 ? text.slice(0, 500) + "..." : text;
 
   const quickPrompt = language === "ru"
@@ -110,25 +200,22 @@ ONLY JSON: {"mood":N,"confidence":0.X}`;
         { role: "system", content: quickPrompt },
         { role: "user", content: truncatedText },
       ],
-      temperature: 0.2, // Low for deterministic results
+      temperature: 0.2,
       max_tokens: 50,
     }),
   });
 
   if (!response.ok) {
-    return handleApiError(response, requestId);
+    return handleApiError(response, requestId, corsHeaders);
   }
 
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content || "";
 
-  // Parse JSON
   let parsed: { mood: number; confidence: number };
   try {
     const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No JSON found in response");
-    }
+    if (!jsonMatch) throw new Error("No JSON found in response");
     parsed = JSON.parse(jsonMatch[0]);
   } catch (parseErr) {
     console.error(`[${requestId}] Failed to parse quick response:`, content);
@@ -144,11 +231,7 @@ ONLY JSON: {"mood":N,"confidence":0.X}`;
   const durationMs = Date.now() - startTime;
   console.log(`[${requestId}] Quick done: mood=${mood}, confidence=${confidence.toFixed(2)}, duration=${durationMs}ms`);
 
-  const result: QuickResponse = {
-    mood,
-    confidence,
-    requestId,
-  };
+  const result: QuickResponse = { mood, confidence, requestId };
 
   return new Response(JSON.stringify(result), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -164,9 +247,9 @@ async function handleFullMode(
   language: "ru" | "en",
   requestId: string,
   startTime: number,
-  apiKey: string
+  apiKey: string,
+  corsHeaders: Record<string, string>
 ): Promise<Response> {
-  // Truncate text to ~1000 chars for efficiency
   const truncatedText = text.length > 1000 ? text.slice(0, 1000) + "..." : text;
 
   const systemPrompt = language === "ru"
@@ -260,19 +343,16 @@ Return ONLY valid JSON:
   });
 
   if (!response.ok) {
-    return handleApiError(response, requestId);
+    return handleApiError(response, requestId, corsHeaders);
   }
 
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content || "";
 
-  // Parse JSON from response (handle markdown code blocks)
   let parsed: { mood: number; confidence: number; semanticTags: string[]; titleSuggestion?: string };
   try {
     const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No JSON found in response");
-    }
+    if (!jsonMatch) throw new Error("No JSON found in response");
     parsed = JSON.parse(jsonMatch[0]);
   } catch (parseErr) {
     console.error(`[${requestId}] Failed to parse AI response:`, content);
@@ -282,7 +362,6 @@ Return ONLY valid JSON:
     );
   }
 
-  // Validate and sanitize response
   const mood = Math.max(1, Math.min(5, Math.round(parsed.mood || 3)));
   const confidence = Math.max(0, Math.min(1, parsed.confidence || 0.5));
   const semanticTags = Array.isArray(parsed.semanticTags) 
@@ -295,13 +374,7 @@ Return ONLY valid JSON:
   const durationMs = Date.now() - startTime;
   console.log(`[${requestId}] Full done: mood=${mood}, confidence=${confidence.toFixed(2)}, tags=${semanticTags.length}, title="${titleSuggestion || 'none'}", duration=${durationMs}ms`);
 
-  const result: AnalyzeResponse = {
-    mood,
-    confidence,
-    semanticTags,
-    titleSuggestion,
-    requestId,
-  };
+  const result: AnalyzeResponse = { mood, confidence, semanticTags, titleSuggestion, requestId };
 
   return new Response(JSON.stringify(result), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -311,7 +384,7 @@ Return ONLY valid JSON:
 /**
  * Handle API errors consistently
  */
-async function handleApiError(response: Response, requestId: string): Promise<Response> {
+async function handleApiError(response: Response, requestId: string, corsHeaders: Record<string, string>): Promise<Response> {
   const status = response.status;
   
   if (status === 429) {
