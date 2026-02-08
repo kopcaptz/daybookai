@@ -12,6 +12,7 @@ import { db, updateEntry, type DiaryEntry, type AnalysisQueueItem } from '@/lib/
 import { supabase } from '@/integrations/supabase/client';
 import { isAITokenValid } from '@/lib/aiTokenService';
 import { loadAISettings } from '@/lib/aiConfig';
+import { getAITokenHeader } from '@/lib/aiUtils';
 
 interface AnalysisResult {
   mood: number;
@@ -19,6 +20,51 @@ interface AnalysisResult {
   semanticTags: string[];
   titleSuggestion?: string;  // AI-generated title in cyber-mystic style
   requestId: string;
+}
+
+// ============================================================
+// Privacy: Theme Extraction for strictPrivacy mode
+// ============================================================
+
+const THEME_KEYWORDS: Record<string, { ru: string; en: string; keywords: string[] }> = {
+  work: { ru: 'работа', en: 'work', keywords: ['работ', 'офис', 'проект', 'задач', 'встреч', 'коллег', 'дедлайн', 'work', 'office', 'project', 'meeting', 'colleague', 'task', 'deadline'] },
+  family: { ru: 'семья', en: 'family', keywords: ['семь', 'семей', 'дом', 'родител', 'дети', 'ребёнок', 'муж', 'жена', 'family', 'home', 'parents', 'kids', 'children', 'husband', 'wife'] },
+  health: { ru: 'здоровье', en: 'health', keywords: ['здоров', 'спорт', 'врач', 'болезн', 'усталост', 'тренировк', 'health', 'gym', 'doctor', 'exercise', 'illness', 'tired'] },
+  food: { ru: 'еда', en: 'food', keywords: ['еда', 'обед', 'ужин', 'завтрак', 'ресторан', 'готови', 'dinner', 'lunch', 'breakfast', 'restaurant', 'food', 'meal', 'cook'] },
+  social: { ru: 'общение', en: 'social', keywords: ['друзь', 'друг', 'подруг', 'friends', 'friend', 'social', 'party', 'hangout'] },
+  stress: { ru: 'стресс', en: 'stress', keywords: ['стресс', 'тревог', 'нервн', 'напряж', 'stress', 'anxiety', 'nervous', 'worried', 'pressure'] },
+  rest: { ru: 'отдых', en: 'rest', keywords: ['отдых', 'прогулк', 'фильм', 'книг', 'сериал', 'rest', 'walk', 'movie', 'relax', 'book'] },
+  study: { ru: 'учёба', en: 'study', keywords: ['учёб', 'курс', 'лекци', 'экзамен', 'study', 'course', 'lecture', 'exam'] },
+  travel: { ru: 'путешествие', en: 'travel', keywords: ['путешеств', 'поездк', 'отпуск', 'travel', 'trip', 'vacation'] },
+  creative: { ru: 'творчество', en: 'creative', keywords: ['творчеств', 'рисова', 'музык', 'писа', 'creative', 'art', 'music', 'writing'] },
+};
+
+/**
+ * Extract generalized themes from text (local processing, no AI).
+ * Used in strictPrivacy mode to replace raw text with theme summary.
+ */
+export function extractGeneralizedThemes(text: string, language: string): string {
+  const baseLang = language === 'ru' ? 'ru' : 'en';
+  const words = text.toLowerCase().split(/\s+/);
+  const themes: string[] = [];
+
+  for (const [, config] of Object.entries(THEME_KEYWORDS)) {
+    if (config.keywords.some(kw => words.some(w => w.includes(kw)))) {
+      themes.push(config[baseLang]);
+    }
+  }
+
+  const prefix = baseLang === 'ru' ? 'Запись дневника' : 'Diary entry';
+
+  if (themes.length === 0) {
+    const noThemes = baseLang === 'ru' ? 'общие размышления' : 'general reflections';
+    return `${prefix}. Темы: ${noThemes}.`;
+  }
+
+  const themeList = themes.slice(0, 5).join(', ');
+  return baseLang === 'ru'
+    ? `${prefix}. Темы: ${themeList}.`
+    : `${prefix}. Themes: ${themeList}.`;
 }
 
 /**
@@ -31,6 +77,7 @@ async function callAnalyzeEdgeFunction(
 ): Promise<AnalysisResult> {
   const { data, error } = await supabase.functions.invoke('ai-entry-analyze', {
     body: { text, tags, language },
+    headers: getAITokenHeader(),
   });
 
   if (error) {
@@ -283,8 +330,13 @@ export async function analyzeEntryInBackground(
 
   console.log(`[EntryAnalysis] Starting analysis for entry ${entryId}, userSetMood=${userSetMood}`);
 
+  // Apply strictPrivacy: send generalized themes instead of raw text
+  const textToSend = aiSettings.strictPrivacy
+    ? extractGeneralizedThemes(text, language)
+    : text;
+
   try {
-    const result = await callAnalyzeEdgeFunction(text, tags, language);
+    const result = await callAnalyzeEdgeFunction(textToSend, tags, language);
 
     console.log(`[EntryAnalysis] Result: mood=${result.mood}, confidence=${result.confidence}, semanticTags=[${result.semanticTags.join(', ')}], title=${result.titleSuggestion || 'none'}`);
 
