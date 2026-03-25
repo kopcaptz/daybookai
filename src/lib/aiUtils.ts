@@ -1,4 +1,5 @@
 import { getAIToken } from './aiTokenService';
+import { loadAISettings, getProviderApiKey } from './aiConfig';
 
 /**
  * Shared AI utilities — single source of truth for token headers,
@@ -9,10 +10,19 @@ import { getAIToken } from './aiTokenService';
 // Get AI token header (returns empty object if no valid token)
 export function getAITokenHeader(): Record<string, string> {
   const tokenData = getAIToken();
+  const headers: Record<string, string> = {};
   if (tokenData?.token) {
-    return { 'X-AI-Token': tokenData.token };
+    headers['X-AI-Token'] = tokenData.token;
   }
-  return {};
+  // Add provider key if not lovable
+  const settings = loadAISettings();
+  if (settings.provider !== 'lovable') {
+    const providerKey = getProviderApiKey(settings.provider);
+    if (providerKey) {
+      headers['X-Provider-Key'] = providerKey;
+    }
+  }
+  return headers;
 }
 
 // Parse AI HTTP error status into a localized user-facing message

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Zap, Gauge, Wifi, WifiOff, Shield, ShieldCheck, KeyRound, Clock, Brain, Tags, Camera, Globe, Server } from 'lucide-react';
+import { Zap, Gauge, Wifi, WifiOff, Shield, ShieldCheck, KeyRound, Clock, Brain, Tags, Camera, Globe, Server, Eye, EyeOff, ExternalLink, AlertTriangle } from 'lucide-react';
 import { 
   AIProfile,
   AIProvider,
@@ -12,7 +12,7 @@ import {
 } from '@/lib/aiConfig';
 import { testAIConnection } from '@/lib/aiService';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -46,7 +46,7 @@ export function AISettingsCard({ onSettingsChange }: AISettingsCardProps) {
   const [settings, setSettings] = useState<AISettings>(DEFAULT_AI_SETTINGS);
   const [isTesting, setIsTesting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'success' | 'error'>('unknown');
-  
+  const [showApiKey, setShowApiKey] = useState(false);
   const {
     hasValidToken,
     tokenExpiryFormatted,
@@ -360,6 +360,59 @@ export function AISettingsCard({ onSettingsChange }: AISettingsCardProps) {
           <p className="text-xs text-muted-foreground mt-1">
             {t('ai.currentModel' as any)}: <span className="font-mono text-cyber-glow">{PROVIDER_MODELS[settings.provider]?.[settings.chatProfile] || '—'}</span>
           </p>
+
+          {/* API Key Input for OpenRouter / MiniMax */}
+          {settings.provider !== 'lovable' && (
+            <div className="mt-3 space-y-2 p-3 rounded-lg bg-muted/30 border border-border">
+              <Label className="text-sm flex items-center gap-2">
+                <KeyRound className="h-3.5 w-3.5" />
+                {language === 'ru' ? 'API ключ' : 'API Key'} {AI_PROVIDERS[settings.provider].name}
+              </Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type={showApiKey ? 'text' : 'password'}
+                    placeholder={language === 'ru' ? 'Вставьте ваш API ключ...' : 'Paste your API key...'}
+                    value={settings.provider === 'openrouter' ? settings.openrouterApiKey : settings.minimaxApiKey}
+                    onChange={(e) => {
+                      const key = settings.provider === 'openrouter' ? 'openrouterApiKey' : 'minimaxApiKey';
+                      updateSettings({ [key]: e.target.value });
+                    }}
+                    className="pr-10 font-mono text-xs"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                  >
+                    {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Warning if key is empty */}
+              {((settings.provider === 'openrouter' && !settings.openrouterApiKey) ||
+                (settings.provider === 'minimax' && !settings.minimaxApiKey)) && (
+                <div className="flex items-center gap-2 text-amber-500 text-xs">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  {language === 'ru' ? 'Ключ не указан — провайдер не будет работать' : 'No key — provider will not work'}
+                </div>
+              )}
+
+              {/* Link to get API key */}
+              <a
+                href={settings.provider === 'openrouter' ? 'https://openrouter.ai/keys' : 'https://platform.minimaxi.com'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-cyber-glow hover:underline"
+              >
+                <ExternalLink className="h-3 w-3" />
+                {language === 'ru' ? 'Где взять ключ?' : 'Where to get a key?'}
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Chat Profile Selection */}

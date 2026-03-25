@@ -22,7 +22,7 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   const allowedOrigin = origin && isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-ai-token",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-ai-token, x-provider-key",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
@@ -61,9 +61,9 @@ async function validateAIToken(token: string | null, requestId: string): Promise
 }
 
 // Provider test configurations
-function getTestConfig(provider: string): { apiUrl: string; apiKey: string | undefined; headers: Record<string, string>; model: string; source: string } | null {
+function getTestConfig(provider: string, providerKey?: string): { apiUrl: string; apiKey: string | undefined; headers: Record<string, string>; model: string; source: string } | null {
   if (provider === "openrouter") {
-    const apiKey = Deno.env.get("VITE_AI_API_KEY");
+    const apiKey = providerKey || Deno.env.get("VITE_AI_API_KEY");
     if (!apiKey) return null;
     return {
       apiUrl: "https://openrouter.ai/api/v1/chat/completions",
@@ -75,12 +75,12 @@ function getTestConfig(provider: string): { apiUrl: string; apiKey: string | und
         "HTTP-Referer": "https://daybook.local",
       },
       model: "google/gemini-2.5-flash-lite",
-      source: "OpenRouter",
+      source: providerKey ? "OpenRouter (user key)" : "OpenRouter",
     };
   }
 
   if (provider === "minimax") {
-    const apiKey = Deno.env.get("MINIMAX_API_KEY");
+    const apiKey = providerKey || Deno.env.get("MINIMAX_API_KEY");
     if (!apiKey) return null;
     return {
       apiUrl: "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
@@ -90,7 +90,7 @@ function getTestConfig(provider: string): { apiUrl: string; apiKey: string | und
         "Content-Type": "application/json",
       },
       model: "MiniMax-M1",
-      source: "MiniMax",
+      source: providerKey ? "MiniMax (user key)" : "MiniMax",
     };
   }
 
@@ -171,7 +171,8 @@ serve(async (req) => {
 
     console.log({ requestId, timestamp: new Date().toISOString(), action: "ai_test_request", provider });
 
-    const config = getTestConfig(provider);
+    const userProviderKey = req.headers.get("X-Provider-Key") || undefined;
+    const config = getTestConfig(provider, userProviderKey);
     if (!config) {
       return new Response(
         JSON.stringify({ success: false, error: `Provider "${provider}" not configured`, source: provider, requestId }),
