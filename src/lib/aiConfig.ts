@@ -108,34 +108,36 @@ export const AI_PROFILES: Record<AIProfile, AIProfileConfig> = {
 
 export interface AISettings {
   enabled: boolean;
+  provider: AIProvider;
   chatProfile: AIProfile;
   bioProfile: AIProfile;
-  strictPrivacy: boolean; // Never quote verbatim, paraphrase only
-  autoMood: boolean; // Predictive mood tracking
-  autoMoodLiveSuggestions: boolean; // Show live suggestions while typing
-  autoMoodInheritFromChat: boolean; // Inherit mood from discussions
-  autoMoodAIEnabled: boolean; // Use AI for mood prediction (v2)
-  autoMoodAIOnBlur: boolean; // Trigger AI on textarea blur
-  autoMoodAIOnPause: boolean; // Trigger AI on typing pause (2s)
-  autoTags: boolean; // Auto-suggest tags based on text content
-  autoScreenshot: boolean; // Auto-capture screen on FAB open (default: false)
-  autoScreenshotBlurPrivate: boolean; // Blur .blur-private elements (default: true)
+  strictPrivacy: boolean;
+  autoMood: boolean;
+  autoMoodLiveSuggestions: boolean;
+  autoMoodInheritFromChat: boolean;
+  autoMoodAIEnabled: boolean;
+  autoMoodAIOnBlur: boolean;
+  autoMoodAIOnPause: boolean;
+  autoTags: boolean;
+  autoScreenshot: boolean;
+  autoScreenshotBlurPrivate: boolean;
 }
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
   enabled: false,
+  provider: 'lovable',
   chatProfile: 'balanced',
   bioProfile: 'biography',
-  strictPrivacy: true, // ON by default
-  autoMood: true, // ON by default
-  autoMoodLiveSuggestions: true, // ON by default (if autoMood enabled)
-  autoMoodInheritFromChat: true, // ON by default (if autoMood enabled)
-  autoMoodAIEnabled: true, // ON by default (v2 AI mood prediction)
-  autoMoodAIOnBlur: true, // ON by default
-  autoMoodAIOnPause: true, // ON by default
-  autoTags: true, // ON by default
-  autoScreenshot: false, // OFF by default (opt-in)
-  autoScreenshotBlurPrivate: true, // ON by default
+  strictPrivacy: true,
+  autoMood: true,
+  autoMoodLiveSuggestions: true,
+  autoMoodInheritFromChat: true,
+  autoMoodAIEnabled: true,
+  autoMoodAIOnBlur: true,
+  autoMoodAIOnPause: true,
+  autoTags: true,
+  autoScreenshot: false,
+  autoScreenshotBlurPrivate: true,
 };
 
 // Storage key
