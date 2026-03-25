@@ -270,7 +270,7 @@ function getProviderConfig(provider: string, model: string, providerKey?: string
   effectiveModel: string;
 } | null {
   if (provider === "openrouter") {
-    const apiKey = providerKey || Deno.env.get("VITE_AI_API_KEY");
+    const apiKey = providerKey;
     if (!apiKey) return null;
     return {
       apiUrl: "https://openrouter.ai/api/v1/chat/completions",
@@ -286,7 +286,7 @@ function getProviderConfig(provider: string, model: string, providerKey?: string
   }
 
   if (provider === "minimax") {
-    const apiKey = providerKey || Deno.env.get("MINIMAX_API_KEY");
+    const apiKey = providerKey;
     if (!apiKey) return null;
     return {
       apiUrl: "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
@@ -302,21 +302,6 @@ function getProviderConfig(provider: string, model: string, providerKey?: string
   // Default: lovable
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!apiKey) {
-    // Fallback to OpenRouter if available
-    const orKey = Deno.env.get("VITE_AI_API_KEY");
-    if (orKey) {
-      return {
-        apiUrl: "https://openrouter.ai/api/v1/chat/completions",
-        apiKey: orKey,
-        headers: {
-          "Authorization": `Bearer ${orKey}`,
-          "Content-Type": "application/json",
-          "X-Title": "Daybook",
-          "HTTP-Referer": "https://daybook.local",
-        },
-        effectiveModel: model,
-      };
-    }
     return null;
   }
 

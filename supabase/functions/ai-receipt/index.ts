@@ -22,7 +22,7 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   const allowedOrigin = origin && isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-ai-token, x-request-id",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-ai-token, x-request-id, x-provider-key",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
@@ -358,9 +358,8 @@ serve(async (req) => {
       );
     }
 
-    // Get API key
+    // Get API key — Lovable Gateway only (user keys for other providers via ai-chat)
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    const OPENROUTER_API_KEY = Deno.env.get("VITE_AI_API_KEY");
 
     let apiUrl: string;
     let apiKey: string;
@@ -372,15 +371,6 @@ serve(async (req) => {
       headers = {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-      };
-    } else if (OPENROUTER_API_KEY) {
-      apiUrl = "https://openrouter.ai/api/v1/chat/completions";
-      apiKey = OPENROUTER_API_KEY;
-      headers = {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "X-Title": "Daybook Receipt Scanner",
-        "HTTP-Referer": "https://daybook.local",
       };
     } else {
       console.error({ requestId, action: "ai_receipt_error", error: "AI service not configured" });
