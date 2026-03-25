@@ -2,6 +2,7 @@ import { db } from './db';
 import { 
   AIProfile, 
   AI_PROFILES, 
+  PROVIDER_MODELS,
   loadAISettings,
 } from './aiConfig';
 import { isAITokenValid } from './aiTokenService';
@@ -219,6 +220,9 @@ export async function streamChatCompletion(
     ...messages,
   ];
   try {
+    const settings = loadAISettings();
+    const effectiveModel = PROVIDER_MODELS[settings.provider][profile];
+    
     const response = await fetch(AI_CHAT_URL, {
       method: 'POST',
       headers: {
@@ -227,9 +231,10 @@ export async function streamChatCompletion(
       },
       body: JSON.stringify({
         messages: requestMessages,
-        model: profileConfig.model,
+        model: effectiveModel,
         maxTokens: profileConfig.maxTokens,
         temperature: profileConfig.temperature,
+        provider: settings.provider,
       }),
     });
     
@@ -282,12 +287,14 @@ export async function testAIConnection(language: 'ru' | 'en' = 'ru'): Promise<{ 
   }
   
   try {
+    const settings = loadAISettings();
     const response = await fetch(AI_TEST_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...getAITokenHeader(),
       },
+      body: JSON.stringify({ provider: settings.provider }),
     });
     
     const requestId = response.headers.get('X-Request-Id') || undefined;

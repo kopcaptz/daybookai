@@ -2,6 +2,7 @@
 // All AI requests go through Edge Functions - no client-side keys needed
 
 export type AIProfile = 'economy' | 'fast' | 'balanced' | 'quality' | 'biography';
+export type AIProvider = 'lovable' | 'openrouter' | 'minimax';
 
 export interface AIProfileConfig {
   id: AIProfile;
@@ -12,7 +13,56 @@ export interface AIProfileConfig {
   temperature: number;
 }
 
-// Profile to model mapping - used when calling Edge Function
+export interface AIProviderInfo {
+  id: AIProvider;
+  name: string;
+  description: { ru: string; en: string };
+}
+
+export const AI_PROVIDERS: Record<AIProvider, AIProviderInfo> = {
+  lovable: {
+    id: 'lovable',
+    name: 'Lovable AI',
+    description: { ru: 'Встроенный AI Gateway', en: 'Built-in AI Gateway' },
+  },
+  openrouter: {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    description: { ru: 'Доступ к Claude, GPT, Gemini', en: 'Access Claude, GPT, Gemini' },
+  },
+  minimax: {
+    id: 'minimax',
+    name: 'MiniMax',
+    description: { ru: 'MiniMax модели', en: 'MiniMax models' },
+  },
+};
+
+// Provider-specific model mappings per profile
+export const PROVIDER_MODELS: Record<AIProvider, Record<AIProfile, string>> = {
+  lovable: {
+    economy: 'google/gemini-2.5-flash-lite',
+    fast: 'google/gemini-2.5-flash-lite',
+    balanced: 'google/gemini-2.5-flash',
+    quality: 'google/gemini-2.5-pro',
+    biography: 'google/gemini-2.5-pro',
+  },
+  openrouter: {
+    economy: 'google/gemini-2.5-flash-lite',
+    fast: 'google/gemini-2.5-flash',
+    balanced: 'anthropic/claude-sonnet-4',
+    quality: 'anthropic/claude-opus-4',
+    biography: 'anthropic/claude-opus-4',
+  },
+  minimax: {
+    economy: 'MiniMax-M1',
+    fast: 'MiniMax-M1',
+    balanced: 'MiniMax-M1',
+    quality: 'MiniMax-M1',
+    biography: 'MiniMax-M1',
+  },
+};
+
+// Profile to model mapping - used when calling Edge Function (default: lovable)
 export const AI_PROFILES: Record<AIProfile, AIProfileConfig> = {
   economy: {
     id: 'economy',
@@ -51,41 +101,43 @@ export const AI_PROFILES: Record<AIProfile, AIProfileConfig> = {
     name: 'БИОГРАФИЯ ДНЯ',
     description: 'Для генерации биографии',
     model: 'google/gemini-2.5-pro',
-    maxTokens: 3072, // Increased for detailed chronicles
+    maxTokens: 3072,
     temperature: 0.8,
   },
 };
 
 export interface AISettings {
   enabled: boolean;
+  provider: AIProvider;
   chatProfile: AIProfile;
   bioProfile: AIProfile;
-  strictPrivacy: boolean; // Never quote verbatim, paraphrase only
-  autoMood: boolean; // Predictive mood tracking
-  autoMoodLiveSuggestions: boolean; // Show live suggestions while typing
-  autoMoodInheritFromChat: boolean; // Inherit mood from discussions
-  autoMoodAIEnabled: boolean; // Use AI for mood prediction (v2)
-  autoMoodAIOnBlur: boolean; // Trigger AI on textarea blur
-  autoMoodAIOnPause: boolean; // Trigger AI on typing pause (2s)
-  autoTags: boolean; // Auto-suggest tags based on text content
-  autoScreenshot: boolean; // Auto-capture screen on FAB open (default: false)
-  autoScreenshotBlurPrivate: boolean; // Blur .blur-private elements (default: true)
+  strictPrivacy: boolean;
+  autoMood: boolean;
+  autoMoodLiveSuggestions: boolean;
+  autoMoodInheritFromChat: boolean;
+  autoMoodAIEnabled: boolean;
+  autoMoodAIOnBlur: boolean;
+  autoMoodAIOnPause: boolean;
+  autoTags: boolean;
+  autoScreenshot: boolean;
+  autoScreenshotBlurPrivate: boolean;
 }
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
   enabled: false,
+  provider: 'lovable',
   chatProfile: 'balanced',
   bioProfile: 'biography',
-  strictPrivacy: true, // ON by default
-  autoMood: true, // ON by default
-  autoMoodLiveSuggestions: true, // ON by default (if autoMood enabled)
-  autoMoodInheritFromChat: true, // ON by default (if autoMood enabled)
-  autoMoodAIEnabled: true, // ON by default (v2 AI mood prediction)
-  autoMoodAIOnBlur: true, // ON by default
-  autoMoodAIOnPause: true, // ON by default
-  autoTags: true, // ON by default
-  autoScreenshot: false, // OFF by default (opt-in)
-  autoScreenshotBlurPrivate: true, // ON by default
+  strictPrivacy: true,
+  autoMood: true,
+  autoMoodLiveSuggestions: true,
+  autoMoodInheritFromChat: true,
+  autoMoodAIEnabled: true,
+  autoMoodAIOnBlur: true,
+  autoMoodAIOnPause: true,
+  autoTags: true,
+  autoScreenshot: false,
+  autoScreenshotBlurPrivate: true,
 };
 
 // Storage key
@@ -114,12 +166,18 @@ export function saveAISettings(settings: AISettings): void {
   }
 }
 
-// Get model for a profile - used when making API calls
-export function getModelForProfile(profile: AIProfile): string {
-  return AI_PROFILES[profile].model;
+// Get model for a profile and provider - used when making API calls
+export function getModelForProfile(profile: AIProfile, provider?: AIProvider): string {
+  const p = provider || loadAISettings().provider || 'lovable';
+  return PROVIDER_MODELS[p][profile];
 }
 
 // Get profile config
 export function getProfileConfig(profile: AIProfile): AIProfileConfig {
   return AI_PROFILES[profile];
+}
+
+// Get current provider
+export function getCurrentProvider(): AIProvider {
+  return loadAISettings().provider || 'lovable';
 }

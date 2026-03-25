@@ -48,7 +48,6 @@ async function validateAIToken(token: string | null, requestId: string): Promise
   const [payloadBase64, signatureBase64] = parts;
 
   try {
-    // Verify HMAC signature
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
       "raw",
@@ -70,7 +69,6 @@ async function validateAIToken(token: string | null, requestId: string): Promise
       return { valid: false, error: "invalid_token_signature" };
     }
 
-    // Decode and check expiry
     const payload = JSON.parse(atob(payloadBase64));
     if (typeof payload.exp !== "number" || payload.exp <= Date.now()) {
       return { valid: false, error: "token_expired" };
@@ -90,14 +88,34 @@ const MAX_TEMPERATURE = 2;
 const MIN_TEMPERATURE = 0;
 const MAX_MESSAGES = 50;
 const MAX_TEXT_LENGTH = 10000;
-const MAX_BASE64_SIZE = 4 * 1024 * 1024; // 4MB for base64 image data
+const MAX_BASE64_SIZE = 4 * 1024 * 1024;
 const ALLOWED_ROLES = ["system", "user", "assistant"];
-const ALLOWED_MODELS = [
-  "google/gemini-2.5-flash",
-  "google/gemini-2.5-flash-lite",
-  "google/gemini-2.5-pro",
-  "google/gemini-3-flash-preview",
-];
+
+// Provider-specific allowed models
+const ALLOWED_MODELS_BY_PROVIDER: Record<string, string[]> = {
+  lovable: [
+    "google/gemini-2.5-flash",
+    "google/gemini-2.5-flash-lite",
+    "google/gemini-2.5-pro",
+    "google/gemini-3-flash-preview",
+  ],
+  openrouter: [
+    "google/gemini-2.5-flash-lite",
+    "google/gemini-2.5-flash",
+    "google/gemini-2.5-pro",
+    "anthropic/claude-sonnet-4",
+    "anthropic/claude-opus-4",
+    "anthropic/claude-3.5-sonnet",
+    "openai/gpt-4o",
+    "openai/gpt-4o-mini",
+  ],
+  minimax: [
+    "MiniMax-M1",
+    "MiniMax-M1-80B",
+  ],
+};
+
+const ALLOWED_PROVIDERS = ["lovable", "openrouter", "minimax"];
 
 // Content part types for multimodal support
 interface TextContentPart {
@@ -108,7 +126,7 @@ interface TextContentPart {
 interface ImageUrlContentPart {
   type: "image_url";
   image_url: {
-    url: string; // data:image/...;base64,... or https://...
+    url: string;
   };
 }
 
@@ -144,10 +162,8 @@ function validateContentPart(part: unknown, index: number, partIndex: number): {
     if (typeof imageUrl.url !== "string") {
       return { valid: false, error: `messages[${index}].content[${partIndex}].image_url.url must be a string` };
     }
-    // Validate base64 data URL or https URL
     const url = imageUrl.url;
     if (url.startsWith("data:image/")) {
-      // Check base64 size (rough estimate)
       const base64Part = url.split(",")[1] || "";
       if (base64Part.length > MAX_BASE64_SIZE) {
         return { valid: false, error: `messages[${index}].content[${partIndex}] image data exceeds size limit` };
@@ -182,13 +198,11 @@ function validateMessages(messages: unknown): { valid: boolean; error?: string }
       return { valid: false, error: `messages[${i}].role must be one of: ${ALLOWED_ROLES.join(", ")}` };
     }
     
-    // Content can be string OR array of content parts (multimodal)
     if (typeof content === "string") {
       if (content.length > MAX_TEXT_LENGTH) {
         return { valid: false, error: `messages[${i}].content exceeds ${MAX_TEXT_LENGTH} characters` };
       }
     } else if (Array.isArray(content)) {
-      // Validate each content part
       for (let j = 0; j < content.length; j++) {
         const partValidation = validateContentPart(content[j], i, j);
         if (!partValidation.valid) {
@@ -203,24 +217,26 @@ function validateMessages(messages: unknown): { valid: boolean; error?: string }
   return { valid: true };
 }
 
-function validateModel(model: unknown): { valid: boolean; error?: string } {
+function validateModel(model: unknown, provider: string): { valid: boolean; error?: string } {
   if (model === undefined || model === null) {
-    return { valid: true }; // Model is optional, will use default
+    return { valid: true };
   }
   if (typeof model !== "string") {
     return { valid: false, error: "model must be a string" };
   }
-  // Allow both new google/ models and legacy models (will be mapped)
-  const allAllowed = [...ALLOWED_MODELS, "gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o", "gpt-4"];
+  const allowedModels = ALLOWED_MODELS_BY_PROVIDER[provider] || ALLOWED_MODELS_BY_PROVIDER.lovable;
+  // Also allow legacy models for backward compat
+  const legacyModels = ["gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o", "gpt-4"];
+  const allAllowed = [...allowedModels, ...legacyModels];
   if (!allAllowed.includes(model)) {
-    return { valid: false, error: `model must be one of: ${ALLOWED_MODELS.join(", ")}` };
+    return { valid: false, error: `model "${model}" is not allowed for provider "${provider}"` };
   }
   return { valid: true };
 }
 
 function validateMaxTokens(maxTokens: unknown): { valid: boolean; error?: string; value: number } {
   if (maxTokens === undefined || maxTokens === null) {
-    return { valid: true, value: 1024 }; // Default value
+    return { valid: true, value: 1024 };
   }
   const num = Number(maxTokens);
   if (isNaN(num) || !Number.isInteger(num)) {
@@ -234,7 +250,7 @@ function validateMaxTokens(maxTokens: unknown): { valid: boolean; error?: string
 
 function validateTemperature(temperature: unknown): { valid: boolean; error?: string; value: number } {
   if (temperature === undefined || temperature === null) {
-    return { valid: true, value: 0.7 }; // Default value
+    return { valid: true, value: 0.7 };
   }
   const num = Number(temperature);
   if (isNaN(num)) {
@@ -246,8 +262,99 @@ function validateTemperature(temperature: unknown): { valid: boolean; error?: st
   return { valid: true, value: num };
 }
 
+// Build provider-specific request config
+function getProviderConfig(provider: string, model: string): {
+  apiUrl: string;
+  apiKey: string;
+  headers: Record<string, string>;
+  effectiveModel: string;
+} | null {
+  if (provider === "openrouter") {
+    const apiKey = Deno.env.get("VITE_AI_API_KEY");
+    if (!apiKey) return null;
+    return {
+      apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+      apiKey,
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "X-Title": "Daybook",
+        "HTTP-Referer": "https://daybook.local",
+      },
+      effectiveModel: model,
+    };
+  }
+
+  if (provider === "minimax") {
+    const apiKey = Deno.env.get("MINIMAX_API_KEY");
+    if (!apiKey) return null;
+    return {
+      apiUrl: "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
+      apiKey,
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      effectiveModel: model,
+    };
+  }
+
+  // Default: lovable
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) {
+    // Fallback to OpenRouter if available
+    const orKey = Deno.env.get("VITE_AI_API_KEY");
+    if (orKey) {
+      return {
+        apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+        apiKey: orKey,
+        headers: {
+          "Authorization": `Bearer ${orKey}`,
+          "Content-Type": "application/json",
+          "X-Title": "Daybook",
+          "HTTP-Referer": "https://daybook.local",
+        },
+        effectiveModel: model,
+      };
+    }
+    return null;
+  }
+
+  // Map legacy model names for Lovable gateway
+  const modelMap: Record<string, string> = {
+    "gpt-3.5-turbo": "google/gemini-2.5-flash-lite",
+    "gpt-4o-mini": "google/gemini-2.5-flash",
+    "gpt-4o": "google/gemini-2.5-pro",
+    "gpt-4": "google/gemini-2.5-pro",
+  };
+  const effectiveModel = modelMap[model] || model || "google/gemini-3-flash-preview";
+
+  return {
+    apiUrl: "https://ai.gateway.lovable.dev/v1/chat/completions",
+    apiKey,
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    effectiveModel,
+  };
+}
+
+// Build MiniMax-specific request body (different from OpenAI format)
+function buildMinimaxBody(messages: ChatMessage[], model: string, maxTokens: number, temperature: number) {
+  return {
+    model,
+    messages: messages.map(m => ({
+      role: m.role === "system" ? "system" : m.role,
+      content: typeof m.content === "string" ? m.content : m.content.map(p => p.type === "text" ? p.text : "").join("\n"),
+    })),
+    max_tokens: maxTokens,
+    temperature,
+    stream: true,
+  };
+}
+
 serve(async (req) => {
-  // Generate request ID for correlation
   const requestId = crypto.randomUUID();
   const origin = req.headers.get("Origin");
   const corsHeaders = getCorsHeaders(origin);
@@ -278,7 +385,6 @@ serve(async (req) => {
     try {
       requestBody = await req.json();
     } catch {
-      console.error({ requestId, action: "ai_chat_error", error: "Invalid JSON" });
       return new Response(
         JSON.stringify({ error: "Invalid JSON in request body", requestId }),
         { status: 400, headers: responseHeaders() }
@@ -286,102 +392,61 @@ serve(async (req) => {
     }
 
     if (!requestBody || typeof requestBody !== "object") {
-      console.error({ requestId, action: "ai_chat_error", error: "Invalid request body" });
       return new Response(
         JSON.stringify({ error: "Request body must be an object", requestId }),
         { status: 400, headers: responseHeaders() }
       );
     }
 
-    const { messages, model, maxTokens, temperature } = requestBody as Record<string, unknown>;
+    const { messages, model, maxTokens, temperature, provider: rawProvider } = requestBody as Record<string, unknown>;
+
+    // Validate provider
+    const provider = typeof rawProvider === "string" && ALLOWED_PROVIDERS.includes(rawProvider) ? rawProvider : "lovable";
 
     // Validate messages
     const messagesValidation = validateMessages(messages);
     if (!messagesValidation.valid) {
-      console.error({ requestId, action: "ai_chat_error", error: messagesValidation.error });
       return new Response(
         JSON.stringify({ error: messagesValidation.error, requestId }),
         { status: 400, headers: responseHeaders() }
       );
     }
 
-    // Validate model
-    const modelValidation = validateModel(model);
+    // Validate model against provider
+    const modelValidation = validateModel(model, provider);
     if (!modelValidation.valid) {
-      console.error({ requestId, action: "ai_chat_error", error: modelValidation.error });
       return new Response(
         JSON.stringify({ error: modelValidation.error, requestId }),
         { status: 400, headers: responseHeaders() }
       );
     }
 
-    // Validate maxTokens
     const maxTokensValidation = validateMaxTokens(maxTokens);
     if (!maxTokensValidation.valid) {
-      console.error({ requestId, action: "ai_chat_error", error: maxTokensValidation.error });
       return new Response(
         JSON.stringify({ error: maxTokensValidation.error, requestId }),
         { status: 400, headers: responseHeaders() }
       );
     }
 
-    // Validate temperature
     const temperatureValidation = validateTemperature(temperature);
     if (!temperatureValidation.valid) {
-      console.error({ requestId, action: "ai_chat_error", error: temperatureValidation.error });
       return new Response(
         JSON.stringify({ error: temperatureValidation.error, requestId }),
         { status: 400, headers: responseHeaders() }
       );
     }
 
-    // Try LOVABLE_API_KEY first (Lovable AI Gateway), then fallback to OpenRouter key
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    const OPENROUTER_API_KEY = Deno.env.get("VITE_AI_API_KEY");
-    
-    let apiUrl: string;
-    let apiKey: string;
-    let headers: Record<string, string>;
-    
-    if (LOVABLE_API_KEY) {
-      // Use Lovable AI Gateway
-      apiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
-      apiKey = LOVABLE_API_KEY;
-      headers = {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      };
-    } else if (OPENROUTER_API_KEY) {
-      // Use OpenRouter
-      apiUrl = "https://openrouter.ai/api/v1/chat/completions";
-      apiKey = OPENROUTER_API_KEY;
-      headers = {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "X-Title": "Daybook",
-        "HTTP-Referer": "https://daybook.local",
-      };
-    } else {
-      console.error({ requestId, action: "ai_chat_error", error: "AI service not configured" });
+    // Get provider config
+    const providerConfig = getProviderConfig(provider, (model as string) || "");
+    if (!providerConfig) {
+      console.error({ requestId, action: "ai_chat_error", error: `Provider "${provider}" not configured` });
       return new Response(
-        JSON.stringify({ error: "AI service not configured", requestId }),
+        JSON.stringify({ error: `AI provider "${provider}" is not configured. Check API key.`, requestId }),
         { status: 500, headers: responseHeaders() }
       );
     }
 
-    // Map model names for Lovable AI Gateway (legacy support)
-    let effectiveModel = (model as string) || "google/gemini-3-flash-preview";
-    if (LOVABLE_API_KEY) {
-      const modelMap: Record<string, string> = {
-        "gpt-3.5-turbo": "google/gemini-2.5-flash-lite",
-        "gpt-4o-mini": "google/gemini-2.5-flash",
-        "gpt-4o": "google/gemini-2.5-pro",
-        "gpt-4": "google/gemini-2.5-pro",
-      };
-      effectiveModel = modelMap[model as string] || (model as string) || "google/gemini-3-flash-preview";
-    }
-
-    // Count messages and check if multimodal (for logging, never log content)
     const messageCount = (messages as ChatMessage[]).length;
     const hasMultimodal = (messages as ChatMessage[]).some(m => Array.isArray(m.content));
 
@@ -389,28 +454,34 @@ serve(async (req) => {
       requestId,
       timestamp: new Date().toISOString(),
       action: "ai_chat_request",
-      model: effectiveModel,
+      provider,
+      model: providerConfig.effectiveModel,
       token_limit: maxTokensValidation.value,
       temperature: temperatureValidation.value,
       message_count: messageCount,
       multimodal: hasMultimodal,
     });
 
-    const response = await fetch(apiUrl, {
+    // Build request body (MiniMax has different format)
+    const body = provider === "minimax"
+      ? buildMinimaxBody(messages as ChatMessage[], providerConfig.effectiveModel, maxTokensValidation.value, temperatureValidation.value)
+      : {
+          model: providerConfig.effectiveModel,
+          messages: messages as ChatMessage[],
+          max_tokens: maxTokensValidation.value,
+          temperature: temperatureValidation.value,
+          stream: true,
+        };
+
+    const response = await fetch(providerConfig.apiUrl, {
       method: "POST",
-      headers,
-      body: JSON.stringify({
-        model: effectiveModel,
-        messages: messages as ChatMessage[],
-        max_tokens: maxTokensValidation.value,
-        temperature: temperatureValidation.value,
-        stream: true,
-      }),
+      headers: providerConfig.headers,
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error({ requestId, action: "ai_chat_gateway_error", status: response.status, error: errorText });
+      console.error({ requestId, action: "ai_chat_gateway_error", provider, status: response.status, error: errorText });
       
       const errorMessages: Record<number, string> = {
         401: "AI service authentication failed",
@@ -425,9 +496,8 @@ serve(async (req) => {
       );
     }
 
-    console.log({ requestId, action: "ai_chat_streaming_start", multimodal: hasMultimodal });
+    console.log({ requestId, action: "ai_chat_streaming_start", provider, multimodal: hasMultimodal });
 
-    // Return streaming response with X-Request-Id header
     return new Response(response.body, {
       headers: responseHeaders("text/event-stream"),
     });
