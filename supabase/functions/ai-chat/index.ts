@@ -22,7 +22,7 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   const allowedOrigin = origin && isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-ai-token",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-ai-token, x-provider-key",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
@@ -263,14 +263,14 @@ function validateTemperature(temperature: unknown): { valid: boolean; error?: st
 }
 
 // Build provider-specific request config
-function getProviderConfig(provider: string, model: string): {
+function getProviderConfig(provider: string, model: string, providerKey?: string): {
   apiUrl: string;
   apiKey: string;
   headers: Record<string, string>;
   effectiveModel: string;
 } | null {
   if (provider === "openrouter") {
-    const apiKey = Deno.env.get("VITE_AI_API_KEY");
+    const apiKey = providerKey || Deno.env.get("VITE_AI_API_KEY");
     if (!apiKey) return null;
     return {
       apiUrl: "https://openrouter.ai/api/v1/chat/completions",
@@ -286,7 +286,7 @@ function getProviderConfig(provider: string, model: string): {
   }
 
   if (provider === "minimax") {
-    const apiKey = Deno.env.get("MINIMAX_API_KEY");
+    const apiKey = providerKey || Deno.env.get("MINIMAX_API_KEY");
     if (!apiKey) return null;
     return {
       apiUrl: "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
@@ -437,8 +437,9 @@ serve(async (req) => {
       );
     }
 
-    // Get provider config
-    const providerConfig = getProviderConfig(provider, (model as string) || "");
+    // Get provider config (pass user-provided key if present)
+    const userProviderKey = req.headers.get("X-Provider-Key") || undefined;
+    const providerConfig = getProviderConfig(provider, (model as string) || "", userProviderKey);
     if (!providerConfig) {
       console.error({ requestId, action: "ai_chat_error", error: `Provider "${provider}" not configured` });
       return new Response(
