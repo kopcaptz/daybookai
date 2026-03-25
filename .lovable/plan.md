@@ -1,37 +1,33 @@
 
 
-# Сделать провайдеров рабочими: ввод API-ключей в настройках
+# Убрать серверный VITE_AI_API_KEY — использовать только пользовательские ключи
 
-## Что сейчас не работает
-Кнопки OpenRouter/MiniMax переключают провайдера в настройках, но:
-- Нет полей для ввода API-ключей пользователем
-- Ключи не передаются в Edge Function
-- MiniMax вообще не сконфигурирован на сервере
+## Что сейчас
+Секрет `VITE_AI_API_KEY` (OpenRouter ключ) хранится на сервере и используется как fallback в 4 Edge Functions:
+- `ai-chat` — fallback если нет `LOVABLE_API_KEY`
+- `ai-test` — fallback для теста
+- `ai-biography` — fallback если нет `LOVABLE_API_KEY`  
+- `ai-receipt` — fallback если нет `LOVABLE_API_KEY`
 
-## Что будет сделано
+## Что нужно сделать
 
-### 1. `src/lib/aiConfig.ts` — новые поля в настройках
-- Добавить `openrouterApiKey: string` и `minimaxApiKey: string` в `AISettings`
-- Хранятся в localStorage как и остальные настройки
+### 1. Убрать все `Deno.env.get("VITE_AI_API_KEY")` из Edge Functions
+- **`ai-chat/index.ts`**: Убрать fallback на `VITE_AI_API_KEY` в `getProviderConfig()` (строки 273, 306). OpenRouter работает только через `providerKey` из заголовка `X-Provider-Key`.
+- **`ai-test/index.ts`**: Аналогично — убрать fallback (строки 66, 112).
+- **`ai-biography/index.ts`**: Убрать `OPENROUTER_API_KEY` fallback (строки 826, 839). Добавить поддержку `X-Provider-Key` заголовка как в ai-chat.
+- **`ai-receipt/index.ts`**: То же самое (строки 363, 376). Добавить поддержку `X-Provider-Key`.
 
-### 2. `src/components/AISettingsCard.tsx` — поля ввода ключей
-- При выборе OpenRouter → показать поле ввода с type="password" + кнопка 👁
-- При выборе MiniMax → аналогично
-- Lovable → поле не нужно (серверный ключ)
-- Ссылки "Где взять ключ?" → openrouter.ai/keys / platform.minimaxi.com
-- Предупреждение если ключ пустой
+### 2. Обновить `ai-biography` и `ai-receipt` — добавить провайдер-роутинг
+Эти функции пока не поддерживают `provider` и `X-Provider-Key`. Нужно:
+- Принимать `provider` из body
+- Читать `X-Provider-Key` из заголовка
+- Использовать ту же логику маршрутизации что в `ai-chat`
 
-### 3. `src/lib/aiService.ts` — передача ключа в заголовке
-- При provider !== 'lovable' добавлять заголовок `X-Provider-Key` с ключом из настроек
-- Аналогично в `testAIConnection()`
+### 3. Удалить секрет `VITE_AI_API_KEY` с сервера
+- После деплоя — удалить через инструменты
 
-### 4. `supabase/functions/ai-chat/index.ts` — приём ключа из заголовка
-- Добавить `x-provider-key` в CORS `Access-Control-Allow-Headers`
-- В `getProviderConfig()`: если есть `X-Provider-Key` из запроса — использовать его вместо серверного секрета
-- Lovable всегда использует серверный `LOVABLE_API_KEY`
+## Результат
+- Lovable AI работает через серверный `LOVABLE_API_KEY` (без изменений)
+- OpenRouter/MiniMax работают **только** через ключи введённые пользователем в настройках
+- Нет серверных ключей третьих сторон
 
-### 5. `supabase/functions/ai-test/index.ts` — то же самое
-- Принимать `X-Provider-Key` и использовать для теста соединения
-
-### 6. `src/lib/i18n.tsx` — локализация
-- "API ключ", "Введите API ключ", "Где взять ключ?", "Ключ не указ
