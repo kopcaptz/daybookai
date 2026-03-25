@@ -121,6 +121,17 @@ export interface AISettings {
   autoTags: boolean;
   autoScreenshot: boolean;
   autoScreenshotBlurPrivate: boolean;
+  openrouterApiKey: string;
+  minimaxApiKey: string;
+}
+
+// Get the user-provided API key for the current provider
+export function getProviderApiKey(provider?: AIProvider): string {
+  const settings = loadAISettings();
+  const p = provider || settings.provider;
+  if (p === 'openrouter') return settings.openrouterApiKey || '';
+  if (p === 'minimax') return settings.minimaxApiKey || '';
+  return '';
 }
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
@@ -138,6 +149,8 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   autoTags: true,
   autoScreenshot: false,
   autoScreenshotBlurPrivate: true,
+  openrouterApiKey: '',
+  minimaxApiKey: '',
 };
 
 // Storage key
