@@ -2,6 +2,7 @@
 // All AI requests go through Edge Functions - no client-side keys needed
 
 export type AIProfile = 'economy' | 'fast' | 'balanced' | 'quality' | 'biography';
+export type AIProvider = 'lovable' | 'openrouter' | 'minimax';
 
 export interface AIProfileConfig {
   id: AIProfile;
@@ -12,7 +13,56 @@ export interface AIProfileConfig {
   temperature: number;
 }
 
-// Profile to model mapping - used when calling Edge Function
+export interface AIProviderInfo {
+  id: AIProvider;
+  name: string;
+  description: { ru: string; en: string };
+}
+
+export const AI_PROVIDERS: Record<AIProvider, AIProviderInfo> = {
+  lovable: {
+    id: 'lovable',
+    name: 'Lovable AI',
+    description: { ru: 'Встроенный AI Gateway', en: 'Built-in AI Gateway' },
+  },
+  openrouter: {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    description: { ru: 'Доступ к Claude, GPT, Gemini', en: 'Access Claude, GPT, Gemini' },
+  },
+  minimax: {
+    id: 'minimax',
+    name: 'MiniMax',
+    description: { ru: 'MiniMax модели', en: 'MiniMax models' },
+  },
+};
+
+// Provider-specific model mappings per profile
+export const PROVIDER_MODELS: Record<AIProvider, Record<AIProfile, string>> = {
+  lovable: {
+    economy: 'google/gemini-2.5-flash-lite',
+    fast: 'google/gemini-2.5-flash-lite',
+    balanced: 'google/gemini-2.5-flash',
+    quality: 'google/gemini-2.5-pro',
+    biography: 'google/gemini-2.5-pro',
+  },
+  openrouter: {
+    economy: 'google/gemini-2.5-flash-lite',
+    fast: 'google/gemini-2.5-flash',
+    balanced: 'anthropic/claude-sonnet-4',
+    quality: 'anthropic/claude-opus-4',
+    biography: 'anthropic/claude-opus-4',
+  },
+  minimax: {
+    economy: 'MiniMax-M1',
+    fast: 'MiniMax-M1',
+    balanced: 'MiniMax-M1',
+    quality: 'MiniMax-M1',
+    biography: 'MiniMax-M1',
+  },
+};
+
+// Profile to model mapping - used when calling Edge Function (default: lovable)
 export const AI_PROFILES: Record<AIProfile, AIProfileConfig> = {
   economy: {
     id: 'economy',
@@ -51,7 +101,7 @@ export const AI_PROFILES: Record<AIProfile, AIProfileConfig> = {
     name: 'БИОГРАФИЯ ДНЯ',
     description: 'Для генерации биографии',
     model: 'google/gemini-2.5-pro',
-    maxTokens: 3072, // Increased for detailed chronicles
+    maxTokens: 3072,
     temperature: 0.8,
   },
 };
@@ -114,12 +164,18 @@ export function saveAISettings(settings: AISettings): void {
   }
 }
 
-// Get model for a profile - used when making API calls
-export function getModelForProfile(profile: AIProfile): string {
-  return AI_PROFILES[profile].model;
+// Get model for a profile and provider - used when making API calls
+export function getModelForProfile(profile: AIProfile, provider?: AIProvider): string {
+  const p = provider || loadAISettings().provider || 'lovable';
+  return PROVIDER_MODELS[p][profile];
 }
 
 // Get profile config
 export function getProfileConfig(profile: AIProfile): AIProfileConfig {
   return AI_PROFILES[profile];
+}
+
+// Get current provider
+export function getCurrentProvider(): AIProvider {
+  return loadAISettings().provider || 'lovable';
 }
