@@ -249,7 +249,13 @@ export const translations = {
   'ai.startConversation': { ru: 'Начните диалог', en: 'Start a conversation', he: 'התחל שיחה', ar: 'ابدأ محادثة' },
   'ai.startConversationHint': { ru: 'Сигил анализирует ваши записи по темам и настроению, не по вложениям', en: 'Sigil analyzes your entries by themes and mood, not attachments', he: 'סיגיל מנתח את הרשומות שלך לפי נושאים ומצב רוח, לא לפי קבצים מצורפים', ar: 'سيجيل يحلل مدخلاتك حسب الموضوعات والمزاج، وليس المرفقات' },
   'ai.profile': { ru: 'Профиль', en: 'Profile', he: 'פרופיל', ar: 'ملف' },
-  
+  'ai.provider': { ru: 'Провайдер', en: 'Provider', he: 'ספק', ar: 'مزود' },
+  'ai.provider.lovable': { ru: 'Lovable AI', en: 'Lovable AI', he: 'Lovable AI', ar: 'Lovable AI' },
+  'ai.provider.openrouter': { ru: 'OpenRouter', en: 'OpenRouter', he: 'OpenRouter', ar: 'OpenRouter' },
+  'ai.provider.minimax': { ru: 'MiniMax', en: 'MiniMax', he: 'MiniMax', ar: 'MiniMax' },
+  'ai.providerNotConfigured': { ru: 'API ключ не настроен', en: 'API key not configured', he: 'מפתח API לא מוגדר', ar: 'مفتاح API غير مهيأ' },
+  'ai.currentModel': { ru: 'Модель', en: 'Model', he: 'מודל', ar: 'نموذج' },
+
   // Biography - Chronicle
   'bio.title': { ru: 'Хроника дня', en: 'Day Chronicle', he: 'כרוניקת היום', ar: 'سجل اليوم' },
   'bio.sealTitle': { ru: 'Печать', en: 'Seal', he: 'חותם', ar: 'ختم' },

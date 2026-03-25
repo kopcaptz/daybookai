@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Zap, Gauge, Wifi, WifiOff, Shield, ShieldCheck, KeyRound, Clock, Brain, Tags, Camera } from 'lucide-react';
+import { Zap, Gauge, Wifi, WifiOff, Shield, ShieldCheck, KeyRound, Clock, Brain, Tags, Camera, Globe, Server } from 'lucide-react';
 import { 
-  AIProfile, 
+  AIProfile,
+  AIProvider,
   AISettings, 
   DEFAULT_AI_SETTINGS,
+  AI_PROVIDERS,
+  PROVIDER_MODELS,
   loadAISettings, 
   saveAISettings,
 } from '@/lib/aiConfig';
@@ -26,6 +29,12 @@ const PROFILE_ICONS: Record<AIProfile, React.ElementType> = {
   balanced: Gauge,
   quality: SigilIcon,
   biography: SealIcon,
+};
+
+const PROVIDER_ICONS: Record<AIProvider, React.ElementType> = {
+  lovable: Server,
+  openrouter: Globe,
+  minimax: Zap,
 };
 
 interface AISettingsCardProps {
@@ -316,6 +325,42 @@ export function AISettingsCard({ onSettingsChange }: AISettingsCardProps) {
             </CollapsibleContent>
           )}
         </Collapsible>
+
+        {/* Provider Selection */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">{t('ai.provider' as any)}</Label>
+          <div className="grid grid-cols-3 gap-2">
+            {(['lovable', 'openrouter', 'minimax'] as AIProvider[]).map((providerId) => {
+              const ProviderIcon = PROVIDER_ICONS[providerId];
+              const isSelected = settings.provider === providerId;
+              const providerInfo = AI_PROVIDERS[providerId];
+              const lang = language === 'ru' ? 'ru' : 'en';
+              
+              return (
+                <Button
+                  key={providerId}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateSettings({ provider: providerId })}
+                  className={cn(
+                    'flex-col h-auto py-2 gap-1 profile-btn-cyber text-xs',
+                    isSelected && 'active'
+                  )}
+                  disabled={!settings.enabled || !hasValidToken}
+                >
+                  <ProviderIcon className="h-4 w-4" />
+                  <span className="font-medium">{providerInfo.name}</span>
+                  <span className="text-[10px] text-muted-foreground leading-tight">{providerInfo.description[lang]}</span>
+                </Button>
+              );
+            })}
+          </div>
+          {/* Show current model for selected profile+provider */}
+          <p className="text-xs text-muted-foreground mt-1">
+            {t('ai.currentModel' as any)}: <span className="font-mono text-cyber-glow">{PROVIDER_MODELS[settings.provider]?.[settings.chatProfile] || '—'}</span>
+          </p>
+        </div>
 
         {/* Chat Profile Selection */}
         <div className="space-y-2">
