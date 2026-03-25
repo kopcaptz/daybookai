@@ -63,7 +63,7 @@ async function validateAIToken(token: string | null, requestId: string): Promise
 // Provider test configurations
 function getTestConfig(provider: string, providerKey?: string): { apiUrl: string; apiKey: string | undefined; headers: Record<string, string>; model: string; source: string } | null {
   if (provider === "openrouter") {
-    const apiKey = providerKey || Deno.env.get("VITE_AI_API_KEY");
+    const apiKey = providerKey;
     if (!apiKey) return null;
     return {
       apiUrl: "https://openrouter.ai/api/v1/chat/completions",
@@ -80,7 +80,7 @@ function getTestConfig(provider: string, providerKey?: string): { apiUrl: string
   }
 
   if (provider === "minimax") {
-    const apiKey = providerKey || Deno.env.get("MINIMAX_API_KEY");
+    const apiKey = providerKey;
     if (!apiKey) return null;
     return {
       apiUrl: "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
@@ -94,7 +94,7 @@ function getTestConfig(provider: string, providerKey?: string): { apiUrl: string
     };
   }
 
-  // Default: lovable, with openrouter fallback
+  // Default: lovable
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");
   if (lovableKey) {
     return {
@@ -106,22 +106,6 @@ function getTestConfig(provider: string, providerKey?: string): { apiUrl: string
       },
       model: "google/gemini-3-flash-preview",
       source: "Lovable AI Gateway",
-    };
-  }
-
-  const orKey = Deno.env.get("VITE_AI_API_KEY");
-  if (orKey) {
-    return {
-      apiUrl: "https://openrouter.ai/api/v1/chat/completions",
-      apiKey: orKey,
-      headers: {
-        "Authorization": `Bearer ${orKey}`,
-        "Content-Type": "application/json",
-        "X-Title": "Daybook",
-        "HTTP-Referer": "https://daybook.local",
-      },
-      model: "google/gemini-2.5-flash-lite",
-      source: "OpenRouter (fallback)",
     };
   }
 
