@@ -255,7 +255,7 @@ serve(async (req) => {
       );
     }
 
-    const { imageBase64, language, timezone, currencyHint, model } = requestBody as Record<string, unknown>;
+    const { imageBase64, language, timezone, currencyHint, model, provider } = requestBody as Record<string, unknown>;
 
     // Validate imageBase64
     if (typeof imageBase64 !== "string" || !imageBase64.startsWith("data:image/")) {
@@ -294,30 +294,64 @@ serve(async (req) => {
       );
     }
 
-    // Get API key — Lovable Gateway only (user keys for other providers via ai-chat)
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-
-    let apiUrl: string;
-    let apiKey: string;
-    let headers: Record<string, string>;
-
-    if (LOVABLE_API_KEY) {
-      apiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
-      apiKey = LOVABLE_API_KEY;
-      headers = {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+    // Build provider-specific request config
+    function getReceiptProviderConfig(providerName: string, modelName: string, providerKey?: string): {
+      apiUrl: string;
+      apiKey: string;
+      headers: Record<string, string>;
+      effectiveModel: string;
+    } | null {
+      if (providerName === "openrouter") {
+        if (!providerKey) return null;
+        return {
+          apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+          apiKey: providerKey,
+          headers: {
+            "Authorization": `Bearer ${providerKey}`,
+            "Content-Type": "application/json",
+            "X-Title": "Daybook",
+            "HTTP-Referer": "https://daybook.local",
+          },
+          effectiveModel: modelName,
+        };
+      }
+      if (providerName === "minimax") {
+        if (!providerKey) return null;
+        return {
+          apiUrl: "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
+          apiKey: providerKey,
+          headers: {
+            "Authorization": `Bearer ${providerKey}`,
+            "Content-Type": "application/json",
+          },
+          effectiveModel: modelName,
+        };
+      }
+      // Default: lovable
+      const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+      if (!lovableKey) return null;
+      return {
+        apiUrl: "https://ai.gateway.lovable.dev/v1/chat/completions",
+        apiKey: lovableKey,
+        headers: {
+          "Authorization": `Bearer ${lovableKey}`,
+          "Content-Type": "application/json",
+        },
+        effectiveModel: modelName || "google/gemini-2.5-pro",
       };
-    } else {
-      console.error({ requestId, action: "ai_receipt_error", error: "AI service not configured" });
+    }
+
+    const userProviderKey = req.headers.get("X-Provider-Key") || undefined;
+    const providerConfig = getReceiptProviderConfig((provider as string) || "lovable", (model as string) || "google/gemini-2.5-pro", userProviderKey);
+    if (!providerConfig) {
+      console.error({ requestId, action: "ai_receipt_error", error: `Provider "${provider || "lovable"}" not configured` });
       return new Response(
-        JSON.stringify({ error: "service_error", hint: "AI service not configured", requestId }),
-        { status: 500, headers: responseHeaders() }
+        JSON.stringify({ error: "service_error", hint: `Provider "${provider || "lovable"}" not configured. Please provide an API key.`, requestId }),
+        { status: 400, headers: responseHeaders() }
       );
     }
 
-    // Use gemini-2.5-pro for best multimodal performance
-    const effectiveModel = (model as string) || "google/gemini-2.5-pro";
+    const { apiUrl, headers: providerHeaders, effectiveModel } = providerConfig;
 
     // Build prompt
     const systemPrompt = buildReceiptPrompt(language as "ru" | "en", currencyHint as string | undefined);

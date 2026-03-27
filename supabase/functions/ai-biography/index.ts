@@ -776,7 +776,7 @@ serve(async (req) => {
       );
     }
 
-    const { model, items, language, date, maxTokens, temperature } = requestBody as BiographyRequest;
+    const { model, provider, items, language, date, maxTokens, temperature } = requestBody as BiographyRequest;
 
     // Validate items
     const itemsValidation = validateItems(items);
