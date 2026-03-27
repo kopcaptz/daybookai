@@ -19,8 +19,6 @@ import { ChatImageConsent } from '@/components/chat/ChatImageConsent';
 import { DiaryImagePicker } from '@/components/chat/DiaryImagePicker';
 import { AutoScreenshotPreview } from '@/components/chat/AutoScreenshotPreview';
 import { isAutoScreenshotMessage, AutoScreenshotPayload } from '@/lib/screenshotService';
-import { useAIAccess } from '@/hooks/useAIAccess';
-import { AIPinDialog } from '@/components/AIPinDialog';
 
 interface ConfirmedImage {
   blob: Blob;
@@ -59,8 +57,7 @@ function ChatContent() {
   // Auto-screenshot state
   const [pendingAutoScreenshot, setPendingAutoScreenshot] = useState<AutoScreenshotPayload | null>(null);
   
-  // AI Access (PIN gate)
-  const aiAccess = useAIAccess(language);
+  
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -376,55 +373,6 @@ function ChatContent() {
     }
   };
 
-  // Show PIN gate if AI enabled but no valid token
-  if (!aiAccess.hasValidToken) {
-    return (
-      <div className="flex min-h-screen flex-col pb-24 cyber-noise rune-grid">
-        <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <SigilIcon className="h-6 w-6 text-cyber-sigil" />
-            </div>
-            <div>
-              <h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
-                {t('app.name')}
-              </h1>
-              <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
-                {t('app.subtitle')}
-              </p>
-            </div>
-          </div>
-        </header>
-
-        <main className="flex flex-1 items-center justify-center px-4">
-          <div className="flex flex-col items-center text-center">
-            <div className="mb-6 p-8 panel-glass relative">
-              <KeyRound className="h-12 w-12 text-amber-500" />
-              <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-cyber-sigil/50 animate-sigil-pulse" />
-            </div>
-            
-            <h3 className="mb-2 text-xl font-serif font-medium">{t('aiPin.required')}</h3>
-            <p className="mb-6 max-w-xs text-sm text-muted-foreground">
-              {t('aiPin.requiredHint')}
-            </p>
-
-            <Button onClick={aiAccess.openPinDialog} className="gap-2 btn-cyber">
-              <KeyRound className="h-4 w-4" />
-              {t('aiPin.enter')}
-            </Button>
-          </div>
-        </main>
-        
-        <AIPinDialog
-          open={aiAccess.showPinDialog}
-          onOpenChange={aiAccess.closePinDialog}
-          onVerify={aiAccess.verifyPin}
-          isVerifying={aiAccess.isVerifying}
-          language={language}
-        />
-      </div>
-    );
-  }
 
   if (!settings.enabled) {
     return (

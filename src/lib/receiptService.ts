@@ -1,13 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { db, Receipt, ReceiptItem, addAttachment } from "./db";
 import { compressImage } from "./mediaUtils";
-import { getAIToken, isAITokenValid } from "./aiTokenService";
-import { 
-  createAIAuthError, 
-  requestPinDialog,
-  getErrorMessage,
-  isAuthError,
-} from "./aiAuthRecovery";
+import { loadAISettings } from "./aiConfig";
+import { getProviderKeyHeader } from "./aiUtils";
 import { Language, getBaseLanguage } from "./i18n";
 
 // Receipt scanning limits (optimized for mobile + OCR)
@@ -205,23 +200,9 @@ export async function scanReceipt(
   const model = SCAN_MODELS[mode];
   const baseLang = getBaseLanguage(language);
   
-  // Check token before making request (only on first attempt)
-  if (!_isRetry && !isAITokenValid()) {
-    // Try to get a PIN first
-    try {
-      await requestPinDialog(requestId, "ai_token_required");
-    } catch {
-      return {
-        error: "service_error",
-        hint: getErrorMessage("pin_cancelled", baseLang),
-        requestId,
-      };
-    }
-  }
-  
-  // Get token for header
-  const tokenData = getAIToken();
-  const aiTokenHeader = tokenData?.token ? { "X-AI-Token": tokenData.token } : {};
+  // Get provider key header
+  const settings = loadAISettings();
+  const providerHeaders = getProviderKeyHeader(settings);
 
   const { data, error } = await supabase.functions.invoke<ReceiptScanResponse>("ai-receipt", {
     body: {
@@ -233,33 +214,13 @@ export async function scanReceipt(
     },
     headers: {
       "X-Request-Id": requestId,
-      ...aiTokenHeader,
+      ...providerHeaders,
     },
   });
 
   // Handle 401 with auto-retry (supabase.functions.invoke returns error object)
   if (error) {
     console.error("[Receipt] Scan error:", error);
-    
-    // Check if this is a 401 auth error that can be retried
-    const errorMessage = error.message || "";
-    const isAuthErrorCode = isAuthError(errorMessage) || 
-      errorMessage.includes("401") || 
-      errorMessage.includes("ai_token");
-    
-    if (isAuthErrorCode && !_isRetry) {
-      try {
-        await requestPinDialog(requestId, "ai_token_required");
-        // Retry once after successful PIN
-        return scanReceipt(imageBase64, language, options, true);
-      } catch {
-        return {
-          error: "service_error",
-          hint: getErrorMessage("pin_cancelled", baseLang),
-          requestId,
-        };
-      }
-    }
     
     return {
       error: "service_error",
@@ -276,20 +237,6 @@ export async function scanReceipt(
     };
   }
 
-  // Check if the response itself is a 401 error
-  if (isReceiptError(data) && isAuthError(data.error) && !_isRetry) {
-    try {
-      await requestPinDialog(data.requestId, data.error);
-      // Retry once after successful PIN
-      return scanReceipt(imageBase64, language, options, true);
-    } catch {
-      return {
-        error: "service_error",
-        hint: getErrorMessage("pin_cancelled", baseLang),
-        requestId: data.requestId,
-      };
-    }
-  }
 
   // Attach model info for diagnostics
   return { ...data, model };

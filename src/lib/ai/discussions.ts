@@ -1,7 +1,7 @@
 import { ContextPackResult, EvidenceRef } from '@/lib/librarian/contextPack';
 import { DiscussionMessage, DiscussionMode } from '@/lib/db';
-import { getAIToken, isAITokenValid } from '@/lib/aiTokenService';
-import { isAuthError, requestPinDialog, AIAuthRetryError } from '@/lib/aiAuthRecovery';
+import { loadAISettings } from '@/lib/aiConfig';
+import { getProviderKeyHeader } from '@/lib/aiUtils';
 import { logger } from '@/lib/logger';
 
 const AI_CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
@@ -58,13 +58,10 @@ export interface DiscussionAIResponse {
   questions?: string[];
 }
 
-// Get AI token header (returns empty object if no valid token)
-function getAITokenHeader(): Record<string, string> {
-  const tokenData = getAIToken();
-  if (tokenData?.token) {
-    return { 'X-AI-Token': tokenData.token };
-  }
-  return {};
+// Get provider key header
+function getDiscussionHeaders(): Record<string, string> {
+  const settings = loadAISettings();
+  return getProviderKeyHeader(settings);
 }
 
 const MODE_INSTRUCTIONS: Record<DiscussionMode, { ru: string; en: string }> = {
@@ -350,18 +347,7 @@ export async function sendDiscussionMessage(
 ): Promise<DiscussionAIResponse> {
   const { userText, mode, contextPack, history, language } = request;
   
-  // Check if AI token is valid
-  if (!isAITokenValid()) {
-    if (retryWithPin) {
-      try {
-        await requestPinDialog();
-        return sendDiscussionMessage(request, false);
-      } catch {
-        throw new AIAuthRetryError('AI authorization cancelled');
-      }
-    }
-    throw new AIAuthRetryError('AI token required');
-  }
+  
   
   const systemPrompt = buildSystemPrompt(contextPack.contextText, mode, language);
   const historyMessages = buildHistoryMessages(history);
@@ -377,7 +363,7 @@ export async function sendDiscussionMessage(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...getAITokenHeader(),
+        ...getDiscussionHeaders(),
       },
       body: JSON.stringify({
         messages,
@@ -390,17 +376,8 @@ export async function sendDiscussionMessage(
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       
-      // Check for auth errors
-      if (isAuthError(errorData.error) || response.status === 401) {
-        if (retryWithPin) {
-          try {
-            await requestPinDialog();
-            return sendDiscussionMessage(request, false);
-          } catch {
-            throw new AIAuthRetryError('AI authorization cancelled');
-          }
-        }
-        throw new AIAuthRetryError(errorData.error || 'AI authorization failed');
+      if (response.status === 401) {
+        throw new Error('AI authorization failed - check your API key');
       }
       
       if (response.status === 429) {
