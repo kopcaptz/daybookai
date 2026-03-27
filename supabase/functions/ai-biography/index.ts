@@ -53,11 +53,71 @@ interface BiographyItem {
 
 interface BiographyRequest {
   model?: string;
+  provider?: string;
   items: BiographyItem[];
   language: "ru" | "en";
   date: string;         // YYYY-MM-DD for context
   maxTokens?: number;
   temperature?: number;
+}
+
+// Build provider-specific request config
+function getProviderConfig(provider: string, model: string, providerKey?: string): {
+  apiUrl: string;
+  apiKey: string;
+  headers: Record<string, string>;
+  effectiveModel: string;
+} | null {
+  if (provider === "openrouter") {
+    const apiKey = providerKey;
+    if (!apiKey) return null;
+    return {
+      apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+      apiKey,
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "X-Title": "Daybook",
+        "HTTP-Referer": "https://daybook.local",
+      },
+      effectiveModel: model,
+    };
+  }
+
+  if (provider === "minimax") {
+    const apiKey = providerKey;
+    if (!apiKey) return null;
+    return {
+      apiUrl: "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
+      apiKey,
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      effectiveModel: model,
+    };
+  }
+
+  // Default: lovable
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) return null;
+
+  const modelMap: Record<string, string> = {
+    "gpt-3.5-turbo": "google/gemini-2.5-flash-lite",
+    "gpt-4o-mini": "google/gemini-2.5-flash",
+    "gpt-4o": "google/gemini-2.5-pro",
+    "gpt-4": "google/gemini-2.5-pro",
+  };
+
+  return {
+    apiUrl: "https://ai.gateway.lovable.dev/v1/chat/completions",
+    apiKey,
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    effectiveModel: modelMap[model] || model || "google/gemini-2.5-pro",
+  };
 }
 
 // Output types
@@ -146,11 +206,7 @@ function validateModel(model: unknown): { valid: boolean; error?: string } {
   if (typeof model !== "string") {
     return { valid: false, error: "model must be a string" };
   }
-  // Allow both new google/ models and legacy models (will be mapped)
-  const allAllowed = [...ALLOWED_MODELS, "gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o", "gpt-4"];
-  if (!allAllowed.includes(model)) {
-    return { valid: false, error: `model must be one of: ${ALLOWED_MODELS.join(", ")}` };
-  }
+  // Accept any model string — third-party providers have different model names
   return { valid: true };
 }
 
@@ -716,7 +772,7 @@ serve(async (req) => {
       );
     }
 
-    const { model, items, language, date, maxTokens, temperature } = requestBody as BiographyRequest;
+    const { model, provider, items, language, date, maxTokens, temperature } = requestBody as BiographyRequest;
 
     // Validate items
     const itemsValidation = validateItems(items);
@@ -757,39 +813,21 @@ serve(async (req) => {
       );
     }
 
-    // Get API key — Lovable Gateway only (user keys for other providers via ai-chat)
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-
-    let apiUrl: string;
-    let apiKey: string;
-    let headers: Record<string, string>;
-
-    if (LOVABLE_API_KEY) {
-      apiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
-      apiKey = LOVABLE_API_KEY;
-      headers = {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      };
-    } else {
-      console.error({ requestId, action: "ai_biography_error", error: "AI service not configured" });
+    // Get provider config (pass user-provided key if present)
+    const userProviderKey = req.headers.get("X-Provider-Key") || undefined;
+    const providerConfig = getProviderConfig(provider || "lovable", model || "", userProviderKey);
+    if (!providerConfig) {
+      console.error({ requestId, action: "ai_biography_error", error: `Provider "${provider || "lovable"}" not configured` });
       return new Response(
-        JSON.stringify({ error: "AI service not configured", requestId }),
-        { status: 500, headers: responseHeaders() }
+        JSON.stringify({ error: `Provider "${provider || "lovable"}" not configured. Please provide an API key.`, requestId }),
+        { status: 400, headers: responseHeaders() }
       );
     }
 
-    // Map model for Lovable AI Gateway (legacy support)
-    let effectiveModel = model || "google/gemini-2.5-pro";
-    if (LOVABLE_API_KEY) {
-      const modelMap: Record<string, string> = {
-        "gpt-3.5-turbo": "google/gemini-2.5-flash-lite",
-        "gpt-4o-mini": "google/gemini-2.5-flash",
-        "gpt-4o": "google/gemini-2.5-pro",
-        "gpt-4": "google/gemini-2.5-pro",
-      };
-      effectiveModel = modelMap[model || ""] || model || "google/gemini-2.5-pro";
-    }
+    const { apiUrl, headers: providerHeaders, effectiveModel: finalModel } = providerConfig;
+
+    // Use provider model or fallback
+    let effectiveModel = finalModel || model || "google/gemini-2.5-pro";
 
     // Build prompt
     const systemPrompt = buildBiographyPrompt(items, date, language);
@@ -820,7 +858,7 @@ serve(async (req) => {
 
       return await fetch(apiUrl, {
         method: "POST",
-        headers,
+        headers: providerHeaders,
         body: JSON.stringify({
           model: effectiveModel,
           messages: [

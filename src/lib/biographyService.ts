@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { db, StoredBiography, DiaryEntry, loadBioSettings, saveBioSettings } from './db';
-import { loadAISettings, AI_PROFILES, AIProfile } from './aiConfig';
+import { loadAISettings, AI_PROFILES, AIProfile, PROVIDER_MODELS } from './aiConfig';
 import { toast } from 'sonner';
 import type { Language } from './i18n';
 import { getAITokenHeader, parseAIError } from './aiUtils';
@@ -139,6 +139,8 @@ export async function generateBiography(
   }
   
   const profileConfig = AI_PROFILES[profile];
+  const settings = loadAISettings();
+  const model = PROVIDER_MODELS[settings.provider][profile];
   
   const response = await fetch(AI_BIOGRAPHY_URL, {
     method: 'POST',
@@ -147,7 +149,8 @@ export async function generateBiography(
       ...getAITokenHeader(),
     },
     body: JSON.stringify({
-      model: profileConfig.model,
+      model,
+      provider: settings.provider,
       items: summaries,
       language,
       date,

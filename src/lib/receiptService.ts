@@ -211,6 +211,7 @@ export async function scanReceipt(
       timezone: options?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
       currencyHint: options?.currencyHint,
       model,
+      provider: settings.provider,
     },
     headers: {
       "X-Request-Id": requestId,
