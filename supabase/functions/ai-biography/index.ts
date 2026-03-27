@@ -206,11 +206,7 @@ function validateModel(model: unknown): { valid: boolean; error?: string } {
   if (typeof model !== "string") {
     return { valid: false, error: "model must be a string" };
   }
-  // Allow both new google/ models and legacy models (will be mapped)
-  const allAllowed = [...ALLOWED_MODELS, "gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o", "gpt-4"];
-  if (!allAllowed.includes(model)) {
-    return { valid: false, error: `model must be one of: ${ALLOWED_MODELS.join(", ")}` };
-  }
+  // Accept any model string — third-party providers have different model names
   return { valid: true };
 }
 
