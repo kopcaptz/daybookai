@@ -10,7 +10,6 @@
 
 import { db, updateEntry, type DiaryEntry, type AnalysisQueueItem } from '@/lib/db';
 import { supabase } from '@/integrations/supabase/client';
-import { isAITokenValid } from '@/lib/aiTokenService';
 import { loadAISettings } from '@/lib/aiConfig';
 import { getAITokenHeader } from '@/lib/aiUtils';
 
@@ -18,24 +17,19 @@ interface AnalysisResult {
   mood: number;
   confidence: number;
   semanticTags: string[];
-  titleSuggestion?: string;  // AI-generated title in cyber-mystic style
+  titleSuggestion?: string;
   requestId: string;
 }
 
-/**
- * Analyze entry via Edge Function
- */
 async function callAnalyzeEdgeFunction(
   text: string,
   tags: string[],
   language: string
 ): Promise<AnalysisResult> {
-  // Check strictPrivacy: if enabled, send generalized data instead of raw text
   const aiSettings = loadAISettings();
   let bodyText = text;
   
   if (aiSettings.strictPrivacy) {
-    // In strict privacy mode, extract only generalized themes instead of raw text
     bodyText = extractGeneralizedThemes(text, language);
   }
 
@@ -55,15 +49,10 @@ async function callAnalyzeEdgeFunction(
   return data as AnalysisResult;
 }
 
-/**
- * Extract generalized themes from text for strict privacy mode.
- * Instead of sending raw text, we send a summary of detected themes/emotions.
- */
 function extractGeneralizedThemes(text: string, language: string): string {
   const themes: string[] = [];
   const lowerText = text.toLowerCase();
   
-  // Detect common themes (works for both ru/en)
   const themePatterns: Record<string, RegExp[]> = {
     'work': [/работ[аеы]/i, /офис/i, /проект/i, /коллег/i, /work/i, /office/i, /project/i, /colleague/i],
     'family': [/семь[яиюе]/i, /родител/i, /мам[аеу]/i, /пап[аеу]/i, /family/i, /parent/i, /mom/i, /dad/i],
@@ -83,7 +72,6 @@ function extractGeneralizedThemes(text: string, language: string): string {
     }
   }
 
-  // Build a generalized summary
   const wordCount = text.split(/\s+/).length;
   const isLong = wordCount > 50;
   
@@ -98,16 +86,12 @@ function extractGeneralizedThemes(text: string, language: string): string {
 // Queue Management Functions
 // ============================================================
 
-/**
- * Add entry to analysis queue (for retry later)
- */
 export async function addToAnalysisQueue(
   entryId: number,
   userSetMood: boolean,
   language: string
 ): Promise<void> {
   try {
-    // Check if already queued
     const existing = await db.analysisQueue.where('entryId').equals(entryId).first();
     if (existing) {
       console.log(`[AnalysisQueue] Entry ${entryId} already in queue`);
@@ -129,30 +113,18 @@ export async function addToAnalysisQueue(
   }
 }
 
-/**
- * Process pending items in queue
- * Called on app startup, online event, and periodically
- */
 export async function processAnalysisQueue(): Promise<void> {
-  // Skip if offline
   if (!navigator.onLine) {
     console.log('[AnalysisQueue] Offline, skipping');
     return;
   }
 
-  // Skip if AI not configured
   const aiSettings = loadAISettings();
   if (!aiSettings.enabled) {
     console.log('[AnalysisQueue] AI disabled, skipping');
     return;
   }
 
-  if (!isAITokenValid()) {
-    console.log('[AnalysisQueue] AI token not valid, skipping');
-    return;
-  }
-
-  // Get pending items (oldest first, max 5)
   const pending = await db.analysisQueue
     .where('status')
     .equals('pending')
@@ -165,51 +137,40 @@ export async function processAnalysisQueue(): Promise<void> {
 
   for (const item of batch) {
     await processQueueItem(item);
-    // Rate limiting delay between requests
     await new Promise(r => setTimeout(r, 500));
   }
 }
 
-/**
- * Process a single queue item
- */
 async function processQueueItem(item: AnalysisQueueItem): Promise<void> {
   if (!item.id) return;
 
   try {
-    // Mark as processing
     await db.analysisQueue.update(item.id, {
       status: 'processing',
       lastAttempt: Date.now(),
     });
 
-    // Get entry
     const entry = await db.entries.get(item.entryId);
     if (!entry) {
-      // Entry deleted — remove from queue
       await db.analysisQueue.delete(item.id);
       console.log(`[AnalysisQueue] Entry ${item.entryId} deleted, removed from queue`);
       return;
     }
 
     if (entry.isPrivate || entry.aiAllowed === false) {
-      // Entry now private — remove from queue
       await db.analysisQueue.delete(item.id);
       console.log(`[AnalysisQueue] Entry ${item.entryId} is private, removed from queue`);
       return;
     }
 
-    // Already analyzed? Remove from queue
     if (entry.aiAnalyzedAt) {
       await db.analysisQueue.delete(item.id);
       console.log(`[AnalysisQueue] Entry ${item.entryId} already analyzed, removed from queue`);
       return;
     }
 
-    // Call AI
     const result = await callAnalyzeEdgeFunction(entry.text, entry.tags, item.language);
 
-    // Update entry
     const updates: Partial<DiaryEntry> = {
       semanticTags: result.semanticTags,
       aiAnalyzedAt: Date.now(),
@@ -220,7 +181,6 @@ async function processQueueItem(item: AnalysisQueueItem): Promise<void> {
       updates.moodSource = 'ai';
     }
 
-    // Add AI title if generated and entry doesn't have one
     if (result.titleSuggestion && !entry.title) {
       updates.title = result.titleSuggestion;
       updates.titleSource = 'ai';
@@ -228,7 +188,6 @@ async function processQueueItem(item: AnalysisQueueItem): Promise<void> {
 
     await updateEntry(item.entryId, updates);
 
-    // Success — remove from queue
     await db.analysisQueue.delete(item.id);
     console.log(`[AnalysisQueue] Entry ${item.entryId} analyzed successfully`);
 
@@ -237,7 +196,6 @@ async function processQueueItem(item: AnalysisQueueItem): Promise<void> {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     if (attempts >= 3) {
-      // Max retries — mark as failed
       await db.analysisQueue.update(item.id, {
         status: 'failed',
         attempts,
@@ -245,7 +203,6 @@ async function processQueueItem(item: AnalysisQueueItem): Promise<void> {
       });
       console.warn(`[AnalysisQueue] Entry ${item.entryId} failed after ${attempts} attempts`);
     } else {
-      // Will retry later
       await db.analysisQueue.update(item.id, {
         status: 'pending',
         attempts,
@@ -256,9 +213,6 @@ async function processQueueItem(item: AnalysisQueueItem): Promise<void> {
   }
 }
 
-/**
- * Get queue stats (for debugging/settings)
- */
 export async function getQueueStats(): Promise<{
   pending: number;
   failed: number;
@@ -270,9 +224,6 @@ export async function getQueueStats(): Promise<{
   return { pending, failed };
 }
 
-/**
- * Retry all failed items (reset to pending)
- */
 export async function retryFailedAnalysis(): Promise<number> {
   const failed = await db.analysisQueue.where('status').equals('failed').toArray();
 
@@ -286,7 +237,6 @@ export async function retryFailedAnalysis(): Promise<number> {
     }
   }
 
-  // Trigger immediate processing
   setTimeout(() => processAnalysisQueue(), 100);
 
   return failed.length;
@@ -296,15 +246,6 @@ export async function retryFailedAnalysis(): Promise<number> {
 // Main Analysis Functions
 // ============================================================
 
-/**
- * Analyze entry in background after saving
- * 
- * @param entryId - ID of saved entry
- * @param text - Entry text
- * @param tags - User-visible tags
- * @param userSetMood - True if user explicitly chose a mood (not default)
- * @param language - User language for prompts
- */
 export async function analyzeEntryInBackground(
   entryId: number,
   text: string,
@@ -312,22 +253,14 @@ export async function analyzeEntryInBackground(
   userSetMood: boolean,
   language: string
 ): Promise<void> {
-  // Early exit for empty or very short entries
   if (!text || text.trim().length < 10) {
     console.log('[EntryAnalysis] Skipping: text too short');
     return;
   }
 
-  // Check if AI is enabled
   const aiSettings = loadAISettings();
   if (!aiSettings.enabled) {
     console.log('[EntryAnalysis] Skipping: AI is disabled in settings');
-    return;
-  }
-
-  // Check if AI token is valid (without showing toast)
-  if (!isAITokenValid()) {
-    console.log('[EntryAnalysis] Skipping: AI token not valid');
     return;
   }
 
@@ -338,49 +271,37 @@ export async function analyzeEntryInBackground(
 
     console.log(`[EntryAnalysis] Result: mood=${result.mood}, confidence=${result.confidence}, semanticTags=[${result.semanticTags.join(', ')}], title=${result.titleSuggestion || 'none'}`);
 
-    // Get current entry to check if title already exists
     const currentEntry = await db.entries.get(entryId);
 
-    // Build updates object
     const updates: Partial<DiaryEntry> = {
       semanticTags: result.semanticTags,
       aiAnalyzedAt: Date.now(),
     };
 
-    // Only apply AI mood if user didn't explicitly set one
     if (!userSetMood) {
       updates.mood = result.mood;
       updates.moodSource = 'ai';
       console.log(`[EntryAnalysis] Applying AI mood: ${result.mood}`);
     } else {
-      // Mark that user set the mood
       updates.moodSource = 'user';
     }
 
-    // Add AI title if generated and entry doesn't have one
     if (result.titleSuggestion && (!currentEntry?.title)) {
       updates.title = result.titleSuggestion;
       updates.titleSource = 'ai';
       console.log(`[EntryAnalysis] Applying AI title: ${result.titleSuggestion}`);
     }
 
-    // Update entry in database
     await updateEntry(entryId, updates);
 
     console.log(`[EntryAnalysis] Entry ${entryId} updated successfully`);
   } catch (error) {
-    // Log error and add to queue for retry
     console.warn('[EntryAnalysis] Failed:', error instanceof Error ? error.message : error);
     
-    // Add to queue for retry when online
     await addToAnalysisQueue(entryId, userSetMood, language);
   }
 }
 
-/**
- * Re-analyze an existing entry (e.g., after edit)
- * Forces re-analysis even if already analyzed
- */
 export async function reanalyzeEntry(
   entryId: number,
   language: string
@@ -392,13 +313,11 @@ export async function reanalyzeEntry(
       return false;
     }
 
-    // Skip private entries
     if (entry.isPrivate || entry.aiAllowed === false) {
       console.log('[EntryAnalysis] Skipping: entry is private or AI disabled');
       return false;
     }
 
-    // User set mood if they changed it from default (3) OR it's marked as user-set
     const userSetMood = entry.moodSource === 'user' || (entry.mood !== 3 && !entry.moodSource);
 
     await analyzeEntryInBackground(
@@ -416,18 +335,9 @@ export async function reanalyzeEntry(
   }
 }
 
-/**
- * Check if entry needs analysis
- */
 export function needsAnalysis(entry: DiaryEntry): boolean {
-  // Already analyzed
   if (entry.aiAnalyzedAt) return false;
-  
-  // Private or AI disabled
   if (entry.isPrivate || entry.aiAllowed === false) return false;
-  
-  // Too short
   if (!entry.text || entry.text.trim().length < 10) return false;
-  
   return true;
 }
