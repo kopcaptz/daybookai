@@ -116,7 +116,7 @@ export function AISettingsCard({ onSettingsChange }: AISettingsCardProps) {
             id="ai-enabled"
             checked={settings.enabled}
             onCheckedChange={(checked) => updateSettings({ enabled: checked })}
-            disabled={!hasValidToken}
+            
           />
         </div>
 
@@ -295,7 +295,7 @@ export function AISettingsCard({ onSettingsChange }: AISettingsCardProps) {
                     'flex-col h-auto py-2 gap-1 profile-btn-cyber text-xs',
                     isSelected && 'active'
                   )}
-                  disabled={!settings.enabled || !hasValidToken}
+                  disabled={!settings.enabled}
                 >
                   <ProviderIcon className="h-4 w-4" />
                   <span className="font-medium">{providerInfo.name}</span>
@@ -382,7 +382,7 @@ export function AISettingsCard({ onSettingsChange }: AISettingsCardProps) {
                     'justify-start gap-2 profile-btn-cyber',
                     isSelected && 'active'
                   )}
-                  disabled={!settings.enabled || !hasValidToken}
+                  disabled={!settings.enabled}
                 >
                   <Icon className="h-4 w-4" />
                   {getProfileName(profileId)}
@@ -411,7 +411,7 @@ export function AISettingsCard({ onSettingsChange }: AISettingsCardProps) {
                     'justify-start gap-2 text-xs profile-btn-cyber',
                     isSelected && 'active'
                   )}
-                  disabled={!settings.enabled || !hasValidToken}
+                  disabled={!settings.enabled}
                 >
                   <Icon className="h-3 w-3" />
                   <span className="truncate">{getProfileName(profileId)}</span>
@@ -453,11 +453,6 @@ export function AISettingsCard({ onSettingsChange }: AISettingsCardProps) {
       </CardContent>
       
       {/* PIN Dialog */}
-      <AIPinDialog
-        open={showPinDialog}
-        onOpenChange={closePinDialog}
-        onVerify={verifyPin}
-        isVerifying={isVerifying}
         language={language}
       />
     </Card>
