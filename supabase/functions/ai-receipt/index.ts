@@ -374,7 +374,7 @@ serve(async (req) => {
     async function makeAIRequest(attempt: number): Promise<Response> {
       return await fetch(apiUrl, {
         method: "POST",
-        headers,
+        headers: providerHeaders,
         body: JSON.stringify({
           model: effectiveModel,
           messages: [
