@@ -1,33 +1,28 @@
 
 
-# Убрать серверный VITE_AI_API_KEY — использовать только пользовательские ключи
+# Пропущенная функция: `biographyService` не передаёт `provider` в Edge Function
 
-## Что сейчас
-Секрет `VITE_AI_API_KEY` (OpenRouter ключ) хранится на сервере и используется как fallback в 4 Edge Functions:
-- `ai-chat` — fallback если нет `LOVABLE_API_KEY`
-- `ai-test` — fallback для теста
-- `ai-biography` — fallback если нет `LOVABLE_API_KEY`  
-- `ai-receipt` — fallback если нет `LOVABLE_API_KEY`
+## Проблема
 
-## Что нужно сделать
+После добавления мульти-провайдерной системы, **`biographyService.ts`** отправляет `X-Provider-Key` (через `getAITokenHeader()`), но **не передаёт `provider`** в теле запроса. Edge Function `ai-biography` не знает, какой провайдер выбран, и всегда использует Lovable AI.
 
-### 1. Убрать все `Deno.env.get("VITE_AI_API_KEY")` из Edge Functions
-- **`ai-chat/index.ts`**: Убрать fallback на `VITE_AI_API_KEY` в `getProviderConfig()` (строки 273, 306). OpenRouter работает только через `providerKey` из заголовка `X-Provider-Key`.
-- **`ai-test/index.ts`**: Аналогично — убрать fallback (строки 66, 112).
-- **`ai-biography/index.ts`**: Убрать `OPENROUTER_API_KEY` fallback (строки 826, 839). Добавить поддержку `X-Provider-Key` заголовка как в ai-chat.
-- **`ai-receipt/index.ts`**: То же самое (строки 363, 376). Добавить поддержку `X-Provider-Key`.
+Аналогичная ситуация с `receiptService.ts` — там тоже нет `provider` в body (хотя `X-Provider-Key` передаётся).
 
-### 2. Обновить `ai-biography` и `ai-receipt` — добавить провайдер-роутинг
-Эти функции пока не поддерживают `provider` и `X-Provider-Key`. Нужно:
-- Принимать `provider` из body
-- Читать `X-Provider-Key` из заголовка
-- Использовать ту же логику маршрутизации что в `ai-chat`
+Также `biographyService` отправляет модель из `profileConfig.model` (дефолтную Lovable-модель), а не из `PROVIDER_MODELS[settings.provider][profile]`.
 
-### 3. Удалить секрет `VITE_AI_API_KEY` с сервера
-- После деплоя — удалить через инструменты
+## Что нужно исправить
+
+### 1. `src/lib/biographyService.ts`
+- Добавить `loadAISettings()` и `PROVIDER_MODELS` в вызов `generateBiography()`
+- Отправлять `provider: settings.provider` в body
+- Использовать `PROVIDER_MODELS[settings.provider][profile]` вместо `profileConfig.model`
+
+### 2. `src/lib/receiptService.ts`
+- Добавить `provider: settings.provider` в body запроса к `ai-receipt`
+
+### 3. Edge Functions `ai-biography` и `ai-receipt`
+- Убедиться что они читают `provider` из body и используют `X-Provider-Key` для маршрутизации (это было в плане ранее — нужно проверить текущее состояние)
 
 ## Результат
-- Lovable AI работает через серверный `LOVABLE_API_KEY` (без изменений)
-- OpenRouter/MiniMax работают **только** через ключи введённые пользователем в настройках
-- Нет серверных ключей третьих сторон
+Когда пользователь выбирает OpenRouter в настройках и вводит ключ — биография и чеки тоже будут генерироваться через OpenRouter, а не только чат.
 
