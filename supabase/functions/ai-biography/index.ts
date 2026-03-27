@@ -695,16 +695,6 @@ serve(async (req) => {
     );
   }
 
-  // Validate AI token
-  const aiToken = req.headers.get("X-AI-Token");
-  const tokenValidation = await validateAIToken(aiToken, requestId);
-  if (!tokenValidation.valid) {
-    console.log({ requestId, action: "ai_biography_unauthorized", error: tokenValidation.error });
-    return new Response(
-      JSON.stringify({ error: tokenValidation.error, requestId }),
-      { status: 401, headers: responseHeaders() }
-    );
-  }
 
   try {
     let requestBody: unknown;

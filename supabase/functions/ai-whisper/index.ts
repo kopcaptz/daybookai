@@ -55,16 +55,6 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // Validate AI token
-  const aiToken = req.headers.get("X-AI-Token");
-  const tokenValidation = await validateAIToken(aiToken, requestId);
-  if (!tokenValidation.valid) {
-    console.log({ requestId, action: "ai_whisper_unauthorized", error: tokenValidation.error });
-    return new Response(
-      JSON.stringify({ error: tokenValidation.error, whisper: null }),
-      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
 
   try {
     const { language, dayOfWeek, timeOfDay, season } = await req.json();

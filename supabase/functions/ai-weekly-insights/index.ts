@@ -119,16 +119,6 @@ serve(async (req) => {
     return new Response(null, { headers: { ...corsHeaders, "X-Request-Id": requestId } });
   }
 
-  // Validate AI token
-  const aiToken = req.headers.get("X-AI-Token");
-  const tokenValidation = await validateAIToken(aiToken, requestId);
-  if (!tokenValidation.valid) {
-    console.log({ requestId, action: "weekly_insights_unauthorized", error: tokenValidation.error });
-    return new Response(
-      JSON.stringify({ error: tokenValidation.error, requestId }),
-      { status: 401, headers: responseHeaders() }
-    );
-  }
 
   try {
     const body = await req.json() as WeeklyRequest;
