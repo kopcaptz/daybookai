@@ -862,7 +862,7 @@ serve(async (req) => {
 
       return await fetch(apiUrl, {
         method: "POST",
-        headers,
+        headers: providerHeaders,
         body: JSON.stringify({
           model: effectiveModel,
           messages: [
