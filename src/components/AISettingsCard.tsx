@@ -426,7 +426,7 @@ export function AISettingsCard({ onSettingsChange }: AISettingsCardProps) {
           variant="outline"
           className="w-full gap-2"
           onClick={handleTestConnection}
-          disabled={isTesting || !hasValidToken}
+          disabled={isTesting || !settings.enabled}
         >
           {isTesting ? (
             <>
@@ -452,9 +452,6 @@ export function AISettingsCard({ onSettingsChange }: AISettingsCardProps) {
         </Button>
       </CardContent>
       
-      {/* PIN Dialog */}
-        language={language}
-      />
     </Card>
   );
 }
