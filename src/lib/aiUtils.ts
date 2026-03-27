@@ -1,4 +1,4 @@
-import { loadAISettings, getProviderApiKey } from './aiConfig';
+import { loadAISettings, getProviderApiKey, type AISettings } from './aiConfig';
 
 /**
  * Shared AI utilities — single source of truth for token headers,
@@ -10,6 +10,18 @@ import { loadAISettings, getProviderApiKey } from './aiConfig';
 export function getAITokenHeader(): Record<string, string> {
   const headers: Record<string, string> = {};
   const settings = loadAISettings();
+  if (settings.provider !== 'lovable') {
+    const providerKey = getProviderApiKey(settings.provider);
+    if (providerKey) {
+      headers['X-Provider-Key'] = providerKey;
+    }
+  }
+  return headers;
+}
+
+// Get provider key header from given settings
+export function getProviderKeyHeader(settings: AISettings): Record<string, string> {
+  const headers: Record<string, string> = {};
   if (settings.provider !== 'lovable') {
     const providerKey = getProviderApiKey(settings.provider);
     if (providerKey) {

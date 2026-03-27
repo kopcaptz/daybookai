@@ -28,60 +28,6 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
-// AI Token validation
-async function validateAIToken(token: string | null, requestId: string): Promise<{ valid: boolean; error?: string }> {
-  if (!token) {
-    return { valid: false, error: "ai_token_required" };
-  }
-
-  const AI_TOKEN_SECRET = Deno.env.get("AI_TOKEN_SECRET");
-  if (!AI_TOKEN_SECRET) {
-    console.error({ requestId, action: "token_validation_error", error: "AI_TOKEN_SECRET not configured" });
-    return { valid: false, error: "service_not_configured" };
-  }
-
-  const parts = token.split(".");
-  if (parts.length !== 2) {
-    return { valid: false, error: "invalid_token_format" };
-  }
-
-  const [payloadBase64, signatureBase64] = parts;
-
-  try {
-    // Verify HMAC signature
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(AI_TOKEN_SECRET),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["verify"]
-    );
-
-    const signatureBytes = Uint8Array.from(atob(signatureBase64), c => c.charCodeAt(0));
-    const isValid = await crypto.subtle.verify(
-      "HMAC",
-      key,
-      signatureBytes,
-      encoder.encode(payloadBase64)
-    );
-
-    if (!isValid) {
-      return { valid: false, error: "invalid_token_signature" };
-    }
-
-    // Decode and check expiry
-    const payload = JSON.parse(atob(payloadBase64));
-    if (typeof payload.exp !== "number" || payload.exp <= Date.now()) {
-      return { valid: false, error: "token_expired" };
-    }
-
-    return { valid: true };
-  } catch (e) {
-    console.error({ requestId, action: "token_validation_error", error: String(e) });
-    return { valid: false, error: "invalid_token" };
-  }
-}
 
 // Validation constants
 const MAX_BASE64_SIZE = 4 * 1024 * 1024; // 4MB for base64 image data
@@ -278,16 +224,6 @@ serve(async (req) => {
     return new Response(null, { headers: { ...corsHeaders, "X-Request-Id": requestId } });
   }
 
-  // Validate AI token
-  const aiToken = req.headers.get("X-AI-Token");
-  const tokenValidation = await validateAIToken(aiToken, requestId);
-  if (!tokenValidation.valid) {
-    console.log({ requestId, action: "ai_receipt_unauthorized", error: tokenValidation.error });
-    return new Response(
-      JSON.stringify({ error: tokenValidation.error, requestId }),
-      { status: 401, headers: responseHeaders() }
-    );
-  }
 
   if (req.method !== "POST") {
     console.error({ requestId, action: "ai_receipt_error", error: "Method not allowed" });

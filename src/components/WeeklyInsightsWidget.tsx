@@ -6,11 +6,9 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { getWeeklyStats, type WeeklyStats } from '@/lib/db';
 import { getOrGenerateWeeklyInsight, getCachedWeeklyInsight, type WeeklyInsight } from '@/lib/weeklyInsightsService';
-import { useAIAccess } from '@/hooks/useAIAccess';
 import { loadAISettings } from '@/lib/aiConfig';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AIPinDialog } from '@/components/AIPinDialog';
 import {
   Sheet,
   SheetContent,
@@ -51,7 +49,7 @@ export function WeeklyInsightsWidget() {
   const { t, language } = useI18n();
   const navigate = useNavigate();
   const aiSettings = loadAISettings();
-  const { hasValidToken, showPinDialog, openPinDialog, closePinDialog, verifyPin, isVerifying } = useAIAccess(language);
+  
   
   const stats = useLiveQuery(() => getWeeklyStats(), []);
   
@@ -101,11 +99,7 @@ export function WeeklyInsightsWidget() {
       return;
     }
     
-    // Need valid token for generation
-    if (!hasValidToken) {
-      openPinDialog();
-      return;
-    }
+    
     
     setIsGenerating(true);
     try {
@@ -117,9 +111,7 @@ export function WeeklyInsightsWidget() {
       } else {
         // Handle specific errors
         const errorCode = result.error;
-        if (errorCode === 'token_invalid') {
-          openPinDialog();
-        } else if (errorCode === 'rate_limit_exceeded') {
+        if (errorCode === 'rate_limit_exceeded') {
           toast.error(t('weekly.tooManyRequests'));
         } else if (errorCode === 'not_enough_entries') {
           toast.error(t('weekly.notEnoughEntries'));
@@ -133,10 +125,7 @@ export function WeeklyInsightsWidget() {
   };
   
   const handleRefreshInsight = async () => {
-    if (!hasValidToken) {
-      openPinDialog();
-      return;
-    }
+    
     
     setIsRefreshing(true);
     try {
@@ -147,9 +136,7 @@ export function WeeklyInsightsWidget() {
         toast.success(labels.refreshed);
       } else {
         const errorCode = result.error;
-        if (errorCode === 'token_invalid') {
-          openPinDialog();
-        } else if (errorCode === 'rate_limit_exceeded') {
+        if (errorCode === 'rate_limit_exceeded') {
           toast.error(t('weekly.tooManyRequests'));
         } else {
           toast.error(t('weekly.refreshFailed'));
@@ -386,15 +373,6 @@ export function WeeklyInsightsWidget() {
           )}
         </SheetContent>
       </Sheet>
-      
-      {/* AI PIN Dialog */}
-      <AIPinDialog
-        open={showPinDialog}
-        onOpenChange={closePinDialog}
-        onVerify={verifyPin}
-        isVerifying={isVerifying}
-        language={language}
-      />
     </>
   );
 }
