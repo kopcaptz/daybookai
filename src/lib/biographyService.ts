@@ -1,12 +1,6 @@
 import { format } from 'date-fns';
 import { db, StoredBiography, DiaryEntry, loadBioSettings, saveBioSettings } from './db';
 import { loadAISettings, AI_PROFILES, AIProfile } from './aiConfig';
-import { isAITokenValid } from './aiTokenService';
-import { 
-  createAIAuthError, 
-  requestPinDialog,
-  getErrorMessage,
-} from './aiAuthRecovery';
 import { toast } from 'sonner';
 import type { Language } from './i18n';
 import { getAITokenHeader, parseAIError } from './aiUtils';
@@ -23,9 +17,9 @@ const AI_BIOGRAPHY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-b
 
 // Entry summary for AI (no raw text, privacy-safe)
 interface EntrySummary {
-  timeLabel: string;    // e.g., "09:30", "утро"
-  mood: number;         // 1-5
-  themes: string[];     // extracted topics
+  timeLabel: string;
+  mood: number;
+  themes: string[];
   tags: string[];
   attachmentCount: number;
 }
@@ -66,7 +60,7 @@ function extractThemes(text: string): string[] {
     }
   }
   
-  return themes.slice(0, 5); // max 5 themes
+  return themes.slice(0, 5);
 }
 
 // Convert timestamp to time label
@@ -109,7 +103,6 @@ async function prepareEntrySummaries(
   for (const entry of entries) {
     if (entry.id) entryIds.push(entry.id);
     
-    // Count attachments
     let attachmentCount = 0;
     if (entry.id) {
       attachmentCount = await db.attachments
@@ -130,29 +123,12 @@ async function prepareEntrySummaries(
   return { summaries, entryIds };
 }
 
-// parseAIError is now imported from ./aiUtils
-
-// Generate biography via dedicated edge function (non-streaming, with auto-PIN retry)
+// Generate biography via dedicated edge function
 export async function generateBiography(
   date: string,
   profile: AIProfile = 'biography',
   language: Language = 'ru',
-  _isRetry: boolean = false
 ): Promise<GenerationResult> {
-  const baseLang = getBaseLanguage(language);
-  
-  // Check token before making request (only on first attempt)
-  if (!_isRetry && !isAITokenValid()) {
-    // Try to get a PIN first
-    try {
-      await requestPinDialog(undefined, 'ai_token_required');
-    } catch {
-      const error = new Error(getErrorMessage('pin_cancelled', baseLang)) as BiographyError;
-      error.statusCode = 401;
-      throw error;
-    }
-  }
-  
   const { summaries } = await prepareEntrySummaries(date, language);
   
   if (summaries.length === 0) {
@@ -164,7 +140,6 @@ export async function generateBiography(
   
   const profileConfig = AI_PROFILES[profile];
   
-  // Call dedicated biography endpoint with preprocessed items
   const response = await fetch(AI_BIOGRAPHY_URL, {
     method: 'POST',
     headers: {
@@ -181,29 +156,7 @@ export async function generateBiography(
     }),
   });
   
-  // Extract requestId from response header
   const requestId = response.headers.get('X-Request-Id') || undefined;
-  
-  // Handle 401 with auto-retry
-  if (response.status === 401 && !_isRetry) {
-    const errorData = await createAIAuthError(response);
-    if (errorData.isRetryable) {
-      try {
-        await requestPinDialog(errorData.requestId, errorData.errorCode);
-        // Retry once after successful PIN
-        return generateBiography(date, profile, language, true);
-      } catch {
-        const error = new Error(getErrorMessage('pin_cancelled', baseLang)) as BiographyError;
-        error.requestId = errorData.requestId;
-        error.statusCode = 401;
-        throw error;
-      }
-    }
-    const error = new Error(getErrorMessage(errorData.errorCode, baseLang)) as BiographyError;
-    error.requestId = errorData.requestId;
-    error.statusCode = 401;
-    throw error;
-  }
   
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -270,10 +223,8 @@ export function shouldPromptBiography(): boolean {
   const settings = loadBioSettings();
   const today = getTodayDate();
   
-  // Don't prompt if already prompted today
   if (settings.lastPromptDate === today) return false;
   
-  // Only prompt if bio time has passed
   return isBioTimeReached();
 }
 
@@ -285,33 +236,28 @@ export function markBioPrompted(): void {
 // Per-date update prompt tracking (stored in memory for session)
 const updatePromptedDates = new Set<string>();
 
-// Check if we already prompted for update on this date (this session)
 export function wasUpdatePrompted(date: string): boolean {
   return updatePromptedDates.has(date);
 }
 
-// Mark that we prompted for update on this date
 export function markUpdatePrompted(date: string): void {
   updatePromptedDates.add(date);
 }
 
-// Check if biography for a date is stale (new/updated entries since generation)
+// Check if biography for a date is stale
 export async function isBiographyStale(date: string): Promise<boolean> {
   const bio = await getBiography(date);
   
-  // No biography or not complete → not "stale", just missing
   if (!bio || bio.status !== 'complete' || !bio.biography) {
     return false;
   }
   
-  // Get current entries for this date (non-private, AI-allowed)
   const entries = await db.entries
     .where('date')
     .equals(date)
     .filter(e => !e.isPrivate && e.aiAllowed !== false)
     .toArray();
   
-  // Check for new entries not in sourceEntryIds
   const sourceIds = new Set(bio.sourceEntryIds || []);
   const hasNewEntries = entries.some(e => e.id && !sourceIds.has(e.id));
   
@@ -319,7 +265,6 @@ export async function isBiographyStale(date: string): Promise<boolean> {
     return true;
   }
   
-  // Check for updated entries (updatedAt > generatedAt)
   const hasUpdatedEntries = entries.some(e => 
     e.updatedAt && e.updatedAt > bio.generatedAt
   );
@@ -341,12 +286,11 @@ function showErrorToast(
   
   toast.error(title, {
     description,
-    duration: 8000, // Longer duration to allow copying
+    duration: 8000,
   });
 }
 
-// Request biography generation (creates pending entry and attempts)
-// showToast: true for user-initiated, false for background retries
+// Request biography generation
 export async function requestBiographyGeneration(
   date: string,
   language: Language = 'ru',
@@ -354,10 +298,8 @@ export async function requestBiographyGeneration(
 ): Promise<StoredBiography> {
   const settings = loadAISettings();
   
-  // Get existing or create new
   let bio = await getBiography(date);
   
-  // Get entry IDs for this date
   const entries = await db.entries
     .where('date')
     .equals(date)
@@ -377,12 +319,10 @@ export async function requestBiographyGeneration(
     await saveBiography(bio);
   }
   
-  // If AI is disabled, keep as pending
   if (!settings.enabled) {
     return bio;
   }
   
-  // Attempt generation
   try {
     const result = await generateBiography(date, settings.bioProfile, language);
     bio = {
@@ -396,7 +336,6 @@ export async function requestBiographyGeneration(
     };
     await saveBiography(bio);
     
-    // Show notification on success
     try {
       const { showBiographyNotification } = await import('./notifications');
       await showBiographyNotification(date, result.biography?.title || '', language);
@@ -416,7 +355,6 @@ export async function requestBiographyGeneration(
     };
     await saveBiography(bio);
     
-    // Show toast only for user-initiated requests
     if (showToast) {
       showErrorToast(error.message, requestId, language);
     }
@@ -425,7 +363,7 @@ export async function requestBiographyGeneration(
   return bio;
 }
 
-// Retry pending biographies (background, silent unless max retries reached)
+// Retry pending biographies
 export async function retryPendingBiographies(
   language: Language = 'ru'
 ): Promise<number> {
@@ -438,18 +376,15 @@ export async function retryPendingBiographies(
   let maxRetriesReached = 0;
   
   for (const bio of pending) {
-    // Skip if too many retries
     if (bio.retryCount >= 3) {
       maxRetriesReached++;
       continue;
     }
     
-    // Silent retry (no toast)
     await requestBiographyGeneration(bio.date, language, false);
     retried++;
   }
   
-  // Show single banner if any biographies reached max retries
   if (maxRetriesReached > 0) {
     const message = baseLang === 'ru'
       ? `${maxRetriesReached} биографий не удалось сгенерировать после нескольких попыток`

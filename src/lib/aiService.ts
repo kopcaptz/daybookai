@@ -5,13 +5,6 @@ import {
   PROVIDER_MODELS,
   loadAISettings,
 } from './aiConfig';
-import { isAITokenValid } from './aiTokenService';
-import { 
-  createAIAuthError, 
-  requestPinDialog,
-  getErrorMessage,
-  AIAuthRetryError,
-} from './aiAuthRecovery';
 import { getAITokenHeader, parseAIError, collectSSEStream } from './aiUtils';
 
 // Edge function URLs - all AI goes through server
@@ -174,28 +167,14 @@ VISION CAPABILITY:
   return prompt;
 }
 
-// parseAIError is now imported from ./aiUtils
-
-// Stream chat completion via edge function (with auto-PIN retry)
+// Stream chat completion via edge function
 export async function streamChatCompletion(
   messages: ChatMessage[],
   profile: AIProfile,
   callbacks: StreamCallbacks,
-  _isRetry: boolean = false
 ): Promise<void> {
   const profileConfig = AI_PROFILES[profile];
   const settings = loadAISettings();
-  
-  // Check token before making request (only on first attempt)
-  if (!_isRetry && !isAITokenValid()) {
-    // Try to get a PIN first
-    try {
-      await requestPinDialog(undefined, 'ai_token_required');
-    } catch {
-      callbacks.onError(new AIAuthRetryError('ai_token_required', undefined, false, 'Authorization cancelled'));
-      return;
-    }
-  }
   
   // Extract text from last user message for context retrieval
   const lastUserMessage = messages.filter(m => m.role === 'user').pop();
@@ -238,23 +217,7 @@ export async function streamChatCompletion(
       }),
     });
     
-    // Handle 401 with auto-retry
-    if (response.status === 401 && !_isRetry) {
-      const errorData = await createAIAuthError(response);
-      if (errorData.isRetryable) {
-        try {
-          await requestPinDialog(errorData.requestId, errorData.errorCode);
-          // Retry once after successful PIN
-          return streamChatCompletion(messages, profile, callbacks, true);
-        } catch {
-          callbacks.onError(new Error('Authorization cancelled'));
-          return;
-        }
-      }
-      throw errorData;
-    }
-    
-    // Check for other error responses
+    // Check for error responses
     if (!response.ok) {
       const errorMessage = parseAIError(response.status, 'ru');
       throw new Error(errorMessage);
@@ -271,21 +234,8 @@ export async function streamChatCompletion(
   }
 }
 
-// Test AI connection via edge function (with auto-PIN retry)
+// Test AI connection via edge function
 export async function testAIConnection(language: 'ru' | 'en' = 'ru'): Promise<{ success: boolean; message: string; requestId?: string }> {
-  // Check token before making request
-  if (!isAITokenValid()) {
-    // Try to get a PIN first
-    try {
-      await requestPinDialog(undefined, 'ai_token_required');
-    } catch {
-      return {
-        success: false,
-        message: getErrorMessage('pin_cancelled', language),
-      };
-    }
-  }
-  
   try {
     const settings = loadAISettings();
     const response = await fetch(AI_TEST_URL, {
@@ -298,29 +248,6 @@ export async function testAIConnection(language: 'ru' | 'en' = 'ru'): Promise<{ 
     });
     
     const requestId = response.headers.get('X-Request-Id') || undefined;
-    
-    // Handle 401 with auto-retry
-    if (response.status === 401) {
-      const errorData = await createAIAuthError(response);
-      if (errorData.isRetryable) {
-        try {
-          await requestPinDialog(errorData.requestId, errorData.errorCode);
-          // Retry once after successful PIN
-          return testAIConnection(language);
-        } catch {
-          return {
-            success: false,
-            message: getErrorMessage('pin_cancelled', language),
-            requestId: errorData.requestId,
-          };
-        }
-      }
-      return {
-        success: false,
-        message: getErrorMessage(errorData.errorCode, language),
-        requestId: errorData.requestId,
-      };
-    }
     
     const data = await response.json();
     
