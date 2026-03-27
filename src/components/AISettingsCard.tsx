@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Zap, Gauge, Wifi, WifiOff, Shield, ShieldCheck, KeyRound, Clock, Brain, Tags, Camera, Globe, Server, Eye, EyeOff, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Zap, Gauge, Wifi, WifiOff, Shield, ShieldCheck, KeyRound, Brain, Tags, Camera, Globe, Server, Eye, EyeOff, ExternalLink, AlertTriangle } from 'lucide-react';
 import { 
   AIProfile,
   AIProvider,
@@ -21,8 +21,6 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useI18n } from '@/lib/i18n';
 import { SigilIcon, SealIcon } from '@/components/icons/SigilIcon';
-import { useAIAccess } from '@/hooks/useAIAccess';
-import { AIPinDialog } from '@/components/AIPinDialog';
 
 const PROFILE_ICONS: Record<AIProfile, React.ElementType> = {
   economy: Zap,
@@ -48,16 +46,6 @@ export function AISettingsCard({ onSettingsChange }: AISettingsCardProps) {
   const [isTesting, setIsTesting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'success' | 'error'>('unknown');
   const [showApiKey, setShowApiKey] = useState(false);
-  const {
-    hasValidToken,
-    tokenExpiryFormatted,
-    showPinDialog,
-    openPinDialog,
-    closePinDialog,
-    verifyPin,
-    isVerifying,
-    revokeAccess,
-  } = useAIAccess(language);
 
   useEffect(() => {
     const loadedSettings = loadAISettings();
@@ -110,48 +98,7 @@ export function AISettingsCard({ onSettingsChange }: AISettingsCardProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* PIN Access Gate */}
-        {!hasValidToken && (
-          <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-3">
-            <div className="flex items-center gap-3">
-              <KeyRound className="h-5 w-5 text-amber-500" />
-              <div>
-                <p className="text-sm font-medium">{t('aiPin.required')}</p>
-                <p className="text-xs text-muted-foreground">{t('aiPin.requiredHint')}</p>
-              </div>
-            </div>
-            <Button 
-              onClick={openPinDialog} 
-              className="w-full gap-2 btn-cyber"
-              size="sm"
-            >
-              <KeyRound className="h-4 w-4" />
-              {t('aiPin.enter')}
-            </Button>
-          </div>
-        )}
-        
-        {/* Token Status (when valid) */}
-        {hasValidToken && (
-          <div className="flex items-center justify-between p-3 rounded-lg bg-cyber-glow/5 border border-cyber-glow/20">
-            <div className="flex items-center gap-3">
-              <Clock className="h-4 w-4 text-cyber-sigil" />
-              <div>
-                <p className="text-xs text-muted-foreground">{t('aiPin.expiresIn')}</p>
-                <p className="text-sm font-medium">{tokenExpiryFormatted}</p>
-              </div>
-            </div>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={revokeAccess}
-              className="text-xs text-muted-foreground hover:text-destructive"
-            >
-              {t('aiPin.revoke')}
-            </Button>
-          </div>
-        )}
-        
+
         {/* AI Enabled Toggle */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
