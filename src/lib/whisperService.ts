@@ -1,6 +1,5 @@
 import { format } from 'date-fns';
 import { logger } from './logger';
-import { isAITokenValid, getAIToken } from './aiTokenService';
 
 // Fallback whispers for when AI is unavailable
 const FALLBACK_WHISPERS = {
@@ -94,16 +93,13 @@ function cacheWhisper(date: string, whisper: string): void {
 }
 
 // Get a deterministic fallback based on date
-// Accepts Language type from i18n, falls back to 'en' for non-ru languages
 export function getFallbackWhisper(language: string, date: string): string {
   const baseLang = language === 'ru' ? 'ru' : 'en';
   const whispers = FALLBACK_WHISPERS[baseLang];
   
-  // Use date string to get a deterministic index
   const dateHash = date.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   const dayOfWeek = new Date(date).getDay();
   
-  // Combine hash with day of week for variety
   const index = (dateHash + dayOfWeek) % whispers.length;
   
   return whispers[index];
@@ -128,7 +124,6 @@ function getSeason(): 'spring' | 'summer' | 'autumn' | 'winter' {
 }
 
 // Fetch whisper from AI (with fallback)
-// Accepts Language type from i18n
 export async function fetchWhisper(language: string): Promise<string> {
   const today = format(new Date(), 'yyyy-MM-dd');
   
@@ -137,25 +132,12 @@ export async function fetchWhisper(language: string): Promise<string> {
   if (cached) {
     return cached;
   }
-  
-  // If no valid AI token, use fallback immediately
-  if (!isAITokenValid()) {
-    logger.debug('Whisper', 'No valid AI token, using fallback');
-    const fallback = getFallbackWhisper(language, today);
-    cacheWhisper(today, fallback);
-    return fallback;
-  }
 
   try {
-    // Build headers with AI token
-    const tokenData = getAIToken();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
     };
-    if (tokenData?.token) {
-      headers['X-AI-Token'] = tokenData.token;
-    }
 
     const response = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-whisper`,
@@ -179,7 +161,6 @@ export async function fetchWhisper(language: string): Promise<string> {
     const data = await response.json();
     const whisper = data.whisper || getFallbackWhisper(language, today);
     
-    // Cache the result
     cacheWhisper(today, whisper);
     
     return whisper;

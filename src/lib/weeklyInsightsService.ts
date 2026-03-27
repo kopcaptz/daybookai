@@ -2,15 +2,15 @@
 // Handles generation and caching of AI-powered weekly insights
 
 import { db, DiaryEntry } from './db';
-import { getAIToken, isAITokenValid } from './aiTokenService';
 import { startOfWeek, subDays, format } from 'date-fns';
 import { Language, getBaseLanguage } from './i18n';
 import { logger } from './logger';
 import { loadAISettings } from './aiConfig';
+import { getAITokenHeader } from './aiUtils';
 
 export interface WeeklyInsight {
-  weekStart: string;       // YYYY-MM-DD (Monday)
-  generatedAt: number;     // timestamp
+  weekStart: string;
+  generatedAt: number;
   summary: string;
   dominantThemes: string[];
   moodPattern: string;
@@ -22,18 +22,12 @@ export interface WeeklyInsight {
 // Cache TTL: 24 hours
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-/**
- * Get the start of the current week (Monday)
- */
 function getCurrentWeekStart(): string {
   const now = new Date();
   const monday = startOfWeek(now, { weekStartsOn: 1 });
   return format(monday, 'yyyy-MM-dd');
 }
 
-/**
- * Get entries from the last 7 days that are AI-allowed
- */
 async function getWeeklyEntries(): Promise<DiaryEntry[]> {
   const now = new Date();
   const sevenDaysAgo = subDays(now, 7);
@@ -45,13 +39,9 @@ async function getWeeklyEntries(): Promise<DiaryEntry[]> {
     .between(startDate, endDate, true, true)
     .toArray();
 
-  // Filter: only AI-allowed AND non-private entries (double check for safety)
   return entries.filter(e => !e.isPrivate && e.aiAllowed !== false);
 }
 
-/**
- * Get cached weekly insight if still valid
- */
 export async function getCachedWeeklyInsight(): Promise<WeeklyInsight | null> {
   try {
     const weekStart = getCurrentWeekStart();
@@ -59,7 +49,6 @@ export async function getCachedWeeklyInsight(): Promise<WeeklyInsight | null> {
     
     if (!cached) return null;
     
-    // Check if cache is still valid (less than 24h old)
     const age = Date.now() - cached.generatedAt;
     if (age > CACHE_TTL_MS) {
       return null;
@@ -72,9 +61,6 @@ export async function getCachedWeeklyInsight(): Promise<WeeklyInsight | null> {
   }
 }
 
-/**
- * Save weekly insight to cache
- */
 async function saveWeeklyInsight(insight: WeeklyInsight): Promise<void> {
   try {
     await db.table('weeklyInsights').put(insight);
@@ -83,17 +69,10 @@ async function saveWeeklyInsight(insight: WeeklyInsight): Promise<void> {
   }
 }
 
-/**
- * Generate weekly insight via Edge Function
- */
 export async function generateWeeklyInsight(
   language: Language
 ): Promise<{ success: true; insight: WeeklyInsight } | { success: false; error: string }> {
   const baseLang = getBaseLanguage(language);
-  // Check AI token first
-  if (!isAITokenValid()) {
-    return { success: false, error: 'token_invalid' };
-  }
 
   // Get entries
   const entries = await getWeeklyEntries();
@@ -110,25 +89,19 @@ export async function generateWeeklyInsight(
       semanticTags: e.semanticTags || [],
       title: e.title || undefined,
     };
-    // In strict privacy mode, omit text entirely
     if (!aiSettings.strictPrivacy) {
-      base.text = e.text.slice(0, 100); // Short preview only
+      base.text = e.text.slice(0, 100);
     }
     return base;
   });
 
   try {
-    const token = getAIToken();
-    if (!token) {
-      return { success: false, error: 'token_invalid' };
-    }
-
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const response = await fetch(`${supabaseUrl}/functions/v1/ai-weekly-insights`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-AI-Token': token.token,
+        ...getAITokenHeader(),
       },
       body: JSON.stringify({
         entries: entryData,
@@ -145,7 +118,6 @@ export async function generateWeeklyInsight(
 
     const result = await response.json();
 
-    // Build insight object
     const insight: WeeklyInsight = {
       weekStart: getCurrentWeekStart(),
       generatedAt: Date.now(),
@@ -157,7 +129,6 @@ export async function generateWeeklyInsight(
       sourceEntryCount: entries.length,
     };
 
-    // Cache it
     await saveWeeklyInsight(insight);
 
     return { success: true, insight };
@@ -167,16 +138,10 @@ export async function generateWeeklyInsight(
   }
 }
 
-/**
- * Get or generate weekly insight
- * First checks cache, then generates if needed
- * @param forceRegenerate - Skip cache and generate fresh insight
- */
 export async function getOrGenerateWeeklyInsight(
   language: Language,
   forceRegenerate: boolean = false
 ): Promise<{ success: true; insight: WeeklyInsight; fromCache: boolean } | { success: false; error: string }> {
-  // Try cache first (unless force regenerate)
   if (!forceRegenerate) {
     const cached = await getCachedWeeklyInsight();
     if (cached) {
@@ -184,7 +149,6 @@ export async function getOrGenerateWeeklyInsight(
     }
   }
 
-  // Generate new
   const result = await generateWeeklyInsight(language);
   if (result.success === true) {
     return { success: true, insight: result.insight, fromCache: false };
@@ -193,9 +157,6 @@ export async function getOrGenerateWeeklyInsight(
   return { success: false, error: result.error };
 }
 
-/**
- * Check if we have enough data for weekly insights
- */
 export async function canGenerateWeeklyInsight(): Promise<boolean> {
   const entries = await getWeeklyEntries();
   return entries.length >= 3;

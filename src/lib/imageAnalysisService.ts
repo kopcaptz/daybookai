@@ -1,14 +1,8 @@
 import { compressImage } from './mediaUtils';
 import { getModelForProfile, loadAISettings } from './aiConfig';
 import { saveAttachmentInsight, getAttachmentInsight, AttachmentInsight } from './db';
-import { isAITokenValid } from './aiTokenService';
-import { 
-  createAIAuthError, 
-  requestPinDialog,
-  getErrorMessage,
-} from './aiAuthRecovery';
 import { logger } from './logger';
-import { getAITokenHeader, collectSSEStream } from './aiUtils';
+import { getAITokenHeader, collectSSEStream, parseAIError } from './aiUtils';
 
 const AI_CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 const PROMPT_VERSION = 'v1.0';
@@ -26,8 +20,6 @@ export interface AnalysisCallbacks {
   onError: (error: Error) => void;
 }
 
-// System prompt for image analysis (privacy-focused)
-// Accepts Language type from i18n
 const getSystemPrompt = (language: string): string => {
   const baseLang = language === 'ru' ? 'ru' : 'en';
   if (baseLang === 'ru') {
@@ -97,7 +89,6 @@ function parseAnalysisResponse(text: string, language: string): ImageAnalysisRes
     }
   }
   
-  // Fallback if parsing fails
   if (!description && !emotions.length && !tags.length) {
     return {
       description: text.substring(0, 200),
@@ -115,21 +106,10 @@ export async function analyzeImage(
   attachmentId: number,
   language: string,
   callbacks: AnalysisCallbacks,
-  _isRetry: boolean = false
 ): Promise<void> {
   callbacks.onStart?.();
   
   try {
-    // Check token before making request (only on first attempt)
-    if (!_isRetry && !isAITokenValid()) {
-      // Try to get a PIN first
-      try {
-        await requestPinDialog(undefined, 'ai_token_required');
-      } catch {
-        throw new Error(getErrorMessage('pin_cancelled', language));
-      }
-    }
-    
     // Check if we already have an insight
     const existing = await getAttachmentInsight(attachmentId);
     if (existing) {
@@ -176,21 +156,6 @@ export async function analyzeImage(
       }),
     });
     
-    // Handle 401 with auto-retry
-    if (response.status === 401 && !_isRetry) {
-      const errorData = await createAIAuthError(response);
-      if (errorData.isRetryable) {
-        try {
-          await requestPinDialog(errorData.requestId, errorData.errorCode);
-          // Retry once after successful PIN
-          return analyzeImage(imageBlob, attachmentId, language, callbacks, true);
-        } catch {
-          throw new Error(getErrorMessage('pin_cancelled', language));
-        }
-      }
-      throw new Error(getErrorMessage(errorData.errorCode, language));
-    }
-    
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || `Analysis failed: ${response.status}`);
@@ -234,15 +199,11 @@ async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-// collectStreamResponse removed — now using collectSSEStream from aiUtils.ts
-
-// Check if insight exists
 export async function hasInsight(attachmentId: number): Promise<boolean> {
   const insight = await getAttachmentInsight(attachmentId);
   return !!insight;
 }
 
-// Get cached insight
 export async function getCachedInsight(attachmentId: number): Promise<ImageAnalysisResult | null> {
   const insight = await getAttachmentInsight(attachmentId);
   return insight?.result || null;

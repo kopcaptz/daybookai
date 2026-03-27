@@ -1,4 +1,3 @@
-import { getAIToken } from './aiTokenService';
 import { loadAISettings, getProviderApiKey } from './aiConfig';
 
 /**
@@ -7,14 +6,9 @@ import { loadAISettings, getProviderApiKey } from './aiConfig';
  * biographyService, and imageAnalysisService.
  */
 
-// Get AI token header (returns empty object if no valid token)
+// Get provider key header (returns empty object if lovable provider)
 export function getAITokenHeader(): Record<string, string> {
-  const tokenData = getAIToken();
   const headers: Record<string, string> = {};
-  if (tokenData?.token) {
-    headers['X-AI-Token'] = tokenData.token;
-  }
-  // Add provider key if not lovable
   const settings = loadAISettings();
   if (settings.provider !== 'lovable') {
     const providerKey = getProviderApiKey(settings.provider);

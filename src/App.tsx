@@ -9,7 +9,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { PageTransition } from "@/components/PageTransition";
 import { NotificationBanner } from "@/components/NotificationBanner";
-import { GlobalAIPinDialog } from "@/components/GlobalAIPinDialog";
+
 import { HeroTransitionProvider } from "@/components/HeroTransition";
 import { FloatingChatButton } from "@/components/FloatingChatButton";
 import { FeedbackModal } from "@/components/FeedbackModal";
@@ -222,7 +222,7 @@ const App = () => (
           <Sonner position="top-center" />
           <BrowserRouter>
             <AppContent />
-            <GlobalAIPinDialog />
+            
           </BrowserRouter>
         </TooltipProvider>
       </I18nProvider>
