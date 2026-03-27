@@ -8,6 +8,7 @@ import { getWeeklyStats, type WeeklyStats } from '@/lib/db';
 import { getOrGenerateWeeklyInsight, getCachedWeeklyInsight, type WeeklyInsight } from '@/lib/weeklyInsightsService';
 import { loadAISettings } from '@/lib/aiConfig';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Sheet,
   SheetContent,
@@ -109,6 +110,7 @@ export function WeeklyInsightsWidget() {
         setShowInsightSheet(true);
       } else {
         // Handle specific errors
+        const errorCode = result.error;
         if (errorCode === 'rate_limit_exceeded') {
           toast.error(t('weekly.tooManyRequests'));
         } else if (errorCode === 'not_enough_entries') {
@@ -133,6 +135,7 @@ export function WeeklyInsightsWidget() {
         setInsight(result.insight);
         toast.success(labels.refreshed);
       } else {
+        const errorCode = result.error;
         if (errorCode === 'rate_limit_exceeded') {
           toast.error(t('weekly.tooManyRequests'));
         } else {
