@@ -53,11 +53,71 @@ interface BiographyItem {
 
 interface BiographyRequest {
   model?: string;
+  provider?: string;
   items: BiographyItem[];
   language: "ru" | "en";
   date: string;         // YYYY-MM-DD for context
   maxTokens?: number;
   temperature?: number;
+}
+
+// Build provider-specific request config
+function getProviderConfig(provider: string, model: string, providerKey?: string): {
+  apiUrl: string;
+  apiKey: string;
+  headers: Record<string, string>;
+  effectiveModel: string;
+} | null {
+  if (provider === "openrouter") {
+    const apiKey = providerKey;
+    if (!apiKey) return null;
+    return {
+      apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+      apiKey,
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "X-Title": "Daybook",
+        "HTTP-Referer": "https://daybook.local",
+      },
+      effectiveModel: model,
+    };
+  }
+
+  if (provider === "minimax") {
+    const apiKey = providerKey;
+    if (!apiKey) return null;
+    return {
+      apiUrl: "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
+      apiKey,
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      effectiveModel: model,
+    };
+  }
+
+  // Default: lovable
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) return null;
+
+  const modelMap: Record<string, string> = {
+    "gpt-3.5-turbo": "google/gemini-2.5-flash-lite",
+    "gpt-4o-mini": "google/gemini-2.5-flash",
+    "gpt-4o": "google/gemini-2.5-pro",
+    "gpt-4": "google/gemini-2.5-pro",
+  };
+
+  return {
+    apiUrl: "https://ai.gateway.lovable.dev/v1/chat/completions",
+    apiKey,
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    effectiveModel: modelMap[model] || model || "google/gemini-2.5-pro",
+  };
 }
 
 // Output types
