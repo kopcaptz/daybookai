@@ -4,6 +4,7 @@
 import { db, AudioTranscript } from './db';
 import { logger } from './logger';
 import { getAITokenHeader } from './aiUtils';
+import { loadAISettings } from './aiConfig';
 
 const AI_TRANSCRIBE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-transcribe`;
 
