@@ -126,6 +126,7 @@ export async function analyzeImage(
     // Get model from settings
     const settings = loadAISettings();
     const model = getModelForProfile(settings.chatProfile);
+    const provider = settings.provider;
     
     // Build multimodal message
     const messages = [
@@ -153,6 +154,7 @@ export async function analyzeImage(
         model,
         maxTokens: 512,
         temperature: 0.7,
+        provider,
       }),
     });
     

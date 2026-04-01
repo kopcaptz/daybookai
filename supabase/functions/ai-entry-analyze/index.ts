@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// CORS configuration - allow known origins (matches ai-chat)
+// CORS configuration
 const ALLOWED_ORIGINS = [
   "https://local-heart-diary.lovable.app",
   "https://daybookai.lovable.app",
@@ -23,18 +23,62 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   const allowedOrigin = origin && isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-ai-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-provider-key, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
 }
 
+// Provider routing
+function getProviderConfig(provider: string, model: string, providerKey?: string): {
+  apiUrl: string;
+  headers: Record<string, string>;
+  effectiveModel: string;
+} | null {
+  if (provider === "openrouter") {
+    if (!providerKey) return null;
+    return {
+      apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+      headers: {
+        "Authorization": `Bearer ${providerKey}`,
+        "Content-Type": "application/json",
+        "X-Title": "Daybook",
+        "HTTP-Referer": "https://daybook.local",
+      },
+      effectiveModel: model || "google/gemini-2.5-flash-lite",
+    };
+  }
+  if (provider === "minimax") {
+    if (!providerKey) return null;
+    return {
+      apiUrl: "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
+      headers: {
+        "Authorization": `Bearer ${providerKey}`,
+        "Content-Type": "application/json",
+      },
+      effectiveModel: model || "MiniMax-M1",
+    };
+  }
+  // Default: lovable
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) return null;
+  return {
+    apiUrl: "https://ai.gateway.lovable.dev/v1/chat/completions",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    effectiveModel: model || "google/gemini-2.5-flash-lite",
+  };
+}
 
 interface AnalyzeRequest {
   text: string;
   tags: string[];
   language: "ru" | "en";
   mode?: "full" | "quick";
+  provider?: string;
+  model?: string;
 }
 
 interface AnalyzeResponse {
@@ -56,18 +100,15 @@ serve(async (req) => {
   const origin = req.headers.get("Origin");
   const corsHeaders = getCorsHeaders(origin);
 
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-
   const startTime = Date.now();
 
   try {
-    const { text, tags, language, mode = "full" }: AnalyzeRequest = await req.json();
+    const { text, tags, language, mode = "full", provider = "lovable", model }: AnalyzeRequest = await req.json();
 
-    // Validate input
     if (!text || typeof text !== "string") {
       return new Response(
         JSON.stringify({ error: "Missing or invalid text field" }),
@@ -75,22 +116,21 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      console.error(`[${requestId}] LOVABLE_API_KEY not configured`);
+    const userProviderKey = req.headers.get("X-Provider-Key") || undefined;
+    const providerConfig = getProviderConfig(provider, model || "", userProviderKey);
+    if (!providerConfig) {
+      console.error(`[${requestId}] Provider "${provider}" not configured`);
       return new Response(
-        JSON.stringify({ error: "AI service not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: provider === "lovable" ? "AI service not configured" : `Provider "${provider}" requires an API key` }),
+        { status: provider === "lovable" ? 500 : 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Quick mode: shorter prompt, mood + confidence only, faster response
     if (mode === "quick") {
-      return await handleQuickMode(text, language, requestId, startTime, LOVABLE_API_KEY, corsHeaders);
+      return await handleQuickMode(text, language, requestId, startTime, providerConfig, corsHeaders);
     }
 
-    // Full mode: complete analysis with semantic tags and title suggestion
-    return await handleFullMode(text, tags, language, requestId, startTime, LOVABLE_API_KEY, corsHeaders);
+    return await handleFullMode(text, tags, language, requestId, startTime, providerConfig, corsHeaders);
 
   } catch (err) {
     console.error(`[${requestId}] Unexpected error:`, err);
@@ -101,15 +141,12 @@ serve(async (req) => {
   }
 });
 
-/**
- * Quick mode: Fast mood prediction for live typing analysis
- */
 async function handleQuickMode(
   text: string,
   language: "ru" | "en",
   requestId: string,
   startTime: number,
-  apiKey: string,
+  providerConfig: { apiUrl: string; headers: Record<string, string>; effectiveModel: string },
   corsHeaders: Record<string, string>
 ): Promise<Response> {
   const truncatedText = text.length > 500 ? text.slice(0, 500) + "..." : text;
@@ -126,14 +163,11 @@ ONLY JSON: {"mood":N,"confidence":0.X}`;
 
   console.log(`[${requestId}] Quick analysis, textLen=${text.length}`);
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch(providerConfig.apiUrl, {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
+    headers: providerConfig.headers,
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash-lite",
+      model: providerConfig.effectiveModel,
       messages: [
         { role: "system", content: quickPrompt },
         { role: "user", content: truncatedText },
@@ -176,16 +210,13 @@ ONLY JSON: {"mood":N,"confidence":0.X}`;
   });
 }
 
-/**
- * Full mode: Complete analysis with mood, semantic tags, and title suggestion
- */
 async function handleFullMode(
   text: string,
   tags: string[],
   language: "ru" | "en",
   requestId: string,
   startTime: number,
-  apiKey: string,
+  providerConfig: { apiUrl: string; headers: Record<string, string>; effectiveModel: string },
   corsHeaders: Record<string, string>
 ): Promise<Response> {
   const truncatedText = text.length > 1000 ? text.slice(0, 1000) + "..." : text;
@@ -263,14 +294,11 @@ Return ONLY valid JSON:
 
   console.log(`[${requestId}] Full analysis, textLen=${text.length}, tags=${tags.length}`);
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch(providerConfig.apiUrl, {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
+    headers: providerConfig.headers,
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash-lite",
+      model: providerConfig.effectiveModel,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -319,9 +347,6 @@ Return ONLY valid JSON:
   });
 }
 
-/**
- * Handle API errors consistently
- */
 async function handleApiError(response: Response, requestId: string, corsHeaders: Record<string, string>): Promise<Response> {
   const status = response.status;
   

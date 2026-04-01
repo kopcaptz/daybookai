@@ -10,7 +10,7 @@
 
 import { db, updateEntry, type DiaryEntry, type AnalysisQueueItem } from '@/lib/db';
 import { supabase } from '@/integrations/supabase/client';
-import { loadAISettings } from '@/lib/aiConfig';
+import { loadAISettings, getModelForProfile } from '@/lib/aiConfig';
 import { getAITokenHeader } from '@/lib/aiUtils';
 
 interface AnalysisResult {
@@ -33,8 +33,10 @@ async function callAnalyzeEdgeFunction(
     bodyText = extractGeneralizedThemes(text, language);
   }
 
+  const model = getModelForProfile('fast');
+
   const { data, error } = await supabase.functions.invoke('ai-entry-analyze', {
-    body: { text: bodyText, tags, language },
+    body: { text: bodyText, tags, language, provider: aiSettings.provider, model },
     headers: getAITokenHeader(),
   });
 

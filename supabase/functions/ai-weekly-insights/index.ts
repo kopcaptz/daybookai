@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // CORS configuration
 const ALLOWED_ORIGINS = [
   "https://local-heart-diary.lovable.app",
+  "https://daybookai.lovable.app",
   "http://localhost:5173",
   "http://localhost:8080",
   "http://127.0.0.1:5173",
@@ -22,28 +23,69 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   const allowedOrigin = origin && isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-ai-token",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-provider-key, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
 }
 
+// Provider routing
+function getProviderConfig(provider: string, model: string, providerKey?: string): {
+  apiUrl: string;
+  headers: Record<string, string>;
+  effectiveModel: string;
+} | null {
+  if (provider === "openrouter") {
+    if (!providerKey) return null;
+    return {
+      apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+      headers: {
+        "Authorization": `Bearer ${providerKey}`,
+        "Content-Type": "application/json",
+        "X-Title": "Daybook",
+        "HTTP-Referer": "https://daybook.local",
+      },
+      effectiveModel: model || "google/gemini-2.5-flash",
+    };
+  }
+  if (provider === "minimax") {
+    if (!providerKey) return null;
+    return {
+      apiUrl: "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
+      headers: {
+        "Authorization": `Bearer ${providerKey}`,
+        "Content-Type": "application/json",
+      },
+      effectiveModel: model || "MiniMax-M1",
+    };
+  }
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) return null;
+  return {
+    apiUrl: "https://ai.gateway.lovable.dev/v1/chat/completions",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    effectiveModel: model || "google/gemini-2.5-flash",
+  };
+}
 
-// Request types
 interface WeeklyEntryData {
   date: string;
   mood: number;
   semanticTags: string[];
   title?: string;
-  text: string; // Summary/preview only
+  text: string;
 }
 
 interface WeeklyRequest {
   entries: WeeklyEntryData[];
   language: 'ru' | 'en';
+  provider?: string;
+  model?: string;
 }
 
-// Response types
 interface WeeklyInsightResult {
   summary: string;
   dominantThemes: string[];
@@ -52,7 +94,6 @@ interface WeeklyInsightResult {
   suggestion: string;
 }
 
-// System prompts
 const SYSTEM_PROMPT_RU = `Ты — аналитик личного дневника «Магический блокнот».
 Проанализируй недельные данные и выяви паттерны настроения и активности.
 
@@ -119,12 +160,10 @@ serve(async (req) => {
     return new Response(null, { headers: { ...corsHeaders, "X-Request-Id": requestId } });
   }
 
-
   try {
     const body = await req.json() as WeeklyRequest;
-    const { entries, language } = body;
+    const { entries, language, provider = "lovable", model } = body;
 
-    // Validate input
     if (!entries || !Array.isArray(entries) || entries.length < 3) {
       return new Response(
         JSON.stringify({ error: "minimum_3_entries_required", requestId }),
@@ -141,35 +180,25 @@ serve(async (req) => {
 
     const validLanguage = language === 'en' ? 'en' : 'ru';
 
-    console.log({
-      requestId,
-      action: "weekly_insights_request",
-      entryCount: entries.length,
-      language: validLanguage,
-    });
+    console.log({ requestId, action: "weekly_insights_request", entryCount: entries.length, language: validLanguage, provider });
 
-    // Build prompts
     const systemPrompt = validLanguage === 'ru' ? SYSTEM_PROMPT_RU : SYSTEM_PROMPT_EN;
     const userPrompt = buildUserPrompt(entries, validLanguage);
 
-    // Call Lovable AI Gateway
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      console.error({ requestId, action: "weekly_insights_error", error: "LOVABLE_API_KEY not configured" });
+    const userProviderKey = req.headers.get("X-Provider-Key") || undefined;
+    const providerConfig = getProviderConfig(provider, model || "", userProviderKey);
+    if (!providerConfig) {
       return new Response(
-        JSON.stringify({ error: "ai_service_not_configured", requestId }),
-        { status: 500, headers: responseHeaders() }
+        JSON.stringify({ error: provider === "lovable" ? "ai_service_not_configured" : `provider_key_required`, requestId }),
+        { status: provider === "lovable" ? 500 : 401, headers: responseHeaders() }
       );
     }
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch(providerConfig.apiUrl, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
+      headers: providerConfig.headers,
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: providerConfig.effectiveModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -184,70 +213,38 @@ serve(async (req) => {
       console.error({ requestId, action: "weekly_insights_ai_error", status: aiResponse.status, error: errorText });
 
       if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "rate_limit_exceeded", requestId }),
-          { status: 429, headers: responseHeaders() }
-        );
+        return new Response(JSON.stringify({ error: "rate_limit_exceeded", requestId }), { status: 429, headers: responseHeaders() });
       }
       if (aiResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "payment_required", requestId }),
-          { status: 402, headers: responseHeaders() }
-        );
+        return new Response(JSON.stringify({ error: "payment_required", requestId }), { status: 402, headers: responseHeaders() });
       }
-
-      return new Response(
-        JSON.stringify({ error: "ai_service_error", requestId }),
-        { status: 500, headers: responseHeaders() }
-      );
+      return new Response(JSON.stringify({ error: "ai_service_error", requestId }), { status: 500, headers: responseHeaders() });
     }
 
     const aiData = await aiResponse.json();
     const content = aiData.choices?.[0]?.message?.content || "";
 
-    // Parse JSON from response
     let result: WeeklyInsightResult;
     try {
-      // Extract JSON from markdown code blocks if present
       const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
       const jsonStr = jsonMatch[1]?.trim() || content.trim();
       result = JSON.parse(jsonStr);
     } catch (parseError) {
       console.error({ requestId, action: "weekly_insights_parse_error", error: String(parseError), content });
-      return new Response(
-        JSON.stringify({ error: "ai_response_parse_error", requestId }),
-        { status: 500, headers: responseHeaders() }
-      );
+      return new Response(JSON.stringify({ error: "ai_response_parse_error", requestId }), { status: 500, headers: responseHeaders() });
     }
 
-    // Validate result structure
     if (!result.summary || !result.dominantThemes || !result.moodPattern || !result.insight || !result.suggestion) {
       console.error({ requestId, action: "weekly_insights_invalid_result", result });
-      return new Response(
-        JSON.stringify({ error: "ai_response_invalid", requestId }),
-        { status: 500, headers: responseHeaders() }
-      );
+      return new Response(JSON.stringify({ error: "ai_response_invalid", requestId }), { status: 500, headers: responseHeaders() });
     }
 
-    console.log({
-      requestId,
-      action: "weekly_insights_success",
-      themesCount: result.dominantThemes.length,
-    });
+    console.log({ requestId, action: "weekly_insights_success", themesCount: result.dominantThemes.length });
 
-    return new Response(
-      JSON.stringify({
-        ...result,
-        requestId,
-      }),
-      { status: 200, headers: responseHeaders() }
-    );
+    return new Response(JSON.stringify({ ...result, requestId }), { status: 200, headers: responseHeaders() });
 
   } catch (error) {
     console.error({ requestId, action: "weekly_insights_error", error: String(error) });
-    return new Response(
-      JSON.stringify({ error: "internal_error", requestId }),
-      { status: 500, headers: responseHeaders() }
-    );
+    return new Response(JSON.stringify({ error: "internal_error", requestId }), { status: 500, headers: responseHeaders() });
   }
 });

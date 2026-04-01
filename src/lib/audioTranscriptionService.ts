@@ -4,6 +4,7 @@
 import { db, AudioTranscript } from './db';
 import { logger } from './logger';
 import { getAITokenHeader } from './aiUtils';
+import { loadAISettings } from './aiConfig';
 
 const AI_TRANSCRIBE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-transcribe`;
 
@@ -52,8 +53,10 @@ export async function requestTranscription(
 
   try {
     // 3. Build FormData and send to edge function
+    const aiSettings = loadAISettings();
     const formData = new FormData();
     formData.append('file', blob);
+    formData.append('provider', aiSettings.provider);
     if (opts?.languageHint) {
       formData.append('languageHint', opts.languageHint);
     }

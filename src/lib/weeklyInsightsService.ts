@@ -5,7 +5,7 @@ import { db, DiaryEntry } from './db';
 import { startOfWeek, subDays, format } from 'date-fns';
 import { Language, getBaseLanguage } from './i18n';
 import { logger } from './logger';
-import { loadAISettings } from './aiConfig';
+import { loadAISettings, getModelForProfile } from './aiConfig';
 import { getAITokenHeader } from './aiUtils';
 
 export interface WeeklyInsight {
@@ -97,6 +97,7 @@ export async function generateWeeklyInsight(
 
   try {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const model = getModelForProfile('balanced');
     const response = await fetch(`${supabaseUrl}/functions/v1/ai-weekly-insights`, {
       method: 'POST',
       headers: {
@@ -106,6 +107,8 @@ export async function generateWeeklyInsight(
       body: JSON.stringify({
         entries: entryData,
         language: baseLang,
+        provider: aiSettings.provider,
+        model,
       }),
     });
 
