@@ -1,28 +1,15 @@
 
 
-# Пропущенная функция: `biographyService` не передаёт `provider` в Edge Function
+# Полный аудит: добавление мульти-провайдеров во все AI-сервисы
 
-## Проблема
+## Текущее состояние
 
-После добавления мульти-провайдерной системы, **`biographyService.ts`** отправляет `X-Provider-Key` (через `getAITokenHeader()`), но **не передаёт `provider`** в теле запроса. Edge Function `ai-biography` не знает, какой провайдер выбран, и всегда использует Lovable AI.
+Мульти-провайдерная маршрутизация работает только в 3 функциях: `ai-chat`, `ai-biography`, `ai-receipt`. Остальные 4 Edge Functions всегда используют Lovable AI Gateway, игнорируя выбранного пользователем провайдера.
 
-Аналогичная ситуация с `receiptService.ts` — там тоже нет `provider` в body (хотя `X-Provider-Key` передаётся).
+Также в CORS-заголовках остался устаревший `x-ai-token` и отсутствует `x-provider-key`.
 
-Также `biographyService` отправляет модель из `profileConfig.model` (дефолтную Lovable-модель), а не из `PROVIDER_MODELS[settings.provider][profile]`.
+---
 
-## Что нужно исправить
+## Шаг 1: Клиентские сервисы — добавить `provider` и `model` в запросы
 
-### 1. `src/lib/biographyService.ts`
-- Добавить `loadAISettings()` и `PROVIDER_MODELS` в вызов `generateBiography()`
-- Отправлять `provider: settings.provider` в body
-- Использовать `PROVIDER_MODELS[settings.provider][profile]` вместо `profileConfig.model`
-
-### 2. `src/lib/receiptService.ts`
-- Добавить `provider: settings.provider` в body запроса к `ai-receipt`
-
-### 3. Edge Functions `ai-biography` и `ai-receipt`
-- Убедиться что они читают `provider` из body и используют `X-Provider-Key` для маршрутизации (это было в плане ранее — нужно проверить текущее состояние)
-
-## Результат
-Когда пользователь выбирает OpenRouter в настройках и вводит ключ — биография и чеки тоже будут генерироваться через OpenRouter, а не только чат.
-
+### 1.1 `src/lib/imageAnal
