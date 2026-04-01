@@ -5,7 +5,7 @@ import { db, DiaryEntry } from './db';
 import { startOfWeek, subDays, format } from 'date-fns';
 import { Language, getBaseLanguage } from './i18n';
 import { logger } from './logger';
-import { loadAISettings } from './aiConfig';
+import { loadAISettings, getModelForProfile } from './aiConfig';
 import { getAITokenHeader } from './aiUtils';
 
 export interface WeeklyInsight {
