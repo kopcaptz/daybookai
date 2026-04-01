@@ -33,8 +33,10 @@ async function callAnalyzeEdgeFunction(
     bodyText = extractGeneralizedThemes(text, language);
   }
 
+  const model = getModelForProfile('fast');
+
   const { data, error } = await supabase.functions.invoke('ai-entry-analyze', {
-    body: { text: bodyText, tags, language },
+    body: { text: bodyText, tags, language, provider: aiSettings.provider, model },
     headers: getAITokenHeader(),
   });
 

@@ -53,8 +53,10 @@ export async function requestTranscription(
 
   try {
     // 3. Build FormData and send to edge function
+    const aiSettings = loadAISettings();
     const formData = new FormData();
     formData.append('file', blob);
+    formData.append('provider', aiSettings.provider);
     if (opts?.languageHint) {
       formData.append('languageHint', opts.languageHint);
     }

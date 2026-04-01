@@ -154,6 +154,7 @@ export async function analyzeImage(
         model,
         maxTokens: 512,
         temperature: 0.7,
+        provider,
       }),
     });
     

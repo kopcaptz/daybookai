@@ -97,6 +97,7 @@ export async function generateWeeklyInsight(
 
   try {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const model = getModelForProfile('balanced');
     const response = await fetch(`${supabaseUrl}/functions/v1/ai-weekly-insights`, {
       method: 'POST',
       headers: {
@@ -106,6 +107,8 @@ export async function generateWeeklyInsight(
       body: JSON.stringify({
         entries: entryData,
         language: baseLang,
+        provider: aiSettings.provider,
+        model,
       }),
     });
 
