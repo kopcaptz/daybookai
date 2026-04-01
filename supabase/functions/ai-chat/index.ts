@@ -273,19 +273,6 @@ function getProviderConfig(provider: string, model: string, providerKey?: string
   };
 }
 
-// Build MiniMax-specific request body (different from OpenAI format)
-function buildMinimaxBody(messages: ChatMessage[], model: string, maxTokens: number, temperature: number) {
-  return {
-    model,
-    messages: messages.map(m => ({
-      role: m.role === "system" ? "system" : m.role,
-      content: typeof m.content === "string" ? m.content : m.content.map(p => p.type === "text" ? p.text : "").join("\n"),
-    })),
-    max_tokens: maxTokens,
-    temperature,
-    stream: true,
-  };
-}
 
 serve(async (req) => {
   const requestId = crypto.randomUUID();
