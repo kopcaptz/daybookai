@@ -10,7 +10,7 @@
 
 import { db, updateEntry, type DiaryEntry, type AnalysisQueueItem } from '@/lib/db';
 import { supabase } from '@/integrations/supabase/client';
-import { loadAISettings } from '@/lib/aiConfig';
+import { loadAISettings, getModelForProfile } from '@/lib/aiConfig';
 import { getAITokenHeader } from '@/lib/aiUtils';
 
 interface AnalysisResult {
