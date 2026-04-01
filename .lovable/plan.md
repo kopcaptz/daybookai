@@ -1,15 +1,30 @@
 
+# Мульти-провайдерная система — ЗАВЕРШЕНО
 
-# Полный аудит: добавление мульти-провайдеров во все AI-сервисы
+## Статус: ✅ Все AI-сервисы поддерживают мульти-провайдеров
 
-## Текущее состояние
+### Клиентские сервисы (передают `provider` и `model`):
+- ✅ `aiService.ts` (чат)
+- ✅ `biographyService.ts` (биография дня)
+- ✅ `receiptService.ts` (сканирование чеков)
+- ✅ `imageAnalysisService.ts` (анализ изображений)
+- ✅ `entryAnalysisService.ts` (анализ записей)
+- ✅ `weeklyInsightsService.ts` (недельные инсайты)
+- ✅ `audioTranscriptionService.ts` (транскрипция аудио)
+- ⏭️ `whisperService.ts` — остаётся на Lovable AI (фраза дня, 10 токенов)
 
-Мульти-провайдерная маршрутизация работает только в 3 функциях: `ai-chat`, `ai-biography`, `ai-receipt`. Остальные 4 Edge Functions всегда используют Lovable AI Gateway, игнорируя выбранного пользователем провайдера.
+### Edge Functions (маршрутизация через `getProviderConfig`):
+- ✅ `ai-chat` — OpenRouter, MiniMax, Lovable
+- ✅ `ai-biography` — OpenRouter, MiniMax, Lovable
+- ✅ `ai-receipt` — OpenRouter, MiniMax, Lovable
+- ✅ `ai-entry-analyze` — OpenRouter, MiniMax, Lovable
+- ✅ `ai-weekly-insights` — OpenRouter, MiniMax, Lovable
+- ✅ `ai-transcribe` — OpenRouter (если поддерживает multimodal), Lovable (fallback для MiniMax)
+- ⏭️ `ai-whisper` — только Lovable AI (CORS обновлён)
 
-Также в CORS-заголовках остался устаревший `x-ai-token` и отсутствует `x-provider-key`.
+### CORS:
+- ✅ `x-ai-token` удалён из всех функций
+- ✅ `x-provider-key` добавлен во все функции
 
----
-
-## Шаг 1: Клиентские сервисы — добавить `provider` и `model` в запросы
-
-### 1.1 `src/lib/imageAnal
+### Секреты:
+- ⚠️ `AI_ACCESS_PIN` и `AI_TOKEN_SECRET` остаются на сервере (пользователь отклонил удаление), но нигде не используются
