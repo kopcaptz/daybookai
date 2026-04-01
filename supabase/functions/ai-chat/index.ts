@@ -58,8 +58,11 @@ const ALLOWED_MODELS_BY_PROVIDER: Record<string, string[]> = {
     "openai/gpt-4o-mini",
   ],
   minimax: [
-    "MiniMax-M1",
-    "MiniMax-M1-80B",
+    "MiniMax-M2.7",
+    "MiniMax-M2.7-highspeed",
+    "MiniMax-M2.5",
+    "MiniMax-M2.1",
+    "MiniMax-M2",
   ],
 };
 

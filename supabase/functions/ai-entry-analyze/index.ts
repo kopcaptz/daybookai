@@ -56,7 +56,7 @@ function getProviderConfig(provider: string, model: string, providerKey?: string
         "Authorization": `Bearer ${providerKey}`,
         "Content-Type": "application/json",
       },
-      effectiveModel: model || "MiniMax-M1",
+      effectiveModel: model || "MiniMax-M2.7-highspeed",
     };
   }
   // Default: lovable

@@ -54,11 +54,11 @@ export const PROVIDER_MODELS: Record<AIProvider, Record<AIProfile, string>> = {
     biography: 'anthropic/claude-opus-4',
   },
   minimax: {
-    economy: 'MiniMax-M1',
-    fast: 'MiniMax-M1',
-    balanced: 'MiniMax-M1',
-    quality: 'MiniMax-M1',
-    biography: 'MiniMax-M1',
+    economy: 'MiniMax-M2.7-highspeed',
+    fast: 'MiniMax-M2.7-highspeed',
+    balanced: 'MiniMax-M2.7',
+    quality: 'MiniMax-M2.7',
+    biography: 'MiniMax-M2.7',
   },
 };
 
