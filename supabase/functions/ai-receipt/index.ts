@@ -318,7 +318,7 @@ serve(async (req) => {
       if (providerName === "minimax") {
         if (!providerKey) return null;
         return {
-          apiUrl: "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
+          apiUrl: "https://api.minimax.io/v1/chat/completions",
           apiKey: providerKey,
           headers: {
             "Authorization": `Bearer ${providerKey}`,

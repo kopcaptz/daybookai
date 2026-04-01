@@ -237,7 +237,7 @@ function getProviderConfig(provider: string, model: string, providerKey?: string
     const apiKey = providerKey;
     if (!apiKey) return null;
     return {
-      apiUrl: "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
+      apiUrl: "https://api.minimax.io/v1/chat/completions",
       apiKey,
       headers: {
         "Authorization": `Bearer ${apiKey}`,
@@ -273,19 +273,6 @@ function getProviderConfig(provider: string, model: string, providerKey?: string
   };
 }
 
-// Build MiniMax-specific request body (different from OpenAI format)
-function buildMinimaxBody(messages: ChatMessage[], model: string, maxTokens: number, temperature: number) {
-  return {
-    model,
-    messages: messages.map(m => ({
-      role: m.role === "system" ? "system" : m.role,
-      content: typeof m.content === "string" ? m.content : m.content.map(p => p.type === "text" ? p.text : "").join("\n"),
-    })),
-    max_tokens: maxTokens,
-    temperature,
-    stream: true,
-  };
-}
 
 serve(async (req) => {
   const requestId = crypto.randomUUID();
@@ -386,16 +373,14 @@ serve(async (req) => {
       multimodal: hasMultimodal,
     });
 
-    // Build request body (MiniMax has different format)
-    const body = provider === "minimax"
-      ? buildMinimaxBody(messages as ChatMessage[], providerConfig.effectiveModel, maxTokensValidation.value, temperatureValidation.value)
-      : {
-          model: providerConfig.effectiveModel,
-          messages: messages as ChatMessage[],
-          max_tokens: maxTokensValidation.value,
-          temperature: temperatureValidation.value,
-          stream: true,
-        };
+    // Build request body — unified OpenAI-compatible format for all providers
+    const body = {
+      model: providerConfig.effectiveModel,
+      messages: messages as ChatMessage[],
+      max_tokens: maxTokensValidation.value,
+      temperature: temperatureValidation.value,
+      stream: true,
+    };
 
     const response = await fetch(providerConfig.apiUrl, {
       method: "POST",
