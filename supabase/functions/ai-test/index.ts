@@ -58,7 +58,7 @@ function getTestConfig(provider: string, providerKey?: string): { apiUrl: string
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      model: "MiniMax-M1",
+      model: "MiniMax-M2.7-highspeed",
       source: providerKey ? "MiniMax (user key)" : "MiniMax",
     };
   }
