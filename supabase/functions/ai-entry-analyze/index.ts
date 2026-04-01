@@ -51,7 +51,7 @@ function getProviderConfig(provider: string, model: string, providerKey?: string
   if (provider === "minimax") {
     if (!providerKey) return null;
     return {
-      apiUrl: "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
+      apiUrl: "https://api.minimax.io/v1/chat/completions",
       headers: {
         "Authorization": `Bearer ${providerKey}`,
         "Content-Type": "application/json",

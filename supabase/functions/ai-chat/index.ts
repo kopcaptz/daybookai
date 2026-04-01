@@ -373,16 +373,14 @@ serve(async (req) => {
       multimodal: hasMultimodal,
     });
 
-    // Build request body (MiniMax has different format)
-    const body = provider === "minimax"
-      ? buildMinimaxBody(messages as ChatMessage[], providerConfig.effectiveModel, maxTokensValidation.value, temperatureValidation.value)
-      : {
-          model: providerConfig.effectiveModel,
-          messages: messages as ChatMessage[],
-          max_tokens: maxTokensValidation.value,
-          temperature: temperatureValidation.value,
-          stream: true,
-        };
+    // Build request body — unified OpenAI-compatible format for all providers
+    const body = {
+      model: providerConfig.effectiveModel,
+      messages: messages as ChatMessage[],
+      max_tokens: maxTokensValidation.value,
+      temperature: temperatureValidation.value,
+      stream: true,
+    };
 
     const response = await fetch(providerConfig.apiUrl, {
       method: "POST",

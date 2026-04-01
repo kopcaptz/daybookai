@@ -52,7 +52,7 @@ function getTestConfig(provider: string, providerKey?: string): { apiUrl: string
     const apiKey = providerKey;
     if (!apiKey) return null;
     return {
-      apiUrl: "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
+      apiUrl: "https://api.minimax.io/v1/chat/completions",
       apiKey,
       headers: {
         "Authorization": `Bearer ${apiKey}`,
