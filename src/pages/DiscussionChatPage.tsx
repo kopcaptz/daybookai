@@ -149,6 +149,15 @@ function DiscussionChatContent() {
   
   const handleSend = async () => {
     if (!inputText.trim() || sending || !session) return;
+
+    if (!hasLiveAuthority) {
+      toast.info(
+        language === 'ru'
+          ? 'Сначала добавьте записи в контекст, чтобы начать обсуждение.'
+          : 'Add entries to the context first to begin this discussion.'
+      );
+      return;
+    }
     
     const userText = inputText.trim();
     setInputText('');
@@ -297,12 +306,12 @@ function DiscussionChatContent() {
                 <>
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm">
                     <Search className="h-3.5 w-3.5" />
-                    {language === 'ru' ? 'Режим «Найти в записях» активен' : 'Find in notes mode active'}
+                    {language === 'ru' ? 'Добавьте записи, чтобы начать обсуждение' : 'Add entries to begin this discussion'}
                   </div>
                   <p className="text-muted-foreground text-sm max-w-xs mx-auto">
                     {language === 'ru' 
-                      ? 'AI будет искать релевантные записи автоматически. Или добавьте записи через кнопку «Контекст».'
-                      : 'AI will search for relevant entries automatically. Or add entries via the Context button.'}
+                      ? 'Эта сессия пока только staging. Добавьте записи через кнопку «Контекст», чтобы у обсуждения появилась живая опора.'
+                      : 'This session is still staging only. Add entries via the Context button so the discussion has live entry-backed authority.'}
                   </p>
                 </>
               ) : (
@@ -345,15 +354,22 @@ function DiscussionChatContent() {
         <div className="max-w-2xl mx-auto">
           {/* Find mode toggle */}
           <div className="flex items-center gap-2 mb-3">
-            <Toggle
-              pressed={findMode}
-              onPressedChange={setFindMode}
-              size="sm"
-              className="gap-1.5 text-xs"
-            >
-              <Search className="h-3.5 w-3.5" />
-              {t('discussion.findInNotes')}
-            </Toggle>
+            {hasLiveAuthority ? (
+              <Toggle
+                pressed={findMode}
+                onPressedChange={setFindMode}
+                size="sm"
+                className="gap-1.5 text-xs"
+              >
+                <Search className="h-3.5 w-3.5" />
+                {t('discussion.findInNotes')}
+              </Toggle>
+            ) : (
+              <div className="inline-flex items-center gap-1.5 rounded-md border border-border/60 px-2.5 py-1.5 text-xs text-muted-foreground">
+                <Search className="h-3.5 w-3.5" />
+                {language === 'ru' ? 'Staging: добавьте записи' : 'Staging: add entries first'}
+              </div>
+            )}
             <ModePill mode={mode} />
           </div>
           
@@ -364,14 +380,18 @@ function DiscussionChatContent() {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={MODE_PLACEHOLDERS[mode][language as 'ru' | 'en'] || t('discussion.placeholder')}
-              disabled={sending}
+              placeholder={hasLiveAuthority
+                ? (MODE_PLACEHOLDERS[mode][language as 'ru' | 'en'] || t('discussion.placeholder'))
+                : (language === 'ru'
+                  ? 'Добавьте записи через «Контекст», чтобы начать обсуждение'
+                  : 'Add entries via Context to begin this discussion')}
+              disabled={sending || !hasLiveAuthority}
               className="min-h-[44px] max-h-[150px] resize-none"
               rows={1}
             />
             <Button
               onClick={handleSend}
-              disabled={!inputText.trim() || sending}
+              disabled={!inputText.trim() || sending || !hasLiveAuthority}
               size="icon"
               className="shrink-0 h-11 w-11"
             >

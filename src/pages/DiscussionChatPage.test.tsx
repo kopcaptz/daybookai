@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   deleteDiscussionSession: vi.fn(),
   buildContextPack: vi.fn(),
   sendDiscussionMessage: vi.fn(),
+  toastInfo: vi.fn(),
+  toastError: vi.fn(),
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -117,8 +119,8 @@ vi.mock('@/lib/i18n', () => ({
 
 vi.mock('sonner', () => ({
   toast: {
-    info: vi.fn(),
-    error: vi.fn(),
+    info: mocks.toastInfo,
+    error: mocks.toastError,
   },
 }));
 
@@ -134,6 +136,8 @@ describe('DiscussionChatPage live authority gating', () => {
     mocks.deleteDiscussionSession.mockReset();
     mocks.buildContextPack.mockReset();
     mocks.sendDiscussionMessage.mockReset();
+    mocks.toastInfo.mockReset();
+    mocks.toastError.mockReset();
 
     mocks.session = {
       id: 42,
@@ -168,19 +172,42 @@ describe('DiscussionChatPage live authority gating', () => {
     cleanup();
   });
 
-  it('treats docs-only scope as lacking live authority', async () => {
+  it('shows zero-authority sessions as staging and guides the user to add entries first', async () => {
     render(<DiscussionChatPage />);
 
-    expect(await screen.findByText('Find in notes mode active')).toBeTruthy();
+    expect(await screen.findByText('Add entries to begin this discussion')).toBeTruthy();
+    expect(
+      screen.getByText('This session is still staging only. Add entries via the Context button so the discussion has live entry-backed authority.')
+    ).toBeTruthy();
+    expect(screen.getByText('Staging: add entries first')).toBeTruthy();
+    expect(screen.queryByText('Find in notes mode active')).toBeNull();
 
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'discussion.findInNotes' }).getAttribute('aria-pressed')
-      ).toBe('true');
-    });
+    const input = screen.getByPlaceholderText('Add entries via Context to begin this discussion');
+    expect((input as HTMLTextAreaElement).disabled).toBe(true);
   });
 
-  it('does not force find-mode onboarding when entry-backed live authority exists', async () => {
+  it('does not allow zero-authority sessions to send or persist turns', async () => {
+    render(<DiscussionChatPage />);
+
+    const input = await screen.findByPlaceholderText('Add entries via Context to begin this discussion');
+    const buttons = screen.getAllByRole('button');
+    const sendButton = buttons[buttons.length - 1];
+
+    fireEvent.change(input, { target: { value: 'Can you continue?' } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    fireEvent.click(sendButton);
+
+    await waitFor(() => {
+      expect(mocks.addDiscussionMessage).not.toHaveBeenCalled();
+    });
+
+    expect(mocks.buildContextPack).not.toHaveBeenCalled();
+    expect(mocks.sendDiscussionMessage).not.toHaveBeenCalled();
+    expect(mocks.toastInfo).toHaveBeenCalledWith('Add entries to the context first to begin this discussion.');
+    expect((sendButton as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('does not force staging onboarding when entry-backed live authority exists', async () => {
     mocks.session = {
       ...mocks.session,
       title: 'Entry-backed discussion',
@@ -193,7 +220,8 @@ describe('DiscussionChatPage live authority gating', () => {
     render(<DiscussionChatPage />);
 
     expect(await screen.findByText('discussion.placeholder')).toBeTruthy();
-    expect(screen.queryByText('Find in notes mode active')).toBeNull();
+    expect(screen.queryByText('Add entries to begin this discussion')).toBeNull();
+    expect(screen.queryByText('Staging: add entries first')).toBeNull();
 
     await waitFor(() => {
       expect(
@@ -290,5 +318,7 @@ describe('DiscussionChatPage live authority gating', () => {
         supportedByEvidenceIds: ['E1', 'E2'],
       }),
     ]);
+    expect(mocks.buildContextPack).toHaveBeenCalledTimes(1);
+    expect(mocks.sendDiscussionMessage).toHaveBeenCalledTimes(1);
   });
 });
