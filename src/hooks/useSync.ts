@@ -12,26 +12,31 @@ import {
 import { toast } from 'sonner';
 
 export function useSync() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [status, setStatus] = useState<SyncStatus>('idle');
   const [lastSynced, setLastSynced] = useState<string | null>(null);
   const [migrationProgress, setMigrationProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Load sync meta on mount and when auth changes
   useEffect(() => {
-    const meta = loadSyncMeta();
+    if (!isAuthenticated || !user?.id) {
+      setLastSynced(null);
+      return;
+    }
+
+    const meta = loadSyncMeta(user.id);
     setLastSynced(meta.lastSyncedAt);
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user?.id]);
 
   // Start/stop auto-sync based on auth state
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && user?.id) {
       startAutoSync();
     } else {
       stopAutoSync();
     }
     return () => stopAutoSync();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user?.id]);
 
   const syncNow = useCallback(async () => {
     if (!isAuthenticated || status === 'syncing') return;
