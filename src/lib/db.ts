@@ -253,6 +253,8 @@ export interface DiscussionMessage {
     entityId: number;
     pageIndex?: number;
     biographyDate?: string;  // YYYY-MM-DD for biographies
+    supportedByEvidenceIds?: string[]; // Biography-only visible entry refs in the same packet
+    knownSourceEntryCount?: number;    // Biography-only total grounded entry count from storage
   }>;
   status?: 'ok' | 'error';
   meta?: {

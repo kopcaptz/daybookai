@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import { FileText, ExternalLink, Book, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { EvidenceRef } from '@/lib/librarian/contextPack';
-import { useI18n } from '@/lib/i18n';
 
 interface EvidenceCardProps {
   evidence: EvidenceRef;
@@ -33,11 +32,33 @@ function getEvidenceClassLabel(evidence: EvidenceRef): string | null {
   }
 }
 
+function getBiographyProvenanceText(evidence: EvidenceRef): string | null {
+  if (evidence.type !== 'biography') return null;
+
+  const supportedByEvidenceIds = evidence.supportedByEvidenceIds ?? [];
+  const knownSourceEntryCount = evidence.knownSourceEntryCount ?? 0;
+
+  if (knownSourceEntryCount <= 0) return null;
+
+  if (supportedByEvidenceIds.length > 0 && supportedByEvidenceIds.length >= knownSourceEntryCount) {
+    return `Grounded in ${supportedByEvidenceIds.join(', ')}`;
+  }
+
+  if (supportedByEvidenceIds.length > 0) {
+    const hiddenSourceCount = Math.max(knownSourceEntryCount - supportedByEvidenceIds.length, 0);
+    if (hiddenSourceCount > 0) {
+      return `Grounded in ${supportedByEvidenceIds.join(', ')}, plus ${hiddenSourceCount} source ${hiddenSourceCount === 1 ? 'entry' : 'entries'} not shown here`;
+    }
+    return `Grounded in ${supportedByEvidenceIds.join(', ')}`;
+  }
+
+  return 'Grounding entries are known but not shown in this packet';
+}
+
 export function EvidenceCard({ evidence, highlighted = false }: EvidenceCardProps) {
-  const { t } = useI18n();
-  
   const Icon = getEvidenceIcon(evidence.type);
   const classLabel = getEvidenceClassLabel(evidence);
+  const provenanceText = getBiographyProvenanceText(evidence);
   
   return (
     <Link
@@ -68,6 +89,11 @@ export function EvidenceCard({ evidence, highlighted = false }: EvidenceCardProp
         {classLabel && (
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80 mb-1">
             {classLabel}
+          </p>
+        )}
+        {provenanceText && (
+          <p className="text-[11px] text-muted-foreground/90 mb-1">
+            {provenanceText}
           </p>
         )}
         <p className="text-sm font-medium text-foreground truncate">
@@ -116,8 +142,6 @@ function buildEvidenceGroups(evidence: EvidenceRef[]): EvidenceGroup[] {
 }
 
 export function EvidenceList({ evidence, usedIds, maxVisible = 4 }: EvidenceListProps) {
-  const { t } = useI18n();
-  
   if (evidence.length === 0) return null;
   
   const groups = buildEvidenceGroups(evidence);

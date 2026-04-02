@@ -353,8 +353,47 @@ describe('buildContextPack', () => {
       findMode: false,
     });
 
+    const biographyEvidence = result.evidence.find(evidence => evidence.type === 'biography');
+
     expect(result.contextText).toContain('[E1] CLASS: PRIMARY_AUTHORED_ENTRY');
     expect(result.contextText).toContain('[B1] CLASS: DERIVED_DAILY_BIOGRAPHY');
+    expect(result.contextText).toContain('SUPPORTED_BY: [E1]');
+    expect(biographyEvidence?.supportedByEvidenceIds).toEqual(['E1']);
+    expect(biographyEvidence?.knownSourceEntryCount).toBe(1);
+  });
+
+  it('marks biography provenance as partial when some source entries are not visible in the packet', async () => {
+    for (let i = 1; i <= 9; i++) {
+      mockState.entries.set(i, makeEntry({
+        id: i,
+        date: '2026-04-01',
+        text: `Scoped entry ${i}`,
+        createdAt: i * 100,
+      }));
+    }
+
+    mockState.biographies.set(
+      '2026-04-01',
+      makeBiography(
+        '2026-04-01',
+        [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        'Crowded day',
+        'Derived synthesis from all scoped entries'
+      )
+    );
+
+    const result = await buildContextPack({
+      sessionScope: { entryIds: [1, 2, 3, 4, 5, 6, 7, 8, 9], docIds: [] },
+      userQuery: '',
+      mode: 'discuss',
+      findMode: false,
+    });
+
+    const biographyEvidence = result.evidence.find(evidence => evidence.type === 'biography');
+
+    expect(biographyEvidence?.supportedByEvidenceIds).toHaveLength(8);
+    expect(biographyEvidence?.knownSourceEntryCount).toBe(9);
+    expect(result.contextText).toContain('partial: 8/9 source entries visible in this packet');
   });
 });
 

@@ -15,6 +15,8 @@ export interface EvidenceRef {
   entityId: number;             // entryId or docId (0 for biographies)
   pageIndex?: number;
   biographyDate?: string;       // YYYY-MM-DD for biographies
+  supportedByEvidenceIds?: string[]; // Biography-only visible entry refs in the same packet
+  knownSourceEntryCount?: number;    // Biography-only total grounded entry count from storage
 }
 
 export interface ContextPackOptions {
@@ -119,6 +121,29 @@ function buildEntryTitle(entry: DiaryEntry): string {
   const date = format(new Date(entry.date), 'dd.MM.yyyy');
   const time = format(new Date(entry.createdAt), 'HH:mm');
   return `${date} @ ${time}`;
+}
+
+function formatSupportedEvidenceIds(evidenceIds: string[]): string {
+  return evidenceIds.map(id => `[${id}]`).join(', ');
+}
+
+function buildBiographyProvenanceLine(
+  supportedByEvidenceIds: string[],
+  knownSourceEntryCount: number
+): string {
+  if (supportedByEvidenceIds.length > 0 && supportedByEvidenceIds.length === knownSourceEntryCount) {
+    return `SUPPORTED_BY: ${formatSupportedEvidenceIds(supportedByEvidenceIds)}`;
+  }
+
+  if (supportedByEvidenceIds.length > 0) {
+    return `SUPPORTED_BY: ${formatSupportedEvidenceIds(supportedByEvidenceIds)} (partial: ${supportedByEvidenceIds.length}/${knownSourceEntryCount} source entries visible in this packet)`;
+  }
+
+  if (knownSourceEntryCount > 0) {
+    return `SUPPORTED_BY: [none visible in this packet] (${knownSourceEntryCount} known source entries)`;
+  }
+
+  return 'SUPPORTED_BY: [no recorded source entries]';
 }
 
 /**
@@ -329,6 +354,7 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
   const selectedEntries = entries.slice(0, maxEntries);
   
   const evidence: EvidenceRef[] = [];
+  const visibleEntryRefIds = new Map<number, string>();
   const contextParts: string[] = [];
   let totalChars = 0;
   
@@ -370,6 +396,7 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
     
     contextParts.push(contextEntry);
     totalChars += contextEntry.length;
+    visibleEntryRefIds.set(entryId, refId);
   }
   
   // Load and add biographies - pass found entry IDs in findMode too
@@ -388,6 +415,14 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
   for (let i = 0; i < biographies.length; i++) {
     const bio = biographies[i];
     const refId = `B${i + 1}`;
+    const knownSourceEntryCount = bio.sourceEntryIds.length;
+    const supportedByEvidenceIds = bio.sourceEntryIds
+      .map(entryId => visibleEntryRefIds.get(entryId))
+      .filter((entryRefId): entryRefId is string => Boolean(entryRefId));
+    const provenanceLine = buildBiographyProvenanceLine(
+      supportedByEvidenceIds,
+      knownSourceEntryCount
+    );
     
     // Build biography snippet with title + narrative + highlights
     const bioContent = [
@@ -410,10 +445,12 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
       deepLink: `/day/${bio.date}`,
       entityId: 0,
       biographyDate: bio.date,
+      supportedByEvidenceIds,
+      knownSourceEntryCount,
     });
     
     // Build context text for biography
-    const contextBio = `[${refId}] CLASS: DERIVED_DAILY_BIOGRAPHY\nChronicle ${bio.date}: ${bio.biography!.title}\n${snippet}`;
+    const contextBio = `[${refId}] CLASS: DERIVED_DAILY_BIOGRAPHY\nChronicle ${bio.date}: ${bio.biography!.title}\n${provenanceLine}\n${snippet}`;
     
     // Check total char limit
     if (totalChars + contextBio.length > CONTEXT_LIMITS.maxTotalContextChars) {

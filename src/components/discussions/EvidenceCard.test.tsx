@@ -40,6 +40,8 @@ describe('EvidenceCard', () => {
                 deepLink: '/day/2026-04-01',
                 entityId: 0,
                 biographyDate: '2026-04-01',
+                supportedByEvidenceIds: ['E1', 'E2'],
+                knownSourceEntryCount: 2,
               }}
             />
           </div>
@@ -49,6 +51,7 @@ describe('EvidenceCard', () => {
 
     expect(screen.getByText('Diary entry')).toBeInTheDocument();
     expect(screen.getByText('Derived chronicle')).toBeInTheDocument();
+    expect(screen.getByText('Grounded in E1, E2')).toBeInTheDocument();
   });
 
   it('groups evidence list by evidence class', () => {
@@ -99,5 +102,37 @@ describe('EvidenceCard', () => {
 
     expect(screen.queryByText('Diary entry')).not.toBeInTheDocument();
     expect(screen.queryByText('Derived chronicle')).not.toBeInTheDocument();
+  });
+
+  it('shows partial provenance for biography evidence when only some grounding entries are visible', () => {
+    renderCard({
+      type: 'biography',
+      id: 'B1',
+      title: 'Chronicle title',
+      snippet: 'Chronicle snippet',
+      deepLink: '/day/2026-04-01',
+      entityId: 0,
+      biographyDate: '2026-04-01',
+      supportedByEvidenceIds: ['E1'],
+      knownSourceEntryCount: 3,
+    });
+
+    expect(screen.getByText('Grounded in E1, plus 2 source entries not shown here')).toBeInTheDocument();
+  });
+
+  it('shows known-but-not-visible provenance for biography evidence', () => {
+    renderCard({
+      type: 'biography',
+      id: 'B1',
+      title: 'Chronicle title',
+      snippet: 'Chronicle snippet',
+      deepLink: '/day/2026-04-01',
+      entityId: 0,
+      biographyDate: '2026-04-01',
+      supportedByEvidenceIds: [],
+      knownSourceEntryCount: 2,
+    });
+
+    expect(screen.getByText('Grounding entries are known but not shown in this packet')).toBeInTheDocument();
   });
 });
