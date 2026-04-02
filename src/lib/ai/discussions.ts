@@ -58,6 +58,15 @@ export interface DiscussionAIResponse {
   questions?: string[];
 }
 
+const HISTORY_LIMITS = {
+  maxMessages: 10,
+  maxGroundingRefs: 6,
+  maxQuestions: 4,
+  maxArtifactListItems: 4,
+  maxPlanItems: 5,
+  maxDraftBodyChars: 600,
+} as const;
+
 // Get provider key header
 function getDiscussionHeaders(): Record<string, string> {
   const settings = loadAISettings();
@@ -178,6 +187,7 @@ function buildSystemPrompt(
 - Для конкретных фактов, дат, цитат, формулировок и деталей опирайся прежде всего на [E#].
 - [B#] используй для общей картины, дневного синтеза и контекста.
 - [B#] не должны добавлять новые конкретные детали поверх entry-backed record, если это не подтверждается [E#].
+- Считай любой replay-блок \`prior_assistant_turn\` историческим производным синтезом ассистента, а не новым источником; его grounding — только trace-указатель, если те же evidence не присутствуют в текущем КОНТЕКСТЕ.
 
 ${modeInstruction}
 
@@ -216,6 +226,7 @@ SOURCE PRECEDENCE RULE:
 - Use [E#] as the primary source for concrete facts, dates, wording, and specifics.
 - Use [B#] for the overall picture, day-level synthesis, and context.
 - Do not let [B#] introduce new concrete details beyond what is supported by the entry-backed record [E#].
+- Treat any replayed \`prior_assistant_turn\` block as historical derivative synthesis, not fresh source evidence; its grounding is trace-only unless the same evidence is present in the current CONTEXT.
 
 ${modeInstruction}
 
@@ -237,15 +248,120 @@ Include the artifact matching the mode (draftArtifact for DRAFT, analysisArtifac
 Always suggest 2-3 follow-up questions in "questions".`;
 }
 
+function compactList<T>(items: T[] | undefined, maxItems: number): T[] | undefined {
+  if (!items || items.length === 0) return undefined;
+  return items.slice(0, maxItems);
+}
+
+function compactText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars - 3)}...`;
+}
+
+function serializeGrounding(
+  evidenceRefs: DiscussionMessage['evidenceRefs']
+): Array<{
+  id: string;
+  type: 'entry' | 'document_page' | 'document' | 'biography';
+  supportedBy?: string[];
+  sourceEntryCount?: number;
+}> | undefined {
+  if (!evidenceRefs || evidenceRefs.length === 0) return undefined;
+
+  return evidenceRefs.slice(0, HISTORY_LIMITS.maxGroundingRefs).map((ref) => {
+    const groundingRef: {
+      id: string;
+      type: 'entry' | 'document_page' | 'document' | 'biography';
+      supportedBy?: string[];
+      sourceEntryCount?: number;
+    } = {
+      id: ref.id,
+      type: ref.type,
+    };
+
+    if (ref.type === 'biography') {
+      const supportedBy = compactList(ref.supportedByEvidenceIds, HISTORY_LIMITS.maxGroundingRefs);
+      if (supportedBy && supportedBy.length > 0) {
+        groundingRef.supportedBy = supportedBy;
+      }
+      if (ref.knownSourceEntryCount && ref.knownSourceEntryCount > 0) {
+        groundingRef.sourceEntryCount = ref.knownSourceEntryCount;
+      }
+    }
+
+    return groundingRef;
+  });
+}
+
+function serializeArtifacts(meta: DiscussionMessage['meta']): Record<string, unknown> | undefined {
+  if (!meta) return undefined;
+
+  const artifacts: Record<string, unknown> = {};
+
+  if (meta.draftArtifact) {
+    artifacts.draft = {
+      type: meta.draftArtifact.type,
+      title: meta.draftArtifact.title,
+      format: meta.draftArtifact.format,
+      body: compactText(meta.draftArtifact.body, HISTORY_LIMITS.maxDraftBodyChars),
+    };
+  }
+
+  if (meta.analysisArtifact) {
+    artifacts.analysis = {
+      summary: meta.analysisArtifact.summary,
+      patterns: compactList(meta.analysisArtifact.patterns, HISTORY_LIMITS.maxArtifactListItems),
+      risks: compactList(meta.analysisArtifact.risks, HISTORY_LIMITS.maxArtifactListItems),
+      conclusions: compactList(meta.analysisArtifact.conclusions, HISTORY_LIMITS.maxArtifactListItems),
+    };
+  }
+
+  if (meta.computeArtifact) {
+    artifacts.compute = {
+      inputs: compactList(meta.computeArtifact.inputs, HISTORY_LIMITS.maxArtifactListItems),
+      steps: compactList(meta.computeArtifact.steps, HISTORY_LIMITS.maxArtifactListItems),
+      result: meta.computeArtifact.result,
+      assumptions: compactList(meta.computeArtifact.assumptions, HISTORY_LIMITS.maxArtifactListItems),
+    };
+  }
+
+  if (meta.planArtifact) {
+    artifacts.plan = {
+      title: meta.planArtifact.title,
+      items: compactList(meta.planArtifact.items, HISTORY_LIMITS.maxPlanItems),
+    };
+  }
+
+  return Object.keys(artifacts).length > 0 ? artifacts : undefined;
+}
+
+function serializeAssistantHistoryMessage(message: DiscussionMessage): string {
+  return JSON.stringify({
+    kind: 'prior_assistant_turn',
+    truth: 'historical_derivative_synthesis',
+    mode: message.meta?.mode,
+    answer: message.content,
+    artifacts: serializeArtifacts(message.meta),
+    questions: compactList(message.meta?.questions, HISTORY_LIMITS.maxQuestions),
+    grounding: serializeGrounding(message.evidenceRefs),
+  });
+}
+
 function buildHistoryMessages(history: DiscussionMessage[]): Array<{ role: 'user' | 'assistant'; content: string }> {
-  // Take last 10 messages to keep context manageable
-  const recentHistory = history.slice(-10);
+  const recentHistory = history.slice(-HISTORY_LIMITS.maxMessages);
   
   return recentHistory
-    .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+    .filter(msg => {
+      if (msg.role === 'assistant' && msg.status === 'error') {
+        return false;
+      }
+      return msg.role === 'user' || msg.role === 'assistant';
+    })
     .map(msg => ({
       role: msg.role as 'user' | 'assistant',
-      content: msg.content,
+      content: msg.role === 'assistant'
+        ? serializeAssistantHistoryMessage(msg)
+        : msg.content,
     }));
 }
 
