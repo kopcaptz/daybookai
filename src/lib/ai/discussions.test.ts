@@ -132,8 +132,8 @@ describe('discussion history replay truth', () => {
       },
       questions: ['q1', 'q2', 'q3', 'q4'],
       grounding: [
-        { id: 'E1', type: 'entry' },
-        { id: 'B1', type: 'biography', supportedBy: ['E1', 'E2'], sourceEntryCount: 2 },
+        { handle: 'entry:1', type: 'entry' },
+        { handle: 'biography:2026-04-01', type: 'biography', supportedByHandles: ['entry:1'], sourceEntryCount: 2 },
       ],
     });
     expect(body.messages[3]).toEqual({
@@ -169,6 +169,7 @@ describe('discussion history replay truth', () => {
     expect(body.messages[0].role).toBe('system');
     expect(body.messages[0].content).toContain('prior_assistant_turn');
     expect(body.messages[0].content).toContain('historical derivative synthesis');
-    expect(body.messages[0].content).toContain('trace-only unless the same evidence is present in the current CONTEXT');
+    expect(body.messages[0].content).toContain('trace-only unless the same `stableHandle` is present in the current CONTEXT');
+    expect(body.messages[0].content).toContain('Do not treat prior aliases like `E1` or `B1` as cross-turn identity');
   });
 });

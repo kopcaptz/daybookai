@@ -1,4 +1,4 @@
-import { ContextPackResult, EvidenceRef } from '@/lib/librarian/contextPack';
+import { ContextPackResult, EvidenceRef, deriveStableEvidenceHandle } from '@/lib/librarian/contextPack';
 import { DiscussionMessage, DiscussionMode } from '@/lib/db';
 import { loadAISettings } from '@/lib/aiConfig';
 import { getProviderKeyHeader } from '@/lib/aiUtils';
@@ -187,7 +187,7 @@ function buildSystemPrompt(
 - Для конкретных фактов, дат, цитат, формулировок и деталей опирайся прежде всего на [E#].
 - [B#] используй для общей картины, дневного синтеза и контекста.
 - [B#] не должны добавлять новые конкретные детали поверх entry-backed record, если это не подтверждается [E#].
-- Считай любой replay-блок \`prior_assistant_turn\` историческим производным синтезом ассистента, а не новым источником; его grounding — только trace-указатель, если те же evidence не присутствуют в текущем КОНТЕКСТЕ.
+- Считай любой replay-блок \`prior_assistant_turn\` историческим производным синтезом ассистента, а не новым источником; его grounding — только trace-указатель, если те же \`stableHandle\` присутствуют в текущем КОНТЕКСТЕ. Сопоставляй replay grounding с строками \`STABLE_HANDLE:\` в КОНТЕКСТЕ. Не считай прошлые alias-ярлыки вроде \`E1\` или \`B1\` кросс-turn identity.
 
 ${modeInstruction}
 
@@ -226,7 +226,7 @@ SOURCE PRECEDENCE RULE:
 - Use [E#] as the primary source for concrete facts, dates, wording, and specifics.
 - Use [B#] for the overall picture, day-level synthesis, and context.
 - Do not let [B#] introduce new concrete details beyond what is supported by the entry-backed record [E#].
-- Treat any replayed \`prior_assistant_turn\` block as historical derivative synthesis, not fresh source evidence; its grounding is trace-only unless the same evidence is present in the current CONTEXT.
+- Treat any replayed \`prior_assistant_turn\` block as historical derivative synthesis, not fresh source evidence; its grounding is trace-only unless the same \`stableHandle\` is present in the current CONTEXT. Compare replay grounding against \`STABLE_HANDLE:\` lines in the CONTEXT. Do not treat prior aliases like \`E1\` or \`B1\` as cross-turn identity.
 
 ${modeInstruction}
 
@@ -258,31 +258,47 @@ function compactText(text: string, maxChars: number): string {
   return `${text.slice(0, maxChars - 3)}...`;
 }
 
+function resolveSupportHandle(
+  refsByAlias: Map<string, NonNullable<DiscussionMessage['evidenceRefs']>[number]>,
+  supportAlias: string
+): string | undefined {
+  const supportRef = refsByAlias.get(supportAlias);
+  if (!supportRef) return undefined;
+  return deriveStableEvidenceHandle(supportRef);
+}
+
 function serializeGrounding(
   evidenceRefs: DiscussionMessage['evidenceRefs']
 ): Array<{
-  id: string;
+  handle: string;
   type: 'entry' | 'document_page' | 'document' | 'biography';
-  supportedBy?: string[];
+  supportedByHandles?: string[];
   sourceEntryCount?: number;
 }> | undefined {
   if (!evidenceRefs || evidenceRefs.length === 0) return undefined;
 
+  const refsByAlias = new Map(evidenceRefs.map((ref) => [ref.id, ref]));
+
   return evidenceRefs.slice(0, HISTORY_LIMITS.maxGroundingRefs).map((ref) => {
     const groundingRef: {
-      id: string;
+      handle: string;
       type: 'entry' | 'document_page' | 'document' | 'biography';
-      supportedBy?: string[];
+      supportedByHandles?: string[];
       sourceEntryCount?: number;
     } = {
-      id: ref.id,
+      handle: deriveStableEvidenceHandle(ref),
       type: ref.type,
     };
 
     if (ref.type === 'biography') {
-      const supportedBy = compactList(ref.supportedByEvidenceIds, HISTORY_LIMITS.maxGroundingRefs);
-      if (supportedBy && supportedBy.length > 0) {
-        groundingRef.supportedBy = supportedBy;
+      const supportedByHandles = compactList(
+        ref.supportedByEvidenceIds
+          ?.map((supportAlias) => resolveSupportHandle(refsByAlias, supportAlias))
+          .filter((supportHandle): supportHandle is string => Boolean(supportHandle)),
+        HISTORY_LIMITS.maxGroundingRefs
+      );
+      if (supportedByHandles && supportedByHandles.length > 0) {
+        groundingRef.supportedByHandles = supportedByHandles;
       }
       if (ref.knownSourceEntryCount && ref.knownSourceEntryCount > 0) {
         groundingRef.sourceEntryCount = ref.knownSourceEntryCount;

@@ -28,7 +28,7 @@ vi.mock('@/lib/db', () => ({
   hasLiveDiscussionAuthority: (scope: { entryIds: number[] }) => scope.entryIds.length > 0,
 }));
 
-import { buildContextPack, getScopeCountText } from './contextPack';
+import { buildContextPack, deriveStableEvidenceHandle, getScopeCountText } from './contextPack';
 
 function makeEntry(overrides: Partial<DiaryEntry> & Pick<DiaryEntry, 'id' | 'date' | 'text' | 'createdAt'>): DiaryEntry {
   return {
@@ -354,10 +354,15 @@ describe('buildContextPack', () => {
     });
 
     const biographyEvidence = result.evidence.find(evidence => evidence.type === 'biography');
+    const entryEvidence = result.evidence.find(evidence => evidence.type === 'entry');
 
     expect(result.contextText).toContain('[E1] CLASS: PRIMARY_AUTHORED_ENTRY');
+    expect(result.contextText).toContain('STABLE_HANDLE: entry:1');
     expect(result.contextText).toContain('[B1] CLASS: DERIVED_DAILY_BIOGRAPHY');
+    expect(result.contextText).toContain('STABLE_HANDLE: biography:2026-04-01');
     expect(result.contextText).toContain('SUPPORTED_BY: [E1]');
+    expect(entryEvidence?.stableHandle).toBe('entry:1');
+    expect(biographyEvidence?.stableHandle).toBe('biography:2026-04-01');
     expect(biographyEvidence?.supportedByEvidenceIds).toEqual(['E1']);
     expect(biographyEvidence?.knownSourceEntryCount).toBe(1);
   });
@@ -394,6 +399,32 @@ describe('buildContextPack', () => {
     expect(biographyEvidence?.supportedByEvidenceIds).toHaveLength(8);
     expect(biographyEvidence?.knownSourceEntryCount).toBe(9);
     expect(result.contextText).toContain('partial: 8/9 source entries visible in this packet');
+  });
+});
+
+describe('deriveStableEvidenceHandle', () => {
+  it('derives deterministic stable handles from persisted identity ingredients', () => {
+    expect(deriveStableEvidenceHandle({
+      type: 'entry',
+      entityId: 7,
+    })).toBe('entry:7');
+
+    expect(deriveStableEvidenceHandle({
+      type: 'biography',
+      entityId: 0,
+      biographyDate: '2026-04-01',
+    })).toBe('biography:2026-04-01');
+
+    expect(deriveStableEvidenceHandle({
+      type: 'document',
+      entityId: 11,
+    })).toBe('document:11');
+
+    expect(deriveStableEvidenceHandle({
+      type: 'document_page',
+      entityId: 11,
+      pageIndex: 3,
+    })).toBe('document_page:11:3');
   });
 });
 

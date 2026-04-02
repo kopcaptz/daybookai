@@ -4,10 +4,50 @@ import { format } from 'date-fns';
 // Re-export DiscussionMode for convenience
 export type { DiscussionMode } from '@/lib/db';
 
+export interface EvidenceIdentityRef {
+  type: 'entry' | 'document_page' | 'document' | 'biography';
+  entityId: number;
+  pageIndex?: number;
+  biographyDate?: string;
+  deepLink?: string;
+}
+
+function deriveBiographyIdentityDate(evidence: EvidenceIdentityRef): string {
+  if (evidence.biographyDate) return evidence.biographyDate;
+
+  const deepLinkMatch = evidence.deepLink?.match(/\/day\/([^/?#]+)/);
+  if (deepLinkMatch) return deepLinkMatch[1];
+
+  return String(evidence.entityId);
+}
+
+function deriveDocumentPageIndex(evidence: EvidenceIdentityRef): number {
+  if (typeof evidence.pageIndex === 'number') return evidence.pageIndex;
+
+  const deepLinkPage = evidence.deepLink?.match(/[?&]page=(\d+)/);
+  if (deepLinkPage) return Number(deepLinkPage[1]);
+
+  return 0;
+}
+
+export function deriveStableEvidenceHandle(evidence: EvidenceIdentityRef): string {
+  switch (evidence.type) {
+    case 'entry':
+      return `entry:${evidence.entityId}`;
+    case 'biography':
+      return `biography:${deriveBiographyIdentityDate(evidence)}`;
+    case 'document':
+      return `document:${evidence.entityId}`;
+    case 'document_page':
+      return `document_page:${evidence.entityId}:${deriveDocumentPageIndex(evidence)}`;
+  }
+}
+
 // Evidence reference for AI citations
 export interface EvidenceRef {
   type: 'entry' | 'document_page' | 'document' | 'biography';
-  id: string;                   // Stable ref ID like "E1", "D2", "B1"
+  id: string;                   // Turn-local citation alias like "E1", "D2", "B1"
+  stableHandle?: string;        // Cross-turn identity handle derived from persisted evidence identity
   title: string;
   subtitle?: string;            // Time/page/folder path
   snippet?: string;
@@ -363,6 +403,11 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
     const entry = selectedEntries[i];
     const entryId = entry.id!;
     const refId = `E${i + 1}`;
+    const stableHandle = deriveStableEvidenceHandle({
+      type: 'entry',
+      entityId: entryId,
+      deepLink: `/entry/${entryId}`,
+    });
     
     // Get attachment count for privacy note
     const attachmentCount = await getAttachmentCount(entryId);
@@ -379,6 +424,7 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
     evidence.push({
       type: 'entry',
       id: refId,
+      stableHandle,
       title,
       subtitle,
       snippet,
@@ -387,7 +433,7 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
     });
     
     // Build context text
-    const contextEntry = `[${refId}] CLASS: PRIMARY_AUTHORED_ENTRY\n${title}${subtitle ? ` | Tags: ${subtitle}` : ''}\n${snippet}${attachmentNote}`;
+    const contextEntry = `[${refId}] CLASS: PRIMARY_AUTHORED_ENTRY\nSTABLE_HANDLE: ${stableHandle}\n${title}${subtitle ? ` | Tags: ${subtitle}` : ''}\n${snippet}${attachmentNote}`;
     
     // Check total char limit
     if (totalChars + contextEntry.length > CONTEXT_LIMITS.maxTotalContextChars) {
@@ -416,6 +462,12 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
     const bio = biographies[i];
     const refId = `B${i + 1}`;
     const knownSourceEntryCount = bio.sourceEntryIds.length;
+    const stableHandle = deriveStableEvidenceHandle({
+      type: 'biography',
+      entityId: 0,
+      biographyDate: bio.date,
+      deepLink: `/day/${bio.date}`,
+    });
     const supportedByEvidenceIds = bio.sourceEntryIds
       .map(entryId => visibleEntryRefIds.get(entryId))
       .filter((entryRefId): entryRefId is string => Boolean(entryRefId));
@@ -439,6 +491,7 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
     evidence.push({
       type: 'biography',
       id: refId,
+      stableHandle,
       title: `Хроника ${dateFormatted}`,
       subtitle: bio.biography!.title,
       snippet,
@@ -450,7 +503,7 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
     });
     
     // Build context text for biography
-    const contextBio = `[${refId}] CLASS: DERIVED_DAILY_BIOGRAPHY\nChronicle ${bio.date}: ${bio.biography!.title}\n${provenanceLine}\n${snippet}`;
+    const contextBio = `[${refId}] CLASS: DERIVED_DAILY_BIOGRAPHY\nSTABLE_HANDLE: ${stableHandle}\nChronicle ${bio.date}: ${bio.biography!.title}\n${provenanceLine}\n${snippet}`;
     
     // Check total char limit
     if (totalChars + contextBio.length > CONTEXT_LIMITS.maxTotalContextChars) {
