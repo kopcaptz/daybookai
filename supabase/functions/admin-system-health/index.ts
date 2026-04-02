@@ -60,6 +60,7 @@ async function verifyAdminToken(token: string, secret: string): Promise<boolean>
     // Check expiration
     const payload = JSON.parse(atob(payloadBase64));
     if (payload.exp < Date.now()) return false;
+    if (payload.type !== "admin") return false;
 
     return true;
   } catch (error) {
