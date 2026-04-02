@@ -2,7 +2,9 @@ import { useState, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Sun, Moon, Monitor, Trash2, AlertTriangle, HardDrive, Smartphone, Globe, Clock, Shield, Receipt, Bell, Coffee, Zap } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
+import { useAuth } from '@/hooks/useAuth';
 import { clearAllData, STORAGE_WARNINGS, loadBioSettings, saveBioSettings } from '@/lib/db';
+import { resetAppState, type CriticalResidualId } from '@/lib/resetService';
 import { useStorageUsage } from '@/hooks/useStorageUsage';
 import { formatFileSize } from '@/lib/mediaUtils';
 import { Button } from '@/components/ui/button';
@@ -41,9 +43,13 @@ import {
 function SettingsContent() {
   const storage = useStorageUsage();
   const { theme, setTheme } = useTheme();
+  const { signOut } = useAuth();
   const { t, language, setLanguage } = useI18n();
   const navigate = useNavigate();
   const [isClearing, setIsClearing] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const isDestructiveBusy = isClearing || isResetting;
+  const destructiveActionLockRef = useRef(false);
   const [bioTime, setBioTime] = useState(() => loadBioSettings().bioTime);
   
   // Android-only reminder notifications toggle
@@ -121,7 +127,41 @@ function SettingsContent() {
     saveBioSettings({ bioTime: value });
   };
 
+  const getCriticalResidualLabel = (residual: CriticalResidualId) => {
+    switch (residual) {
+      case 'sync_activity':
+        return language === 'ru' ? 'синхронизация всё ещё активна' : 'sync may still be active';
+      case 'auth_session':
+        return language === 'ru' ? 'сессия аккаунта всё ещё может быть активна' : 'account session may still be active';
+      case 'local_daybook_data':
+        return language === 'ru' ? 'локальные данные Daybook могли сохраниться' : 'local Daybook data may still remain';
+      case 'sync_owner_state':
+        return language === 'ru' ? 'локальная привязка владельца или sync metadata могли сохраниться' : 'local owner binding or sync metadata may still remain';
+      case 'admin_access_state':
+        return language === 'ru' ? 'локальное admin-состояние могло сохраниться' : 'local admin access state may still remain';
+      case 'ethereal_access_state':
+        return language === 'ru' ? 'локальное Ethereal-состояние могло сохраниться' : 'local Ethereal access state may still remain';
+      default:
+        return language === 'ru' ? 'критичные остатки могли сохраниться' : 'critical residue may still remain';
+    }
+  };
+
+  const getCriticalResetMessage = (residuals: CriticalResidualId[]) => {
+    if (residuals.length === 0) {
+      return language === 'ru'
+        ? 'Сброс не завершён: критичные шаги не выполнены.'
+        : 'Reset incomplete: critical steps failed.';
+    }
+
+    const details = residuals.map(getCriticalResidualLabel).join('; ');
+    return language === 'ru'
+      ? `Сброс не завершён: устройство не считается безопасным для передачи. Возможные остатки: ${details}.`
+      : `Reset incomplete: this device is not yet considered safe to transfer. Possible remaining residue: ${details}.`;
+  };
+
   const handleClearData = async () => {
+    if (isDestructiveBusy || destructiveActionLockRef.current) return;
+    destructiveActionLockRef.current = true;
     setIsClearing(true);
     try {
       await clearAllData();
@@ -131,6 +171,46 @@ function SettingsContent() {
       toast.error(t('common.error'));
     } finally {
       setIsClearing(false);
+      destructiveActionLockRef.current = false;
+    }
+  };
+
+  const handleResetDevice = async () => {
+    if (isDestructiveBusy || destructiveActionLockRef.current) return;
+    destructiveActionLockRef.current = true;
+    setIsResetting(true);
+    try {
+      const result = await resetAppState({ signOut });
+
+      if (result.status === 'full_success') {
+        toast.success(language === 'ru' ? 'Устройство сброшено' : 'Device reset complete');
+        setTimeout(() => window.location.reload(), 1000);
+        return;
+      }
+
+      if (result.status === 'partial_success') {
+        toast.error(
+          language === 'ru'
+            ? 'Сброс завершён: часть некритичных локальных метаданных могла сохраниться.'
+            : 'Reset completed: some non-critical local metadata may remain.'
+        );
+        console.warn('[Reset] Non-critical failures:', result.nonCriticalFailures);
+        setTimeout(() => window.location.reload(), 1000);
+        return;
+      }
+
+      toast.error(getCriticalResetMessage(result.criticalResiduals));
+      console.error('[Reset] Critical failure:', result);
+    } catch (error) {
+      console.error('[Reset] Unexpected error:', error);
+      toast.error(
+        language === 'ru'
+          ? 'Сброс не завершён: произошла непредвиденная ошибка.'
+          : 'Reset did not complete: unexpected error.'
+      );
+    } finally {
+      setIsResetting(false);
+      destructiveActionLockRef.current = false;
     }
   };
 
@@ -147,6 +227,19 @@ function SettingsContent() {
     { value: 'he', label: 'עברית' },
     { value: 'ar', label: 'العربية' },
   ];
+
+  const resetTexts = {
+    title: language === 'ru' ? 'Сбросить устройство' : 'Reset this device',
+    desc: language === 'ru'
+      ? 'Best-effort сброс на этом устройстве: выход из аккаунта, очистка локального доступа и удаление локальных данных Daybook.'
+      : 'Best-effort reset on this device: sign out, clear local access state, and erase local Daybook data.',
+    confirmTitle: language === 'ru' ? 'Сбросить это устройство?' : 'Reset this device?',
+    confirmDesc: language === 'ru'
+      ? 'Это пытается выполнить полный локальный reset на этом устройстве. Если критичный шаг не выполнится, сброс останется незавершённым. Облачные данные не удаляются.'
+      : 'This attempts full local closure on this device. If a critical step fails, reset remains incomplete. Cloud data is not deleted.',
+    confirmAction: language === 'ru' ? 'Сбросить устройство' : 'Reset device',
+    processing: language === 'ru' ? 'Сброс...' : 'Resetting...',
+  };
 
   // Storage percentage for progress bar
   const storagePercent = Math.min((storage.total / STORAGE_WARNINGS.critical) * 100, 100);
@@ -417,7 +510,7 @@ function SettingsContent() {
                 <Button
                   variant="destructive"
                   className="w-full gap-2"
-                  disabled={isClearing}
+                  disabled={isDestructiveBusy}
                 >
                   <Trash2 className="h-4 w-4" />
                   {t('settings.clearData')}
@@ -439,8 +532,56 @@ function SettingsContent() {
                   <AlertDialogAction
                     onClick={handleClearData}
                     className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    disabled={isDestructiveBusy}
                   >
                     {t('common.confirm')}
+                  </AlertDialogAction>
+                  <AlertDialogCancel className="w-full">{t('common.cancel')}</AlertDialogCancel>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
+
+        {/* Reset This Device */}
+        <Card className="panel-glass border-destructive/50">
+          <CardHeader>
+            <CardTitle className="text-lg text-destructive">{resetTexts.title}</CardTitle>
+            <CardDescription>
+              {resetTexts.desc}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  className="w-full gap-2"
+                  disabled={isDestructiveBusy}
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  {isResetting ? resetTexts.processing : resetTexts.title}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="panel-glass">
+                <AlertDialogHeader>
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+                    <AlertTriangle className="h-6 w-6 text-destructive" />
+                  </div>
+                  <AlertDialogTitle className="text-center">
+                    {resetTexts.confirmTitle}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="text-center">
+                    {resetTexts.confirmDesc}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+                  <AlertDialogAction
+                    onClick={handleResetDevice}
+                    className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    disabled={isDestructiveBusy}
+                  >
+                    {isResetting ? resetTexts.processing : resetTexts.confirmAction}
                   </AlertDialogAction>
                   <AlertDialogCancel className="w-full">{t('common.cancel')}</AlertDialogCancel>
                 </AlertDialogFooter>
