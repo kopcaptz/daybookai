@@ -142,6 +142,70 @@ describe('discussion history replay truth', () => {
     });
   });
 
+  it('neutralizes stale inline evidence aliases inside replayed assistant answers', async () => {
+    fetchMock.mockResolvedValue(
+      createSseResponse(JSON.stringify({
+        answer: 'Fresh answer',
+        usedEvidenceIds: [],
+        questions: [],
+      }))
+    );
+
+    await sendDiscussionMessage({
+      sessionId: 99,
+      userText: 'Keep going',
+      mode: 'discuss',
+      language: 'en',
+      contextPack: {
+        contextText: 'Current context',
+        evidence: [],
+      },
+      history: [
+        {
+          sessionId: 99,
+          role: 'assistant',
+          content: 'The argument tightened after the meeting [E1] and matched the wider daily pattern [B1].',
+          createdAt: 1,
+          status: 'ok',
+          evidenceRefs: [
+            {
+              id: 'E1',
+              type: 'entry',
+              title: 'Entry 1',
+              deepLink: '/entry/1',
+              entityId: 1,
+            },
+            {
+              id: 'B1',
+              type: 'biography',
+              title: 'Chronicle',
+              deepLink: '/day/2026-04-01',
+              entityId: 0,
+              biographyDate: '2026-04-01',
+              supportedByEvidenceIds: ['E1'],
+              knownSourceEntryCount: 1,
+            },
+          ],
+          meta: {
+            mode: 'discuss',
+          },
+        },
+      ],
+    });
+
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body as string);
+    const replay = JSON.parse(body.messages[1].content);
+
+    expect(replay.answer).toBe('The argument tightened after the meeting and matched the wider daily pattern.');
+    expect(replay.answer).not.toContain('[E1]');
+    expect(replay.answer).not.toContain('[B1]');
+    expect(replay.grounding).toEqual([
+      { handle: 'entry:1', type: 'entry' },
+      { handle: 'biography:2026-04-01', type: 'biography', supportedByHandles: ['entry:1'], sourceEntryCount: 1 },
+    ]);
+  });
+
   it('adds a system prompt rule that demotes replayed assistant blocks to trace-only history', async () => {
     fetchMock.mockResolvedValue(
       createSseResponse(JSON.stringify({

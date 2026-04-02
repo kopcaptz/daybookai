@@ -258,6 +258,14 @@ function compactText(text: string, maxChars: number): string {
   return `${text.slice(0, maxChars - 3)}...`;
 }
 
+function neutralizeHistoricalAnswerAliases(answer: string): string {
+  return answer
+    .replace(/\s*\[(?:E|B|D)\d+\]/g, '')
+    .replace(/[ \t]+([.,;:!?])/g, '$1')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
 function resolveSupportHandle(
   refsByAlias: Map<string, NonNullable<DiscussionMessage['evidenceRefs']>[number]>,
   supportAlias: string
@@ -356,7 +364,7 @@ function serializeAssistantHistoryMessage(message: DiscussionMessage): string {
     kind: 'prior_assistant_turn',
     truth: 'historical_derivative_synthesis',
     mode: message.meta?.mode,
-    answer: message.content,
+    answer: neutralizeHistoricalAnswerAliases(message.content),
     artifacts: serializeArtifacts(message.meta),
     questions: compactList(message.meta?.questions, HISTORY_LIMITS.maxQuestions),
     grounding: serializeGrounding(message.evidenceRefs),
