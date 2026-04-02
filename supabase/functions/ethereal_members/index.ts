@@ -135,7 +135,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { roomId, memberId } = validation.session;
+    const { roomId, memberId, sessionId } = validation.session;
+    const requestUrl = new URL(req.url);
 
     if (req.method === "GET") {
       // List members
@@ -172,6 +173,28 @@ Deno.serve(async (req) => {
           })),
           currentMemberId: memberId,
         }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (req.method === "DELETE" && requestUrl.searchParams.get("self") === "true") {
+      const { error: closeSessionError } = await supabase
+        .from("ethereal_sessions")
+        .delete()
+        .eq("id", sessionId)
+        .eq("room_id", roomId)
+        .eq("member_id", memberId);
+
+      if (closeSessionError) {
+        console.error("Close own session error:", closeSessionError);
+        return new Response(
+          JSON.stringify({ success: false, error: "close_session_error" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, closed: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

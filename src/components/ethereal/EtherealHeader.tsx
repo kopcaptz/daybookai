@@ -1,4 +1,4 @@
-import { getEtherealSession, clearEtherealSession } from '@/lib/etherealTokenService';
+import { getEtherealSession, clearEtherealSession, getEtherealApiHeaders } from '@/lib/etherealTokenService';
 import { Button } from '@/components/ui/button';
 import { LogOut, Users, Anchor, Circle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -25,7 +25,19 @@ export function EtherealHeader({ title, subtitle, isConnected }: EtherealHeaderP
   const lang = getBaseLanguage(language);
   const t = (key: keyof typeof texts) => texts[key][lang];
 
-  const handleLeave = () => {
+  const handleLeave = async () => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    if (session && supabaseUrl) {
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/ethereal_members?self=true`, {
+          method: 'DELETE',
+          headers: getEtherealApiHeaders(),
+        });
+      } catch (error) {
+        console.error('[ethereal] Failed to close session on leave:', error);
+      }
+    }
+
     clearEtherealSession();
     navigate('/');
   };
