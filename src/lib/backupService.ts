@@ -5,6 +5,7 @@
 
 import { db } from './db';
 import { APP_VERSION } from './appVersion';
+import { bindSyncOwnershipIfUnbound, getSyncOwnerUserId } from './syncService';
 import JSZip from 'jszip';
 
 // Types
@@ -13,7 +14,19 @@ export interface BackupManifest {
   dbVersion: number;
   exportedAt: string;
   appVersion: string;
+  ownerUserId?: string | null;
   tables: Record<string, number>;
+}
+
+export type RestoreProvenanceDecisionReason = 'owner_mismatch' | 'missing_provenance';
+
+export interface RestoreProvenanceDecision {
+  allowed: boolean;
+  reason?: RestoreProvenanceDecisionReason;
+}
+
+export interface RestoreImportOwnershipPlan extends RestoreProvenanceDecision {
+  ownerUserIdToBind: string | null;
 }
 
 export interface BackupPayload {
@@ -164,6 +177,46 @@ export function getDaysSinceLastBackup(): number | null {
   const lastBackup = getLastBackupDate();
   if (!lastBackup) return null;
   return Math.floor((Date.now() - new Date(lastBackup).getTime()) / (1000 * 60 * 60 * 24));
+}
+
+export function evaluateRestoreProvenance(params: {
+  deviceOwnerUserId: string | null;
+  backupOwnerUserId?: string | null;
+}): RestoreProvenanceDecision {
+  const { deviceOwnerUserId, backupOwnerUserId } = params;
+
+  if (!deviceOwnerUserId) {
+    return { allowed: true };
+  }
+
+  if (!backupOwnerUserId) {
+    return { allowed: false, reason: 'missing_provenance' };
+  }
+
+  if (backupOwnerUserId !== deviceOwnerUserId) {
+    return { allowed: false, reason: 'owner_mismatch' };
+  }
+
+  return { allowed: true };
+}
+
+export function planRestoreImportOwnership(params: {
+  deviceOwnerUserId: string | null;
+  backupOwnerUserId?: string | null;
+}): RestoreImportOwnershipPlan {
+  const decision = evaluateRestoreProvenance(params);
+
+  if (!decision.allowed) {
+    return {
+      ...decision,
+      ownerUserIdToBind: null,
+    };
+  }
+
+  return {
+    allowed: true,
+    ownerUserIdToBind: params.backupOwnerUserId ?? null,
+  };
 }
 
 /**
@@ -318,6 +371,7 @@ export async function exportFullBackup(
     dbVersion: db.verno,
     exportedAt: new Date().toISOString(),
     appVersion: APP_VERSION,
+    ownerUserId: getSyncOwnerUserId(),
     tables: {
       entries: entries.length,
       attachments: attachments.length,
@@ -513,6 +567,7 @@ export async function exportBackupZip(
     dbVersion: db.verno,
     exportedAt: new Date().toISOString(),
     appVersion: APP_VERSION,
+    ownerUserId: getSyncOwnerUserId(),
     tables: tableCounts,
   };
 
@@ -619,6 +674,15 @@ export async function importFullBackup(
   options: { wipeExisting: boolean } = { wipeExisting: true },
   onProgress?: (progress: ExportProgress) => void
 ): Promise<void> {
+  const restoreOwnershipPlan = planRestoreImportOwnership({
+    deviceOwnerUserId: getSyncOwnerUserId(),
+    backupOwnerUserId: payload.manifest.ownerUserId,
+  });
+
+  if (!restoreOwnershipPlan.allowed) {
+    throw new Error(`Restore denied: ${restoreOwnershipPlan.reason}`);
+  }
+
   // Wipe existing data if requested
   if (options.wipeExisting) {
     await db.transaction('rw', db.tables, async () => {
@@ -694,6 +758,10 @@ export async function importFullBackup(
     await importTableData('analysisQueue', payload.analysisQueue);
     await importTableData('scanLogs', payload.scanLogs);
   });
+
+  if (restoreOwnershipPlan.ownerUserIdToBind) {
+    bindSyncOwnershipIfUnbound(restoreOwnershipPlan.ownerUserIdToBind);
+  }
 }
 
 /**
@@ -717,6 +785,15 @@ export async function importBackupZip(
 
   if (!validateZipManifest(manifest)) {
     throw new Error('Invalid backup: manifest validation failed');
+  }
+
+  const restoreOwnershipPlan = planRestoreImportOwnership({
+    deviceOwnerUserId: getSyncOwnerUserId(),
+    backupOwnerUserId: manifest.ownerUserId,
+  });
+
+  if (!restoreOwnershipPlan.allowed) {
+    throw new Error(`Restore denied: ${restoreOwnershipPlan.reason}`);
   }
 
   // Initialize progress - use mutable status
@@ -864,6 +941,10 @@ export async function importBackupZip(
   }
 
   updateProgress('complete', 100);
+
+  if (restoreOwnershipPlan.ownerUserIdToBind) {
+    bindSyncOwnershipIfUnbound(restoreOwnershipPlan.ownerUserIdToBind);
+  }
 }
 
 /**

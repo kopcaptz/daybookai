@@ -6,8 +6,41 @@
  * These tests focus on validation logic which can be tested reliably
  */
 
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+import JSZip from 'jszip';
+
+const mocks = vi.hoisted(() => ({
+  getSyncOwnerUserId: vi.fn(),
+  bindSyncOwnershipIfUnbound: vi.fn(),
+  dbTransaction: vi.fn(),
+  dbTable: vi.fn(),
+  tableBulkPut: vi.fn(),
+  tableClearOne: vi.fn(),
+  tableClearTwo: vi.fn(),
+}));
+
+vi.mock('./syncService', () => ({
+  getSyncOwnerUserId: mocks.getSyncOwnerUserId,
+  bindSyncOwnershipIfUnbound: mocks.bindSyncOwnershipIfUnbound,
+}));
+
+vi.mock('./db', () => ({
+  db: {
+    verno: 15,
+    tables: [
+      { clear: mocks.tableClearOne },
+      { clear: mocks.tableClearTwo },
+    ],
+    transaction: mocks.dbTransaction,
+    table: mocks.dbTable,
+  },
+}));
+
 import {
+  evaluateRestoreProvenance,
+  importBackupZip,
+  importFullBackup,
+  planRestoreImportOwnership,
   validateBackupManifest,
   validateZipManifest,
   getImportSummary,
@@ -15,7 +48,55 @@ import {
   BackupManifest,
 } from './backupService';
 
+function makePayload(ownerUserId?: string | null): BackupPayload {
+  return {
+    manifest: {
+      dbName: 'DaybookDB',
+      dbVersion: 15,
+      exportedAt: '2026-01-01T00:00:00.000Z',
+      appVersion: '1.0.0',
+      ownerUserId,
+      tables: {},
+    },
+    entries: [],
+    attachments: [],
+    drafts: [],
+    biographies: [],
+    reminders: [],
+    receipts: [],
+    receiptItems: [],
+    discussionSessions: [],
+    discussionMessages: [],
+    weeklyInsights: [],
+    audioTranscripts: [],
+    attachmentInsights: [],
+    analysisQueue: [],
+    scanLogs: [],
+  };
+}
+
 describe('Backup Service', () => {
+  beforeEach(() => {
+    mocks.getSyncOwnerUserId.mockReset();
+    mocks.bindSyncOwnershipIfUnbound.mockReset();
+    mocks.dbTransaction.mockReset();
+    mocks.dbTable.mockReset();
+    mocks.tableBulkPut.mockReset();
+    mocks.tableClearOne.mockReset();
+    mocks.tableClearTwo.mockReset();
+
+    mocks.getSyncOwnerUserId.mockReturnValue(null);
+    mocks.tableBulkPut.mockResolvedValue(undefined);
+    mocks.tableClearOne.mockResolvedValue(undefined);
+    mocks.tableClearTwo.mockResolvedValue(undefined);
+    mocks.dbTable.mockImplementation(() => ({
+      bulkPut: mocks.tableBulkPut,
+    }));
+    mocks.dbTransaction.mockImplementation(async (_mode: unknown, _tables: unknown, cb: () => Promise<void>) => {
+      await cb();
+    });
+  });
+
   describe('validateBackupManifest', () => {
     it('returns false for null/undefined', () => {
       expect(validateBackupManifest(null)).toBe(false);
@@ -192,6 +273,118 @@ describe('Backup Service', () => {
       expect(summary.attachments).toBe(1000);
       expect(summary.receipts).toBe(200);
       expect(summary.receiptItems).toBe(1500);
+    });
+  });
+
+  describe('evaluateRestoreProvenance', () => {
+    it('allows restore when device owner matches backup owner', () => {
+      expect(evaluateRestoreProvenance({
+        deviceOwnerUserId: 'owner-123',
+        backupOwnerUserId: 'owner-123',
+      })).toEqual({ allowed: true });
+    });
+
+    it('denies restore when device owner differs from backup owner', () => {
+      expect(evaluateRestoreProvenance({
+        deviceOwnerUserId: 'owner-123',
+        backupOwnerUserId: 'owner-456',
+      })).toEqual({ allowed: false, reason: 'owner_mismatch' });
+    });
+
+    it('denies restore with missing provenance on owner-bound device', () => {
+      expect(evaluateRestoreProvenance({
+        deviceOwnerUserId: 'owner-123',
+        backupOwnerUserId: null,
+      })).toEqual({ allowed: false, reason: 'missing_provenance' });
+    });
+
+    it('allows missing-provenance backup on clean device', () => {
+      expect(evaluateRestoreProvenance({
+        deviceOwnerUserId: null,
+        backupOwnerUserId: undefined,
+      })).toEqual({ allowed: true });
+    });
+  });
+
+  describe('planRestoreImportOwnership', () => {
+    it('returns an owner to bind for allowed ownerful imports', () => {
+      expect(planRestoreImportOwnership({
+        deviceOwnerUserId: null,
+        backupOwnerUserId: 'owner-123',
+      })).toEqual({ allowed: true, ownerUserIdToBind: 'owner-123' });
+    });
+
+    it('keeps clean-device missing-provenance imports unbound', () => {
+      expect(planRestoreImportOwnership({
+        deviceOwnerUserId: null,
+        backupOwnerUserId: undefined,
+      })).toEqual({ allowed: true, ownerUserIdToBind: null });
+    });
+
+    it('rejects foreign-owner imports without a binding target', () => {
+      expect(planRestoreImportOwnership({
+        deviceOwnerUserId: 'owner-123',
+        backupOwnerUserId: 'owner-456',
+      })).toEqual({ allowed: false, reason: 'owner_mismatch', ownerUserIdToBind: null });
+    });
+  });
+
+  describe('import ownership binding', () => {
+    it('rejects foreign-owner JSON import before destructive work', async () => {
+      mocks.getSyncOwnerUserId.mockReturnValue('owner-123');
+
+      await expect(importFullBackup(makePayload('owner-456'))).rejects.toThrow('Restore denied: owner_mismatch');
+
+      expect(mocks.dbTransaction).not.toHaveBeenCalled();
+      expect(mocks.tableClearOne).not.toHaveBeenCalled();
+      expect(mocks.tableClearTwo).not.toHaveBeenCalled();
+      expect(mocks.bindSyncOwnershipIfUnbound).not.toHaveBeenCalled();
+    });
+
+    it('binds owner after successful ownerful JSON import on a clean device', async () => {
+      const payload = makePayload('owner-123');
+      payload.entries = [{ id: 1, text: 'entry' }];
+
+      await importFullBackup(payload);
+
+      expect(mocks.tableBulkPut).toHaveBeenCalled();
+      expect(mocks.bindSyncOwnershipIfUnbound).toHaveBeenCalledWith('owner-123');
+    });
+
+    it('allows missing-provenance JSON import on a clean device and stays unbound', async () => {
+      const payload = makePayload(undefined);
+      payload.entries = [{ id: 1, text: 'entry' }];
+
+      await importFullBackup(payload);
+
+      expect(mocks.bindSyncOwnershipIfUnbound).not.toHaveBeenCalled();
+    });
+
+    it('does not bind owner when JSON import fails', async () => {
+      const payload = makePayload('owner-123');
+      payload.entries = [{ id: 1, text: 'entry' }];
+      mocks.tableBulkPut.mockRejectedValueOnce(new Error('bulk failed'));
+
+      await expect(importFullBackup(payload)).rejects.toThrow('bulk failed');
+
+      expect(mocks.bindSyncOwnershipIfUnbound).not.toHaveBeenCalled();
+    });
+
+    it('binds owner after successful ownerful ZIP import on a clean device', async () => {
+      const zip = new JSZip();
+      zip.file('manifest.json', JSON.stringify({
+        dbName: 'DaybookDB',
+        dbVersion: 15,
+        exportedAt: '2026-01-01T00:00:00.000Z',
+        appVersion: '1.0.0',
+        ownerUserId: 'owner-123',
+        tables: {},
+      }));
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+      await importBackupZip(zipBlob);
+
+      expect(mocks.bindSyncOwnershipIfUnbound).toHaveBeenCalledWith('owner-123');
     });
   });
 

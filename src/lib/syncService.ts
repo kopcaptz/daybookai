@@ -12,20 +12,88 @@ interface SyncMeta {
 }
 
 const SYNC_META_KEY = 'daybook-sync-meta';
+const SYNC_META_KEY_PREFIX = 'daybook-sync-meta:';
+const SYNC_OWNER_USER_ID_KEY = 'daybook-sync-owner-user-id';
+export const ACCOUNT_SWITCH_BLOCKED = 'account_switch_blocked';
 const SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const SYNC_IDLE_POLL_MS = 50;
 
-// Load sync metadata from localStorage
-export function loadSyncMeta(): SyncMeta {
+let inFlightSyncOperations = 0;
+
+async function withTrackedSyncOperation<T>(operation: () => Promise<T>): Promise<T> {
+  inFlightSyncOperations += 1;
   try {
-    const raw = localStorage.getItem(SYNC_META_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
-  return { lastSyncedAt: null, pendingCount: 0 };
+    return await operation();
+  } finally {
+    inFlightSyncOperations = Math.max(0, inFlightSyncOperations - 1);
+  }
 }
 
-function saveSyncMeta(meta: Partial<SyncMeta>) {
-  const current = loadSyncMeta();
-  localStorage.setItem(SYNC_META_KEY, JSON.stringify({ ...current, ...meta }));
+export async function waitForSyncIdle(timeoutMs = 2000): Promise<void> {
+  const startedAt = Date.now();
+
+  while (inFlightSyncOperations > 0) {
+    if (Date.now() - startedAt >= timeoutMs) {
+      throw new Error('Timed out waiting for sync to become idle');
+    }
+    await new Promise((resolve) => setTimeout(resolve, SYNC_IDLE_POLL_MS));
+  }
+}
+
+function getSyncMetaStorageKey(userId: string): string {
+  return `${SYNC_META_KEY_PREFIX}${userId}`;
+}
+
+export function getSyncOwnerUserId(): string | null {
+  try {
+    return localStorage.getItem(SYNC_OWNER_USER_ID_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function assertSyncOwnershipCompatible(userId: string): void {
+  const syncOwnerUserId = getSyncOwnerUserId();
+  if (syncOwnerUserId && syncOwnerUserId !== userId) {
+    throw new Error(ACCOUNT_SWITCH_BLOCKED);
+  }
+}
+
+export function bindSyncOwnershipIfUnbound(userId: string): void {
+  try {
+    const currentOwner = getSyncOwnerUserId();
+    if (!currentOwner) {
+      localStorage.setItem(SYNC_OWNER_USER_ID_KEY, userId);
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+// Load sync metadata from localStorage
+export function loadSyncMeta(userId?: string): SyncMeta {
+  const defaultMeta = { lastSyncedAt: null, pendingCount: 0 };
+
+  try {
+    if (userId) {
+      const rawUserMeta = localStorage.getItem(getSyncMetaStorageKey(userId));
+      if (rawUserMeta) return JSON.parse(rawUserMeta);
+      return defaultMeta;
+    }
+
+    const rawLegacyMeta = localStorage.getItem(SYNC_META_KEY);
+    if (rawLegacyMeta) return JSON.parse(rawLegacyMeta);
+  } catch { /* ignore */ }
+  return defaultMeta;
+}
+
+function saveSyncMeta(meta: Partial<SyncMeta>, userId?: string) {
+  const current = loadSyncMeta(userId);
+  const storageKey = userId ? getSyncMetaStorageKey(userId) : SYNC_META_KEY;
+  localStorage.setItem(storageKey, JSON.stringify({ ...current, ...meta }));
+  if (userId) {
+    localStorage.removeItem(SYNC_META_KEY);
+  }
 }
 
 // Get current user id
@@ -38,15 +106,23 @@ async function getUserId(): Promise<string | null> {
  * Sync entries: bidirectional with Last-Write-Wins strategy
  */
 export async function syncEntries(): Promise<{ uploaded: number; downloaded: number; errors: string[] }> {
+  return withTrackedSyncOperation(async () => {
   const userId = await getUserId();
   if (!userId) throw new Error('Not authenticated');
+  assertSyncOwnershipCompatible(userId);
 
   const result = { uploaded: 0, downloaded: 0, errors: [] as string[] };
-  const meta = loadSyncMeta();
+  const meta = loadSyncMeta(userId);
 
   try {
     // 1. Get all local entries
     const localEntries = await db.entries.toArray();
+    const syncPrivate = localStorage.getItem('daybook-sync-private') === 'true';
+    const eligibleLocalEntries = localEntries.filter((entry) => {
+      if (!entry.id) return false;
+      if (entry.isPrivate && !syncPrivate) return false;
+      return true;
+    });
 
     // 2. Get server entries updated since last sync (or all if first sync)
     let query = supabase
@@ -69,13 +145,7 @@ export async function syncEntries(): Promise<{ uploaded: number; downloaded: num
     localEntries.forEach(le => { if (le.id) localById.set(le.id, le); });
 
     // 3. Upload local entries that are newer or don't exist on server
-    for (const local of localEntries) {
-      if (!local.id) continue;
-
-      // Skip private entries unless sync-private is enabled
-      const syncPrivate = localStorage.getItem('daybook-sync-private') === 'true';
-      if (local.isPrivate && !syncPrivate) continue;
-
+    for (const local of eligibleLocalEntries) {
       const server = serverByLocalId.get(local.id);
 
       if (!server) {
@@ -202,7 +272,11 @@ export async function syncEntries(): Promise<{ uploaded: number; downloaded: num
     saveSyncMeta({
       lastSyncedAt: new Date().toISOString(),
       pendingCount: 0,
-    });
+    }, userId);
+
+    if (result.errors.length === 0 && (eligibleLocalEntries.length > 0 || result.downloaded > 0)) {
+      bindSyncOwnershipIfUnbound(userId);
+    }
 
     logger.info('[Sync]', `Completed: ↑${result.uploaded} ↓${result.downloaded} errors=${result.errors.length}`);
   } catch (err: any) {
@@ -211,14 +285,17 @@ export async function syncEntries(): Promise<{ uploaded: number; downloaded: num
   }
 
   return result;
+  });
 }
 
 /**
  * Sync attachments: upload local media to cloud storage
  */
 export async function syncAttachments(): Promise<{ uploaded: number; errors: string[] }> {
+  return withTrackedSyncOperation(async () => {
   const userId = await getUserId();
   if (!userId) throw new Error('Not authenticated');
+  assertSyncOwnershipCompatible(userId);
 
   const result = { uploaded: 0, errors: [] as string[] };
 
@@ -302,6 +379,7 @@ export async function syncAttachments(): Promise<{ uploaded: number; errors: str
   }
 
   return result;
+  });
 }
 
 /**
@@ -322,8 +400,10 @@ export async function fullSync(): Promise<{
 export async function migrateLegacyData(
   onProgress?: (current: number, total: number) => void
 ): Promise<{ entries: number; attachments: number; errors: string[] }> {
+  return withTrackedSyncOperation(async () => {
   const userId = await getUserId();
   if (!userId) throw new Error('Not authenticated');
+  assertSyncOwnershipCompatible(userId);
 
   const result = { entries: 0, attachments: 0, errors: [] as string[] };
 
@@ -376,9 +456,13 @@ export async function migrateLegacyData(
   saveSyncMeta({
     lastSyncedAt: new Date().toISOString(),
     pendingCount: 0,
-  });
+  }, userId);
+  if (result.errors.length === 0 && entriesToSync.length > 0) {
+    bindSyncOwnershipIfUnbound(userId);
+  }
 
   return result;
+  });
 }
 
 // Auto-sync manager
@@ -391,7 +475,10 @@ export function startAutoSync() {
       const userId = await getUserId();
       if (!userId) return;
       await syncEntries();
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message === ACCOUNT_SWITCH_BLOCKED) {
+        stopAutoSync();
+      }
       // Silent fail for auto-sync
     }
   }, SYNC_INTERVAL);
