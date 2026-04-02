@@ -17,14 +17,43 @@ type AuthMode = 'login' | 'signup';
 export default function AuthPage() {
   const { language } = useI18n();
   const navigate = useNavigate();
-  const { isAuthenticated, loading, signIn, signUp } = useAuth();
+  const {
+    isAuthenticated,
+    loading,
+    signIn,
+    signUp,
+    authRejectionReason,
+    clearAuthRejectionReason,
+  } = useAuth();
 
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [awaitingAcceptedLogin, setAwaitingAcceptedLogin] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; confirm?: string }>({});
+
+  const t = (ru: string, en: string) => language === 'ru' ? ru : en;
+
+  useEffect(() => {
+    if (!awaitingAcceptedLogin) return;
+
+    if (isAuthenticated) {
+      toast.success(t('Вы вошли в аккаунт', 'Signed in successfully'));
+      setAwaitingAcceptedLogin(false);
+      return;
+    }
+
+    if (authRejectionReason === 'foreign_owner') {
+      toast.error(t(
+        'Это устройство уже связано с другим облачным аккаунтом. Сбросьте устройство перед входом в другой аккаунт.',
+        'This device is already bound to another cloud account. Reset this device before signing in with another account.'
+      ));
+      clearAuthRejectionReason();
+      setAwaitingAcceptedLogin(false);
+    }
+  }, [authRejectionReason, awaitingAcceptedLogin, clearAuthRejectionReason, isAuthenticated, t]);
 
   // Redirect authenticated users
   useEffect(() => {
@@ -32,8 +61,6 @@ export default function AuthPage() {
       navigate('/', { replace: true });
     }
   }, [isAuthenticated, loading, navigate]);
-
-  const t = (ru: string, en: string) => language === 'ru' ? ru : en;
 
   const validate = (): boolean => {
     const newErrors: typeof errors = {};
@@ -59,6 +86,7 @@ export default function AuthPage() {
     setSubmitting(true);
     try {
       if (mode === 'login') {
+        clearAuthRejectionReason();
         const { error } = await signIn(email, password);
         if (error) {
           if (error.message.includes('Invalid login credentials')) {
@@ -70,7 +98,7 @@ export default function AuthPage() {
           }
           return;
         }
-        toast.success(t('Вы вошли в аккаунт', 'Signed in successfully'));
+        setAwaitingAcceptedLogin(true);
       } else {
         const { data, error } = await signUp(email, password);
         if (error) {
