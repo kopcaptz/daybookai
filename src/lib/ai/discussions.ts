@@ -171,10 +171,13 @@ function buildSystemPrompt(
 5. Будь кратким и полезным.
 
 ТИПЫ ИСТОЧНИКОВ:
-- [E1], [E2]... — записи дневника (конкретные события, мысли)
-- [B1], [B2]... — хроники (AI-сводки дней с общей картиной)
+- [E1], [E2]... — записи дневника (авторские первичные источники: конкретные события, мысли, детали)
+- [B1], [B2]... — хроники (производные AI-сводки дней с общей картиной)
 
-Хроники содержат структурированный анализ дня. Используй их для понимания общей картины и контекста.
+ПРАВИЛО ПРИОРИТЕТА ИСТОЧНИКОВ:
+- Для конкретных фактов, дат, цитат, формулировок и деталей опирайся прежде всего на [E#].
+- [B#] используй для общей картины, дневного синтеза и контекста.
+- [B#] не должны добавлять новые конкретные детали поверх entry-backed record, если это не подтверждается [E#].
 
 ${modeInstruction}
 
@@ -206,10 +209,13 @@ RULES:
 5. Keep responses focused and helpful.
 
 SOURCE TYPES:
-- [E1], [E2]... — diary entries (specific events, thoughts)
-- [B1], [B2]... — chronicles (AI summaries of days with overall picture)
+- [E1], [E2]... — diary entries (authored primary sources: specific events, thoughts, details)
+- [B1], [B2]... — chronicles (derived AI summaries of days with the overall picture)
 
-Chronicles contain structured day analysis. Use them to understand the big picture and context.
+SOURCE PRECEDENCE RULE:
+- Use [E#] as the primary source for concrete facts, dates, wording, and specifics.
+- Use [B#] for the overall picture, day-level synthesis, and context.
+- Do not let [B#] introduce new concrete details beyond what is supported by the entry-backed record [E#].
 
 ${modeInstruction}
 

@@ -333,6 +333,29 @@ describe('buildContextPack', () => {
 
     expect(biographyDates).toEqual(['2026-04-02']);
   });
+
+  it('marks entry and biography evidence classes explicitly in contextText', async () => {
+    mockState.entries.set(1, makeEntry({
+      id: 1,
+      date: '2026-04-01',
+      text: 'Concrete authored fact from the diary entry.',
+      createdAt: 100,
+    }));
+    mockState.biographies.set(
+      '2026-04-01',
+      makeBiography('2026-04-01', [1], 'Scoped day', 'Derived synthesis from the same day')
+    );
+
+    const result = await buildContextPack({
+      sessionScope: { entryIds: [1], docIds: [] },
+      userQuery: 'fact',
+      mode: 'discuss',
+      findMode: false,
+    });
+
+    expect(result.contextText).toContain('[E1] CLASS: PRIMARY_AUTHORED_ENTRY');
+    expect(result.contextText).toContain('[B1] CLASS: DERIVED_DAILY_BIOGRAPHY');
+  });
 });
 
 describe('getScopeCountText', () => {

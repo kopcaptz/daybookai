@@ -361,7 +361,7 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
     });
     
     // Build context text
-    const contextEntry = `[${refId}] ${title}${subtitle ? ` | Tags: ${subtitle}` : ''}\n${snippet}${attachmentNote}`;
+    const contextEntry = `[${refId}] CLASS: PRIMARY_AUTHORED_ENTRY\n${title}${subtitle ? ` | Tags: ${subtitle}` : ''}\n${snippet}${attachmentNote}`;
     
     // Check total char limit
     if (totalChars + contextEntry.length > CONTEXT_LIMITS.maxTotalContextChars) {
@@ -413,7 +413,7 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
     });
     
     // Build context text for biography
-    const contextBio = `[${refId}] Chronicle ${bio.date}: ${bio.biography!.title}\n${snippet}`;
+    const contextBio = `[${refId}] CLASS: DERIVED_DAILY_BIOGRAPHY\nChronicle ${bio.date}: ${bio.biography!.title}\n${snippet}`;
     
     // Check total char limit
     if (totalChars + contextBio.length > CONTEXT_LIMITS.maxTotalContextChars) {

@@ -22,10 +22,22 @@ function getEvidenceIcon(type: EvidenceRef['type']) {
   }
 }
 
+function getEvidenceClassLabel(evidence: EvidenceRef): string | null {
+  switch (evidence.type) {
+    case 'entry':
+      return 'Diary entry';
+    case 'biography':
+      return 'Derived chronicle';
+    default:
+      return null;
+  }
+}
+
 export function EvidenceCard({ evidence, highlighted = false }: EvidenceCardProps) {
   const { t } = useI18n();
   
   const Icon = getEvidenceIcon(evidence.type);
+  const classLabel = getEvidenceClassLabel(evidence);
   
   return (
     <Link
@@ -53,6 +65,11 @@ export function EvidenceCard({ evidence, highlighted = false }: EvidenceCardProp
       
       {/* Content */}
       <div className="flex-1 min-w-0">
+        {classLabel && (
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80 mb-1">
+            {classLabel}
+          </p>
+        )}
         <p className="text-sm font-medium text-foreground truncate">
           {evidence.title}
         </p>
@@ -80,32 +97,67 @@ interface EvidenceListProps {
   maxVisible?: number;
 }
 
+interface EvidenceGroup {
+  key: string;
+  label: string;
+  items: EvidenceRef[];
+}
+
+function buildEvidenceGroups(evidence: EvidenceRef[]): EvidenceGroup[] {
+  const entries = evidence.filter(ev => ev.type === 'entry');
+  const biographies = evidence.filter(ev => ev.type === 'biography');
+  const other = evidence.filter(ev => ev.type !== 'entry' && ev.type !== 'biography');
+
+  return [
+    { key: 'entries', label: 'Diary entries', items: entries },
+    { key: 'chronicles', label: 'Derived chronicles', items: biographies },
+    { key: 'other', label: 'Other sources', items: other },
+  ].filter(group => group.items.length > 0);
+}
+
 export function EvidenceList({ evidence, usedIds, maxVisible = 4 }: EvidenceListProps) {
   const { t } = useI18n();
   
   if (evidence.length === 0) return null;
   
-  const visibleEvidence = evidence.slice(0, maxVisible);
-  const hiddenCount = evidence.length - maxVisible;
+  const groups = buildEvidenceGroups(evidence);
+  let remaining = maxVisible;
   
   return (
     <div className="space-y-2">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-        {t('discussion.sources')} ({evidence.length})
+        Evidence used ({evidence.length})
       </p>
-      <div className="space-y-1.5">
-        {visibleEvidence.map((ev) => (
-          <EvidenceCard 
-            key={ev.id} 
-            evidence={ev}
-            highlighted={usedIds?.includes(ev.id)}
-          />
-        ))}
-        {hiddenCount > 0 && (
-          <p className="text-xs text-muted-foreground text-center py-1">
-            +{hiddenCount} more
-          </p>
-        )}
+      <div className="space-y-3">
+        {groups.map((group) => {
+          if (remaining <= 0) return null;
+
+          const visibleItems = group.items.slice(0, remaining);
+          const hiddenCount = group.items.length - visibleItems.length;
+          remaining -= visibleItems.length;
+
+          return (
+            <div key={group.key} className="space-y-1.5">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                {group.label}
+              </p>
+              <div className="space-y-1.5">
+                {visibleItems.map((ev) => (
+                  <EvidenceCard 
+                    key={ev.id} 
+                    evidence={ev}
+                    highlighted={usedIds?.includes(ev.id)}
+                  />
+                ))}
+                {hiddenCount > 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-1">
+                    +{hiddenCount} more
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
