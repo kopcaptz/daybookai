@@ -208,7 +208,7 @@ export const ROUTE_SURFACE_REGISTRY: RouteSurfaceSpec[] = [
     path: '/discussions/:id',
     surfaceClass: 'secondary',
     showBottomNav: false,
-    showFloatingChatButton: true,
+    showFloatingChatButton: false,
     showFeedbackTrigger: false,
     centerActionPolicy: 'new-entry-default',
   },

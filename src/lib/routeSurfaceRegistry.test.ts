@@ -8,7 +8,7 @@ describe('routeSurfaceRegistry', () => {
     ['/search', { id: 'search', showBottomNav: true, showFloatingChatButton: true, showFeedbackTrigger: true, centerActionPolicy: 'new-entry-default' }],
     ['/chat', { id: 'chat', showBottomNav: true, showFloatingChatButton: false, showFeedbackTrigger: true, centerActionPolicy: 'new-entry-default' }],
     ['/discussions', { id: 'discussions', showBottomNav: true, showFloatingChatButton: true, showFeedbackTrigger: true, centerActionPolicy: 'new-discussion-on-discussions-list' }],
-    ['/discussions/123', { id: 'discussion-detail', showBottomNav: false, showFloatingChatButton: true, showFeedbackTrigger: false, centerActionPolicy: 'new-entry-default' }],
+    ['/discussions/123', { id: 'discussion-detail', showBottomNav: false, showFloatingChatButton: false, showFeedbackTrigger: false, centerActionPolicy: 'new-entry-default' }],
     ['/settings', { id: 'settings', showBottomNav: true, showFloatingChatButton: true, showFeedbackTrigger: true, centerActionPolicy: 'new-entry-default' }],
     ['/new', { id: 'new-entry', showBottomNav: false, showFloatingChatButton: false, showFeedbackTrigger: false, centerActionPolicy: 'new-entry-default' }],
     ['/entry/1', { id: 'entry-edit', showBottomNav: false, showFloatingChatButton: false, showFeedbackTrigger: false, centerActionPolicy: 'new-entry-default' }],
