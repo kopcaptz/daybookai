@@ -232,6 +232,11 @@ export interface DiscussionSession {
   pinned?: boolean;
 }
 
+// Current live discussion authority is entry-backed only.
+export function hasLiveDiscussionAuthority(scope: DiscussionSession['scope']): boolean {
+  return scope.entryIds.length > 0;
+}
+
 export interface DiscussionMessage {
   id?: number;
   sessionId: number;

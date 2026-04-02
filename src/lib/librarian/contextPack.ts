@@ -1,4 +1,4 @@
-import { db, DiaryEntry, DiscussionMode, StoredBiography } from '@/lib/db';
+import { db, DiaryEntry, DiscussionMode, StoredBiography, hasLiveDiscussionAuthority } from '@/lib/db';
 import { format } from 'date-fns';
 
 // Re-export DiscussionMode for convenience
@@ -21,7 +21,7 @@ export interface ContextPackOptions {
   sessionScope: { entryIds: number[]; docIds: number[] };
   userQuery: string;
   mode: DiscussionMode;
-  findMode: boolean;  // If true, search globally instead of using scope
+  findMode: boolean;  // Enables note-finding; global discovery only when scope is empty
 }
 
 export interface ContextPackResult {
@@ -221,10 +221,23 @@ async function buildFromSearch(
 async function loadRelevantBiographies(
   entryIds: number[],
   query: string,
-  findMode: boolean
+  options: {
+    allowGlobalKeywordExpansion: boolean;
+    allowRecentFallback: boolean;
+    admissibleEntryIds?: number[];
+  }
 ): Promise<StoredBiography[]> {
   const biographies: StoredBiography[] = [];
   const addedDates = new Set<string>();
+  const admissibleEntryIds = options.admissibleEntryIds
+    ? new Set(options.admissibleEntryIds)
+    : null;
+
+  function isBiographyAdmissible(bio: StoredBiography): boolean {
+    if (bio.status !== 'complete' || !bio.biography) return false;
+    if (!admissibleEntryIds) return true;
+    return bio.sourceEntryIds.every(id => admissibleEntryIds.has(id));
+  }
   
   // 1. Get biographies for provided entry dates (works for both modes now)
   if (entryIds.length > 0) {
@@ -233,7 +246,7 @@ async function loadRelevantBiographies(
     
     for (const date of dates) {
       const bio = await db.biographies.get(date);
-      if (bio && bio.status === 'complete' && bio.biography) {
+      if (bio && isBiographyAdmissible(bio)) {
         biographies.push(bio);
         addedDates.add(bio.date);
       }
@@ -241,10 +254,10 @@ async function loadRelevantBiographies(
   }
   
   // 2. Search by keywords (additional matches)
-  if (query.trim()) {
+  if (options.allowGlobalKeywordExpansion && query.trim()) {
     const allBios = await db.biographies.toArray();
     const matches = allBios.filter(bio => {
-      if (bio.status !== 'complete' || !bio.biography) return false;
+      if (!isBiographyAdmissible(bio)) return false;
       if (addedDates.has(bio.date)) return false;
       
       const searchText = `${bio.biography.title} ${bio.biography.narrative} ${bio.biography.highlights.join(' ')}`;
@@ -272,11 +285,11 @@ async function loadRelevantBiographies(
     }
   }
   
-  // 3. FALLBACK: If findMode and still empty, load most recent biographies
-  if (findMode && biographies.length === 0) {
+  // 3. FALLBACK: Load most recent biographies only when global discovery is allowed
+  if (options.allowRecentFallback && biographies.length === 0) {
     const allBios = await db.biographies.toArray();
     const completeBios = allBios
-      .filter(bio => bio.status === 'complete' && bio.biography !== null)
+      .filter(bio => isBiographyAdmissible(bio))
       .sort((a, b) => b.date.localeCompare(a.date)) // Sort by date descending
       .slice(0, CONTEXT_LIMITS.maxBiographies);
     
@@ -296,10 +309,13 @@ async function loadRelevantBiographies(
  */
 export async function buildContextPack(options: ContextPackOptions): Promise<ContextPackResult> {
   const { sessionScope, userQuery, findMode } = options;
+  const hasLiveAuthority = hasLiveDiscussionAuthority(sessionScope);
+  const allowGlobalDiscovery = findMode && !hasLiveAuthority;
+  const allowGlobalBiographyExpansion = !hasLiveAuthority;
   
   let entriesData: { entries: DiaryEntry[]; scores: Map<number, number> };
   
-  if (findMode) {
+  if (allowGlobalDiscovery) {
     // Global search mode
     entriesData = await buildFromSearch(userQuery);
   } else {
@@ -358,11 +374,15 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
   
   // Load and add biographies - pass found entry IDs in findMode too
   const biographies = await loadRelevantBiographies(
-    findMode 
+    allowGlobalDiscovery
       ? selectedEntries.map(e => e.id!).slice(0, 8)  // Use found entries in findMode
       : sessionScope.entryIds,
     userQuery,
-    findMode
+    {
+      allowGlobalKeywordExpansion: allowGlobalBiographyExpansion,
+      allowRecentFallback: allowGlobalDiscovery,
+      admissibleEntryIds: hasLiveAuthority ? sessionScope.entryIds : undefined,
+    }
   );
   
   for (let i = 0; i < biographies.length; i++) {
@@ -417,7 +437,7 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
  */
 export function getScopeCountText(
   entryIds: number[],
-  docIds: number[],
+  _docIds: number[],
   language: string
 ): string {
   const labels: Record<string, { entries: string; documents: string; noSources: string }> = {
@@ -433,10 +453,6 @@ export function getScopeCountText(
   if (entryIds.length > 0) {
     parts.push(`${entryIds.length} ${l.entries}`);
   }
-  
-  if (docIds.length > 0) {
-    parts.push(`${docIds.length} ${l.documents}`);
-  }
-  
+
   return parts.length === 0 ? l.noSources : parts.join(', ');
 }
