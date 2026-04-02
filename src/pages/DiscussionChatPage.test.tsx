@@ -157,4 +157,50 @@ describe('DiscussionChatPage live authority gating', () => {
       ).toBe('true');
     });
   });
+
+  it('does not force find-mode onboarding when entry-backed live authority exists', async () => {
+    mocks.session = {
+      ...mocks.session,
+      title: 'Entry-backed discussion',
+      scope: {
+        entryIds: [7],
+        docIds: [9],
+      },
+    };
+
+    render(<DiscussionChatPage />);
+
+    expect(await screen.findByText('discussion.placeholder')).toBeTruthy();
+    expect(screen.queryByText('Find in notes mode active')).toBeNull();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'discussion.findInNotes' }).getAttribute('aria-pressed')
+      ).toBe('false');
+    });
+  });
+
+  it('does not delete an empty entry-backed discussion during route handoff', async () => {
+    mocks.session = {
+      ...mocks.session,
+      title: 'Entry-backed discussion',
+      scope: {
+        entryIds: [7],
+        docIds: [],
+      },
+    };
+
+    const { unmount } = render(<DiscussionChatPage />);
+
+    await screen.findByText('discussion.placeholder');
+    unmount();
+
+    await waitFor(() => {
+      expect(mocks.getMessagesBySessionId).toHaveBeenCalledWith(42);
+    });
+
+    await waitFor(() => {
+      expect(mocks.deleteDiscussionSession).not.toHaveBeenCalled();
+    });
+  });
 });

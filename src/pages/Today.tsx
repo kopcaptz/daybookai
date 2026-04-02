@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ru, enUS } from 'date-fns/locale';
 import { Loader2, Plus, CheckSquare, X, MessageSquare } from 'lucide-react';
-import { getEntriesByDate, createDiscussionSession } from '@/lib/db';
+import { getEntriesByDate, createDiscussionSession, getDiscussionSessionById, updateDiscussionSession } from '@/lib/db';
 import { EntryCard } from '@/components/EntryCard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { BiographyDisplay } from '@/components/BiographyDisplay';
@@ -22,6 +22,15 @@ import { BreathingSigil } from '@/components/icons/BreathingSigil';
 import { useOracleWhisper } from '@/hooks/useOracleWhisper';
 import { useHeroTransition } from '@/hooks/useHeroTransition';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+
+function parseDiscussionHandoffId(value: string | null): number | null {
+  if (value === null || !/^[1-9]\d*$/.test(value)) {
+    return null;
+  }
+
+  return Number(value);
+}
 
 function TodayContent() {
   const { t, language } = useI18n();
@@ -53,6 +62,8 @@ function TodayContent() {
   // Hero transition for sigil click
   const { startTransition } = useHeroTransition();
   const sigilRef = useRef<HTMLButtonElement>(null);
+  const discussionIdParam = searchParams.get('discussionId');
+  const handoffDiscussionId = parseDiscussionHandoffId(discussionIdParam);
   
   // Check if we should enter select mode from URL
   useEffect(() => {
@@ -99,6 +110,42 @@ function TodayContent() {
     setCreatingDiscussion(true);
     
     try {
+      if (discussionIdParam !== null) {
+        if (handoffDiscussionId === null) {
+          console.error('[Today] Invalid discussion handoff:', discussionIdParam);
+          toast.error(language === 'ru' ? 'Обсуждение не найдено' : 'Discussion not found');
+          return;
+        }
+
+        const session = await getDiscussionSessionById(handoffDiscussionId);
+        if (!session) {
+          console.error('[Today] Discussion handoff target not found:', handoffDiscussionId);
+          toast.error(language === 'ru' ? 'Обсуждение не найдено' : 'Discussion not found');
+          return;
+        }
+
+        const mergedEntryIds = [...session.scope.entryIds];
+        const existingIds = new Set(session.scope.entryIds);
+        for (const id of selectedIds) {
+          if (!existingIds.has(id)) {
+            existingIds.add(id);
+            mergedEntryIds.push(id);
+          }
+        }
+
+        await updateDiscussionSession(handoffDiscussionId, {
+          scope: {
+            entryIds: mergedEntryIds,
+            docIds: session.scope.docIds,
+          },
+        });
+
+        setSelectionMode(false);
+        setSelectedIds(new Set());
+        navigate(`/discussions/${handoffDiscussionId}`);
+        return;
+      }
+
       const sessionId = await createDiscussionSession({
         title: language === 'ru' ? 'Новое обсуждение' : 'New discussion',
         scope: { entryIds: Array.from(selectedIds), docIds: [] },

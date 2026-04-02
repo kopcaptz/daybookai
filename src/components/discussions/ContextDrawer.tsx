@@ -13,7 +13,6 @@ interface ContextDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   entryIds: number[];
-  docIds: number[];
   onAddFromToday?: () => void;
   onRemoveEntry?: (id: number) => void;
 }
@@ -22,7 +21,6 @@ export function ContextDrawer({
   open,
   onOpenChange,
   entryIds,
-  docIds,
   onAddFromToday,
   onRemoveEntry,
 }: ContextDrawerProps) {
@@ -103,27 +101,6 @@ export function ContextDrawer({
                   ))}
                 </div>
               )}
-            </div>
-            
-            {/* Documents section (placeholder) */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-sm font-medium text-muted-foreground">
-                  {language === 'ru' ? 'Документы' : 'Documents'} ({docIds.length})
-                </h4>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled
-                  className="h-7 text-xs gap-1 opacity-50"
-                >
-                  <Plus className="h-3 w-3" />
-                  {language === 'ru' ? 'Добавить' : 'Add'}
-                </Button>
-              </div>
-              <p className="text-sm text-muted-foreground py-4 text-center">
-                {language === 'ru' ? 'Документы скоро' : 'Documents coming soon'}
-              </p>
             </div>
           </div>
         </ScrollArea>
