@@ -209,6 +209,12 @@ export function SyncSettingsCard() {
           <LogOut className="h-4 w-4" />
           {t('Выйти из аккаунта', 'Sign out')}
         </Button>
+        <p className="text-xs text-muted-foreground text-center">
+          {t(
+            'Выход только из облачного аккаунта. Локальные данные на этом устройстве сохраняются.',
+            'Signs out of cloud account only. Local data on this device remains.'
+          )}
+        </p>
       </CardContent>
     </Card>
   );

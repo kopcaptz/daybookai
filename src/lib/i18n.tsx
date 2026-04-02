@@ -199,10 +199,10 @@ export const translations = {
   'settings.export': { ru: 'Экспорт данных', en: 'Export data', he: 'ייצא נתונים', ar: 'تصدير البيانات' },
   'settings.exportHint': { ru: 'Скачать все записи в JSON', en: 'Download all entries as JSON', he: 'הורד את כל הרשומות כ-JSON', ar: 'تحميل جميع المدخلات بتنسيق JSON' },
   'settings.exportSuccess': { ru: 'Данные экспортированы', en: 'Data exported', he: 'הנתונים יוצאו', ar: 'تم تصدير البيانات' },
-  'settings.clearData': { ru: 'Очистить все данные', en: 'Clear all data', he: 'נקה את כל הנתונים', ar: 'مسح جميع البيانات' },
-  'settings.clearDataConfirm': { ru: 'Удалить все данные?', en: 'Delete all data?', he: 'למחוק את כל הנתונים?', ar: 'حذف جميع البيانات؟' },
-  'settings.clearDataDesc': { ru: 'Все записи и вложения будут удалены безвозвратно', en: 'All entries and attachments will be permanently deleted', he: 'כל הרשומות והקבצים המצורפים יימחקו לצמיתות', ar: 'سيتم حذف جميع المدخلات والمرفقات نهائياً' },
-  'settings.clearDataSuccess': { ru: 'Все данные удалены', en: 'All data cleared', he: 'כל הנתונים נמחקו', ar: 'تم مسح جميع البيانات' },
+  'settings.clearData': { ru: 'Очистить локальные данные контента', en: 'Clear local content data', he: 'נקה נתוני תוכן מקומיים', ar: 'مسح بيانات المحتوى المحلية' },
+  'settings.clearDataConfirm': { ru: 'Удалить локальные записи и медиа на этом устройстве?', en: 'Delete local entries and media on this device?', he: 'למחוק רשומות ומדיה מקומיים במכשיר הזה?', ar: 'حذف المدخلات والوسائط المحلية على هذا الجهاز؟' },
+  'settings.clearDataDesc': { ru: 'Удаляет записи, вложения, черновики, чеки, логи сканирования и аудио-транскрипты на этом устройстве. Не выполняет выход из аккаунта и не делает полный сброс устройства.', en: 'Deletes entries, attachments, drafts, receipts, scan logs, and audio transcripts on this device. Does not sign out or fully reset app/device state.', he: 'מוחק רשומות, קבצים מצורפים, טיוטות, קבלות, יומני סריקה ותמלולי אודיו במכשיר הזה. לא מבצע התנתקות ולא איפוס מלא של מצב האפליקציה/המכשיר.', ar: 'يحذف المدخلات والمرفقات والمسودات والإيصالات وسجلات المسح ونسخ الصوت على هذا الجهاز. لا يقوم بتسجيل الخروج ولا ينفذ إعادة ضبط كاملة لحالة التطبيق/الجهاز.' },
+  'settings.clearDataSuccess': { ru: 'Локальные данные контента очищены', en: 'Local content data cleared', he: 'נתוני התוכן המקומיים נוקו', ar: 'تم مسح بيانات المحتوى المحلية' },
   'settings.version': { ru: 'Версия', en: 'Version', he: 'גרסה', ar: 'الإصدار' },
   
   // Sync
