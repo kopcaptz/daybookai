@@ -39,6 +39,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ru, enUS, he, ar } from 'date-fns/locale';
 import { formatFileSize } from '@/lib/mediaUtils';
 import { cn } from '@/lib/utils';
+import { getGroupedImportProgress, getGroupedImportSummary } from './backupRestoreGrouping';
 
 const dateLocales = { ru, en: enUS, he, ar };
 
@@ -189,33 +190,11 @@ export function BackupRestoreCard() {
           : 'This backup has no owner provenance. It can only be restored on a clean or reset device.';
   };
 
-  const groupedImportSummary = importSummary ? [
-    {
-      key: 'journal-content',
-      label: language === 'ru' ? 'Дневниковый материал' : language === 'he' ? 'תוכן יומן' : language === 'ar' ? 'محتوى اليوميات' : 'Journal content',
-      count: importSummary.entries + importSummary.attachments + importSummary.drafts,
-    },
-    {
-      key: 'discussions',
-      label: language === 'ru' ? 'Обсуждения' : language === 'he' ? 'דיונים' : language === 'ar' ? 'المناقشات' : 'Discussions',
-      count: importSummary.discussionSessions + importSummary.discussionMessages,
-    },
-    {
-      key: 'analysis',
-      label: language === 'ru' ? 'Хроники и аналитические артефакты' : language === 'he' ? 'כרוניקות וארטיפקטים אנליטיים' : language === 'ar' ? 'السجلات والآثار التحليلية' : 'Chronicles and analysis artifacts',
-      count: importSummary.biographies + importSummary.weeklyInsights + importSummary.attachmentInsights + importSummary.audioTranscripts + importSummary.analysisQueue,
-    },
-    {
-      key: 'task-record-data',
-      label: language === 'ru' ? 'Напоминания и учётные записи' : language === 'he' ? 'תזכורות ורשומות' : language === 'ar' ? 'التذكيرات والسجلات' : 'Reminders and record data',
-      count: importSummary.reminders + importSummary.receipts + importSummary.receiptItems,
-    },
-    {
-      key: 'diagnostics',
-      label: language === 'ru' ? 'Диагностика' : language === 'he' ? 'אבחון' : language === 'ar' ? 'التشخيص' : 'Diagnostics',
-      count: importSummary.scanLogs,
-    },
-  ].filter((item) => item.count > 0) : [];
+  const groupedImportSummary = importSummary ? getGroupedImportSummary(importSummary, language) : [];
+  const groupedImportProgress = importProgress ? {
+    ...importProgress,
+    tables: getGroupedImportProgress(importProgress, language),
+  } : null;
 
   const handleExportClick = async () => {
     // Check size first
@@ -440,7 +419,7 @@ export function BackupRestoreCard() {
           {isExporting && <ProgressDisplay progress={exportProgress} label={t.exporting} />}
           
           {/* Import progress */}
-          {isImporting && <ProgressDisplay progress={importProgress} label={t.importing} />}
+          {isImporting && <ProgressDisplay progress={groupedImportProgress} label={t.importing} />}
           
           {/* Last backup info */}
           {!isExporting && !isImporting && (
