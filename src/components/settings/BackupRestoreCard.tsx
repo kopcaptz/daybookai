@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { useI18n } from '@/lib/i18n';
 import {
   exportBackupZip,
+  evaluateRestoreProvenance,
   importBackupZip,
   importFullBackup,
   readBackupFile,
@@ -33,6 +34,7 @@ import {
   ImportSummary,
   DetailedProgress,
 } from '@/lib/backupService';
+import { getSyncOwnerUserId } from '@/lib/syncService';
 import { formatDistanceToNow } from 'date-fns';
 import { ru, enUS, he, ar } from 'date-fns/locale';
 import { formatFileSize } from '@/lib/mediaUtils';
@@ -110,7 +112,7 @@ export function BackupRestoreCard() {
   
   // Import confirmation dialog state
   const [showImportConfirm, setShowImportConfirm] = useState(false);
-  const [pendingImportFile, setPendingImportFile] = useState<{ type: 'json' | 'zip'; data: BackupPayload | Blob; manifest?: BackupManifest } | null>(null);
+  const [pendingImportFile, setPendingImportFile] = useState<{ type: 'json' | 'zip'; data: BackupPayload | Blob; manifest: BackupManifest } | null>(null);
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
   
   const lastBackup = getLastBackupDate();
@@ -132,21 +134,21 @@ export function BackupRestoreCard() {
           ? 'حذف التطبيق أو مسح بيانات الموقع يحذف الذاكرة. قم بالنسخ الاحتياطي قبل ذلك!'
           : 'Deleting the app or clearing site data erases memory. Backup first!',
     export: language === 'ru' ? 'Экспорт' : language === 'he' ? 'ייצוא' : language === 'ar' ? 'تصدير' : 'Export',
-    import: language === 'ru' ? 'Импорт' : language === 'he' ? 'ייבוא' : language === 'ar' ? 'استيراد' : 'Import',
+    import: language === 'ru' ? 'Восстановить бэкап' : language === 'he' ? 'שחזר גיבוי' : language === 'ar' ? 'استعادة النسخة الاحتياطية' : 'Restore backup',
     exporting: language === 'ru' ? 'Экспорт...' : language === 'he' ? 'מייצא...' : language === 'ar' ? 'جاري التصدير...' : 'Exporting...',
-    importing: language === 'ru' ? 'Импорт...' : language === 'he' ? 'מייבא...' : language === 'ar' ? 'جاري الاستيراد...' : 'Importing...',
+    importing: language === 'ru' ? 'Восстановление...' : language === 'he' ? 'משחזר...' : language === 'ar' ? 'جارٍ الاستعادة...' : 'Restoring...',
     lastBackup: language === 'ru' ? 'Последний бэкап' : language === 'he' ? 'גיבוי אחרון' : language === 'ar' ? 'آخر نسخة احتياطية' : 'Last backup',
     exportSuccess: language === 'ru' ? 'Бэкап создан' : language === 'he' ? 'הגיבוי נוצר' : language === 'ar' ? 'تم إنشاء النسخة الاحتياطية' : 'Backup created',
     importSuccess: language === 'ru' ? 'Данные восстановлены' : language === 'he' ? 'הנתונים שוחזרו' : language === 'ar' ? 'تم استعادة البيانات' : 'Data restored',
     invalidFile: language === 'ru' ? 'Неверный формат файла' : language === 'he' ? 'פורמט קובץ לא תקין' : language === 'ar' ? 'تنسيق ملف غير صالح' : 'Invalid file format',
-    confirmTitle: language === 'ru' ? 'Восстановить данные?' : language === 'he' ? 'לשחזר נתונים?' : language === 'ar' ? 'استعادة البيانات؟' : 'Restore data?',
+    confirmTitle: language === 'ru' ? 'Заменить локальные данные из бэкапа?' : language === 'he' ? 'להחליף נתונים מקומיים מהגיבוי?' : language === 'ar' ? 'استبدال البيانات المحلية من هذه النسخة؟' : 'Replace local data from this backup?',
     confirmDesc: language === 'ru' 
-      ? 'Текущие данные будут заменены данными из бэкапа.' 
+      ? 'Локальная база DaybookDB на этом устройстве будет заменена данными из бэкапа. Облачный аккаунт и сессия не изменяются.'
       : language === 'he' 
-        ? 'הנתונים הנוכחיים יוחלפו בנתונים מהגיבוי.'
+        ? 'נתוני DaybookDB המקומיים במכשיר הזה יוחלפו בנתוני הגיבוי. חשבון הענן והסשן לא משתנים.'
         : language === 'ar'
-          ? 'سيتم استبدال البيانات الحالية ببيانات النسخة الاحتياطية.'
-          : 'Current data will be replaced with backup data.',
+          ? 'سيتم استبدال بيانات DaybookDB المحلية على هذا الجهاز ببيانات النسخة الاحتياطية. حساب السحابة والجلسة لا يتغيران.'
+          : 'This will replace local DaybookDB data on this device with backup data. Cloud account and session stay unchanged.',
     willRestore: language === 'ru' ? 'Будет восстановлено' : language === 'he' ? 'ישוחזר' : language === 'ar' ? 'سيتم استعادة' : 'Will restore',
     entries: language === 'ru' ? 'записей' : language === 'he' ? 'רשומות' : language === 'ar' ? 'مدخلات' : 'entries',
     attachments: language === 'ru' ? 'вложений' : language === 'he' ? 'קבצים מצורפים' : language === 'ar' ? 'مرفقات' : 'attachments',
@@ -166,6 +168,54 @@ export function BackupRestoreCard() {
           : 'Backup may be large. Make sure you have enough space.',
     continue: language === 'ru' ? 'Продолжить' : language === 'he' ? 'המשך' : language === 'ar' ? 'متابعة' : 'Continue',
   };
+
+  const getRestoreDeniedMessage = (reason?: 'owner_mismatch' | 'missing_provenance') => {
+    if (reason === 'owner_mismatch') {
+      return language === 'ru'
+        ? 'Этот бэкап принадлежит другому облачному владельцу и не может быть восстановлен на этом устройстве.'
+        : language === 'he'
+          ? 'גיבוי זה שייך לבעלים ענני אחר ולא ניתן לשחזר אותו במכשיר זה.'
+          : language === 'ar'
+            ? 'تعود هذه النسخة الاحتياطية إلى مالك سحابي مختلف ولا يمكن استعادتها على هذا الجهاز.'
+            : 'This backup belongs to a different cloud owner and cannot be restored on this device.';
+    }
+
+    return language === 'ru'
+      ? 'У этого бэкапа нет данных о владельце. Его можно восстановить только на чистом или сброшенном устройстве.'
+      : language === 'he'
+        ? 'לגיבוי זה אין נתוני בעלים. ניתן לשחזר אותו רק במכשיר נקי או לאחר איפוס.'
+        : language === 'ar'
+          ? 'لا تحتوي هذه النسخة الاحتياطية على بيانات المالك. يمكن استعادتها فقط على جهاز نظيف أو بعد إعادة الضبط.'
+          : 'This backup has no owner provenance. It can only be restored on a clean or reset device.';
+  };
+
+  const groupedImportSummary = importSummary ? [
+    {
+      key: 'journal-content',
+      label: language === 'ru' ? 'Дневниковый материал' : language === 'he' ? 'תוכן יומן' : language === 'ar' ? 'محتوى اليوميات' : 'Journal content',
+      count: importSummary.entries + importSummary.attachments + importSummary.drafts,
+    },
+    {
+      key: 'discussions',
+      label: language === 'ru' ? 'Обсуждения' : language === 'he' ? 'דיונים' : language === 'ar' ? 'المناقشات' : 'Discussions',
+      count: importSummary.discussionSessions + importSummary.discussionMessages,
+    },
+    {
+      key: 'analysis',
+      label: language === 'ru' ? 'Хроники и аналитические артефакты' : language === 'he' ? 'כרוניקות וארטיפקטים אנליטיים' : language === 'ar' ? 'السجلات والآثار التحليلية' : 'Chronicles and analysis artifacts',
+      count: importSummary.biographies + importSummary.weeklyInsights + importSummary.attachmentInsights + importSummary.audioTranscripts + importSummary.analysisQueue,
+    },
+    {
+      key: 'task-record-data',
+      label: language === 'ru' ? 'Напоминания и учётные записи' : language === 'he' ? 'תזכורות ורשומות' : language === 'ar' ? 'التذكيرات والسجلات' : 'Reminders and record data',
+      count: importSummary.reminders + importSummary.receipts + importSummary.receiptItems,
+    },
+    {
+      key: 'diagnostics',
+      label: language === 'ru' ? 'Диагностика' : language === 'he' ? 'אבחון' : language === 'ar' ? 'التشخيص' : 'Diagnostics',
+      count: importSummary.scanLogs,
+    },
+  ].filter((item) => item.count > 0) : [];
 
   const handleExportClick = async () => {
     // Check size first
@@ -209,6 +259,19 @@ export function BackupRestoreCard() {
     
     try {
       const result = await readBackupFile(file);
+      const manifest = result.type === 'zip'
+        ? result.manifest
+        : (result.data as BackupPayload).manifest;
+
+      const provenanceDecision = evaluateRestoreProvenance({
+        deviceOwnerUserId: getSyncOwnerUserId(),
+        backupOwnerUserId: manifest?.ownerUserId,
+      });
+
+      if (!provenanceDecision.allowed) {
+        toast.error(getRestoreDeniedMessage(provenanceDecision.reason));
+        return;
+      }
       
       let summary: ImportSummary;
       if (result.type === 'zip' && result.manifest) {
@@ -221,7 +284,7 @@ export function BackupRestoreCard() {
       }
       
       setImportSummary(summary);
-      setPendingImportFile(result);
+      setPendingImportFile({ ...result, manifest });
       setShowImportConfirm(true);
     } catch (error) {
       console.error('[Backup] File read failed:', error);
@@ -231,6 +294,19 @@ export function BackupRestoreCard() {
 
   const handleConfirmImport = async () => {
     if (!pendingImportFile) return;
+
+    const provenanceDecision = evaluateRestoreProvenance({
+      deviceOwnerUserId: getSyncOwnerUserId(),
+      backupOwnerUserId: pendingImportFile.manifest.ownerUserId,
+    });
+
+    if (!provenanceDecision.allowed) {
+      setShowImportConfirm(false);
+      setPendingImportFile(null);
+      setImportSummary(null);
+      toast.error(getRestoreDeniedMessage(provenanceDecision.reason));
+      return;
+    }
     
     setShowImportConfirm(false);
     setIsImporting(true);
@@ -420,18 +496,9 @@ export function BackupRestoreCard() {
             <div className="bg-muted rounded-lg p-3 space-y-1 text-sm">
               <p className="font-medium mb-2">{t.willRestore}:</p>
               <ul className="space-y-1 text-muted-foreground">
-                {importSummary.entries > 0 && (
-                  <li>• {importSummary.entries} {t.entries}</li>
-                )}
-                {importSummary.attachments > 0 && (
-                  <li>• {importSummary.attachments} {t.attachments}</li>
-                )}
-                {importSummary.reminders > 0 && (
-                  <li>• {importSummary.reminders} {t.reminders}</li>
-                )}
-                {importSummary.receipts > 0 && (
-                  <li>• {importSummary.receipts} {t.receipts}</li>
-                )}
+                {groupedImportSummary.map((item) => (
+                  <li key={item.key}>• {item.count} — {item.label}</li>
+                ))}
               </ul>
             </div>
           )}
