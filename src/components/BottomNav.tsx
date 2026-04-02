@@ -4,6 +4,7 @@ import { Scroll, Calendar, MessageSquare, Settings, Feather } from 'lucide-react
 import { useLiveQuery } from 'dexie-react-hooks';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
+import { resolveRouteSurface } from '@/lib/routeSurfaceRegistry';
 import { getPendingReminderCount } from '@/lib/db';
 import { Badge } from '@/components/ui/badge';
 import { useHeroTransition } from '@/hooks/useHeroTransition';
@@ -16,6 +17,8 @@ export function BottomNav() {
   
   // Reactive pending reminders count for badge
   const pendingCount = useLiveQuery(() => getPendingReminderCount(), [], 0);
+
+  const routeSurface = resolveRouteSurface(location.pathname);
 
   const navItems = [
     { path: '/', icon: Scroll, label: t('nav.today'), showBadge: true },
@@ -52,7 +55,7 @@ export function BottomNav() {
               }
               
               // On discussions page — create new discussion directly
-              if (location.pathname === '/discussions') {
+              if (routeSurface.centerActionPolicy === 'new-discussion-on-discussions-list') {
                 window.dispatchEvent(new CustomEvent('create-new-discussion'));
                 return;
               }

@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate, Navigate } from "react-router-dom";
+import { resolveRouteSurface } from "@/lib/routeSurfaceRegistry";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { BottomNav } from "@/components/BottomNav";
 import { InstallPrompt } from "@/components/InstallPrompt";
@@ -113,33 +114,7 @@ function AppContent() {
     trackNavigation(location.pathname);
   }, [location.pathname]);
   
-  // Hide bottom nav on entry editor, receipt pages, discussion chat, admin pages, ethereal, and onboarding
-  // Hide floating chat on chat page, entry editor, admin pages, ethereal, and onboarding
-  const hideNav = location.pathname === '/new' || 
-    location.pathname.startsWith('/entry/') || 
-    location.pathname === '/receipts' || 
-    location.pathname.startsWith('/receipts/') || 
-    location.pathname.startsWith('/discussions/') ||
-    location.pathname.startsWith('/admin') ||
-    location.pathname.startsWith('/e/') ||
-    location.pathname === '/onboarding' ||
-    location.pathname === '/auth';
-
-  const hideFloatingChat = location.pathname === '/chat' || 
-    location.pathname === '/new' || 
-    location.pathname.startsWith('/entry/') ||
-    location.pathname.startsWith('/admin') ||
-    location.pathname.startsWith('/e/') ||
-    location.pathname === '/onboarding' ||
-    location.pathname === '/auth';
-  
-  // Hide feedback modal on admin pages, onboarding, ethereal, and entry editor
-  const hideFeedback = location.pathname.startsWith('/admin') || 
-    location.pathname === '/onboarding' ||
-    location.pathname === '/new' ||
-    location.pathname.startsWith('/entry/') ||
-    location.pathname.startsWith('/discussions/') ||
-    location.pathname.startsWith('/e/');
+  const routeSurface = resolveRouteSurface(location.pathname);
 
   return (
     <HeroTransitionProvider>
@@ -196,10 +171,10 @@ function AppContent() {
               </Routes>
             </Suspense>
           </PageTransition>
-          {!hideNav && <BottomNav />}
-          {!hideFloatingChat && <FloatingChatButton />}
+          {routeSurface.showBottomNav && <BottomNav />}
+          {routeSurface.showFloatingChatButton && <FloatingChatButton />}
           
-          {!hideFeedback && <FeedbackModal onSecretUnlock={() => setShowEtherealPin(true)} />}
+          {routeSurface.showFeedbackTrigger && <FeedbackModal onSecretUnlock={() => setShowEtherealPin(true)} />}
           <InstallPrompt />
           
           {/* Ethereal PIN Modal - global */}
