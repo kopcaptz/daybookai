@@ -1,6 +1,6 @@
 import { forwardRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import DiscussionChatPage from './DiscussionChatPage';
 
 const mocks = vi.hoisted(() => ({
@@ -8,8 +8,13 @@ const mocks = vi.hoisted(() => ({
   session: undefined as any,
   messages: undefined as any,
   useLiveQueryCall: 0,
+  getDiscussionSessionById: vi.fn(),
   getMessagesBySessionId: vi.fn(),
+  addDiscussionMessage: vi.fn(),
+  updateDiscussionSession: vi.fn(),
   deleteDiscussionSession: vi.fn(),
+  buildContextPack: vi.fn(),
+  sendDiscussionMessage: vi.fn(),
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -25,20 +30,20 @@ vi.mock('dexie-react-hooks', () => ({
 }));
 
 vi.mock('@/lib/db', () => ({
-  getDiscussionSessionById: vi.fn(),
+  getDiscussionSessionById: mocks.getDiscussionSessionById,
   getMessagesBySessionId: mocks.getMessagesBySessionId,
-  addDiscussionMessage: vi.fn(),
-  updateDiscussionSession: vi.fn(),
+  addDiscussionMessage: mocks.addDiscussionMessage,
+  updateDiscussionSession: mocks.updateDiscussionSession,
   deleteDiscussionSession: mocks.deleteDiscussionSession,
   hasLiveDiscussionAuthority: (scope: { entryIds: number[] }) => scope.entryIds.length > 0,
 }));
 
 vi.mock('@/lib/librarian/contextPack', () => ({
-  buildContextPack: vi.fn(),
+  buildContextPack: mocks.buildContextPack,
 }));
 
 vi.mock('@/lib/ai/discussions', () => ({
-  sendDiscussionMessage: vi.fn(),
+  sendDiscussionMessage: mocks.sendDiscussionMessage,
 }));
 
 vi.mock('@/components/ErrorBoundary', () => ({
@@ -122,8 +127,13 @@ describe('DiscussionChatPage live authority gating', () => {
     HTMLElement.prototype.scrollIntoView = vi.fn();
     mocks.useLiveQueryCall = 0;
     mocks.navigate.mockReset();
+    mocks.getDiscussionSessionById.mockReset();
     mocks.getMessagesBySessionId.mockReset();
+    mocks.addDiscussionMessage.mockReset();
+    mocks.updateDiscussionSession.mockReset();
     mocks.deleteDiscussionSession.mockReset();
+    mocks.buildContextPack.mockReset();
+    mocks.sendDiscussionMessage.mockReset();
 
     mocks.session = {
       id: 42,
@@ -138,8 +148,20 @@ describe('DiscussionChatPage live authority gating', () => {
       modeDefault: 'discuss',
     };
     mocks.messages = [];
+    mocks.getDiscussionSessionById.mockResolvedValue(mocks.session);
     mocks.getMessagesBySessionId.mockResolvedValue([]);
+    mocks.addDiscussionMessage.mockResolvedValue(1);
+    mocks.updateDiscussionSession.mockResolvedValue(undefined);
     mocks.deleteDiscussionSession.mockResolvedValue(undefined);
+    mocks.buildContextPack.mockResolvedValue({
+      contextText: '',
+      evidence: [],
+    });
+    mocks.sendDiscussionMessage.mockResolvedValue({
+      answer: 'Mock response',
+      usedEvidenceIds: [],
+      questions: [],
+    });
   });
 
   afterEach(() => {
@@ -202,5 +224,71 @@ describe('DiscussionChatPage live authority gating', () => {
     await waitFor(() => {
       expect(mocks.deleteDiscussionSession).not.toHaveBeenCalled();
     });
+  });
+
+  it('persists visible grounding entry refs alongside selected biography evidence', async () => {
+    mocks.session = {
+      ...mocks.session,
+      title: 'Entry-backed discussion',
+      scope: {
+        entryIds: [1, 2],
+        docIds: [],
+      },
+    };
+    mocks.getDiscussionSessionById.mockResolvedValue(mocks.session);
+    mocks.buildContextPack.mockResolvedValue({
+      contextText: 'context',
+      evidence: [
+        {
+          type: 'entry',
+          id: 'E1',
+          title: 'Entry 1',
+          deepLink: '/entry/1',
+          entityId: 1,
+        },
+        {
+          type: 'entry',
+          id: 'E2',
+          title: 'Entry 2',
+          deepLink: '/entry/2',
+          entityId: 2,
+        },
+        {
+          type: 'biography',
+          id: 'B1',
+          title: 'Chronicle',
+          deepLink: '/day/2026-04-01',
+          entityId: 0,
+          biographyDate: '2026-04-01',
+          supportedByEvidenceIds: ['E1', 'E2'],
+          knownSourceEntryCount: 2,
+        },
+      ],
+    });
+    mocks.sendDiscussionMessage.mockResolvedValue({
+      answer: 'Answer [B1]',
+      usedEvidenceIds: ['B1'],
+      questions: [],
+    });
+
+    render(<DiscussionChatPage />);
+
+    const input = await screen.findByPlaceholderText('What do you think about...');
+    fireEvent.change(input, { target: { value: 'Summarize this day' } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => {
+      expect(mocks.addDiscussionMessage).toHaveBeenCalledTimes(2);
+    });
+
+    expect(mocks.addDiscussionMessage.mock.calls[1][0].evidenceRefs).toEqual([
+      expect.objectContaining({ id: 'E1', type: 'entry' }),
+      expect.objectContaining({ id: 'E2', type: 'entry' }),
+      expect.objectContaining({
+        id: 'B1',
+        type: 'biography',
+        supportedByEvidenceIds: ['E1', 'E2'],
+      }),
+    ]);
   });
 });

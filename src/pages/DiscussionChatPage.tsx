@@ -56,6 +56,28 @@ const MODE_PLACEHOLDERS: Record<DiscussionMode, { ru: string; en: string }> = {
   },
 };
 
+function buildPersistedEvidenceRefs(
+  contextPack: ContextPackResult,
+  usedEvidenceIds: string[]
+): ContextPackResult['evidence'] {
+  const persistedIds = new Set(usedEvidenceIds);
+  const availableIds = new Set(contextPack.evidence.map((evidence) => evidence.id));
+
+  for (const evidence of contextPack.evidence) {
+    if (evidence.type !== 'biography' || !persistedIds.has(evidence.id)) {
+      continue;
+    }
+
+    for (const supportId of evidence.supportedByEvidenceIds ?? []) {
+      if (availableIds.has(supportId)) {
+        persistedIds.add(supportId);
+      }
+    }
+  }
+
+  return contextPack.evidence.filter((evidence) => persistedIds.has(evidence.id));
+}
+
 function DiscussionChatContent() {
   const { id } = useParams<{ id: string }>();
   const sessionId = parseInt(id || '0', 10);
@@ -170,9 +192,7 @@ function DiscussionChatContent() {
       });
       
       // Filter evidence to used ones
-      const usedEvidence = contextPack.evidence.filter(e => 
-        response.usedEvidenceIds.includes(e.id)
-      );
+      const usedEvidence = buildPersistedEvidenceRefs(contextPack, response.usedEvidenceIds);
       
       // Save assistant message
       await addDiscussionMessage({
