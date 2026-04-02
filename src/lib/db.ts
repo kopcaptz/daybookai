@@ -1434,7 +1434,9 @@ export async function getDiscussionSessionById(id: number): Promise<DiscussionSe
  * Get all discussion sessions sorted by lastMessageAt (desc).
  */
 export async function getAllDiscussionSessions(): Promise<DiscussionSession[]> {
-  const sessions = await db.discussionSessions.toArray();
+  const sessions = (await db.discussionSessions.toArray()).filter(session =>
+    hasLiveDiscussionAuthority(session.scope)
+  );
   // Sort: pinned first, then by lastMessageAt desc
   return sessions.sort((a, b) => {
     if (a.pinned && !b.pinned) return -1;
