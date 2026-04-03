@@ -1414,6 +1414,10 @@ export async function getWeeklyStats(): Promise<WeeklyStats> {
 export async function createDiscussionSession(
   session: Omit<DiscussionSession, 'id' | 'createdAt' | 'updatedAt' | 'lastMessageAt'>
 ): Promise<number> {
+  if (!hasLiveDiscussionAuthority(session.scope)) {
+    throw new Error('Discussion sessions require at least one entry ID.');
+  }
+
   const now = Date.now();
   return await db.discussionSessions.add({
     ...session,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, ArrowRight, FolderOpen, Send, Search, Loader2, User, Bot, AlertCircle } from 'lucide-react';
+import { ArrowLeft, FolderOpen, Send, Search, Loader2, User, Bot, AlertCircle } from 'lucide-react';
 import { 
   getDiscussionSessionById, 
   getMessagesBySessionId, 
@@ -9,12 +9,11 @@ import {
   updateDiscussionSession,
   deleteDiscussionSession,
   hasLiveDiscussionAuthority,
-  DiscussionSession,
   DiscussionMessage,
   DiscussionMode
 } from '@/lib/db';
 import { buildContextPack, ContextPackResult } from '@/lib/librarian/contextPack';
-import { sendDiscussionMessage, DiscussionAIResponse } from '@/lib/ai/discussions';
+import { sendDiscussionMessage } from '@/lib/ai/discussions';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ModeSelector, ModePill } from '@/components/discussions/ModeSelector';
 import { EvidenceList } from '@/components/discussions/EvidenceCard';
@@ -28,7 +27,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Toggle } from '@/components/ui/toggle';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useI18n, isRTL } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -92,8 +91,8 @@ function DiscussionChatContent() {
   const [findMode, setFindMode] = useState(false);
   const [sending, setSending] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
-  const [currentEvidence, setCurrentEvidence] = useState<ContextPackResult | null>(null);
   const hasLiveAuthority = session ? hasLiveDiscussionAuthority(session.scope) : false;
+  const isLegacyInvalidSession = session !== undefined && !hasLiveAuthority;
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -104,13 +103,6 @@ function DiscussionChatContent() {
       setMode(session.modeDefault);
     }
   }, [session?.modeDefault]);
-  
-  // Auto-enable findMode when no live discussion authority exists
-  useEffect(() => {
-    if (session && !hasLiveAuthority) {
-      setFindMode(true);
-    }
-  }, [hasLiveAuthority, session]);
   
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -125,7 +117,7 @@ function DiscussionChatContent() {
     }
   }, [inputText]);
   
-  // Cleanup empty session on unmount
+  // Cleanup empty invalid legacy session on unmount.
   useEffect(() => {
     return () => {
       (async () => {
@@ -151,10 +143,10 @@ function DiscussionChatContent() {
     if (!inputText.trim() || sending || !session) return;
 
     if (!hasLiveAuthority) {
-      toast.info(
+      toast.error(
         language === 'ru'
-          ? 'Сначала добавьте записи в контекст, чтобы начать обсуждение.'
-          : 'Add entries to the context first to begin this discussion.'
+          ? 'Это обсуждение больше не поддерживается.'
+          : 'This discussion is no longer supported.'
       );
       return;
     }
@@ -180,7 +172,6 @@ function DiscussionChatContent() {
         mode,
         findMode,
       });
-      setCurrentEvidence(contextPack);
       
       // Show warning if no context was found
       if (contextPack.evidence.length === 0) {
@@ -255,6 +246,31 @@ function DiscussionChatContent() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (isLegacyInvalidSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="max-w-sm text-center space-y-4">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+            <AlertCircle className="h-6 w-6 text-destructive" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-lg font-medium">
+              {language === 'ru' ? 'Обсуждение недоступно' : 'Discussion unavailable'}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {language === 'ru'
+                ? 'У этого обсуждения нет опоры на выбранные записи, и такой формат больше не поддерживается.'
+                : 'This discussion has no entry-backed authority and is no longer supported.'}
+            </p>
+          </div>
+          <Button onClick={() => navigate('/discussions')}>
+            {language === 'ru' ? 'К обсуждениям' : 'Back to discussions'}
+          </Button>
+        </div>
       </div>
     );
   }

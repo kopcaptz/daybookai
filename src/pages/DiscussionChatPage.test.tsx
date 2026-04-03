@@ -172,39 +172,25 @@ describe('DiscussionChatPage live authority gating', () => {
     cleanup();
   });
 
-  it('shows zero-authority sessions as staging and guides the user to add entries first', async () => {
+  it('treats zero-authority sessions as invalid legacy state', async () => {
     render(<DiscussionChatPage />);
 
-    expect(await screen.findByText('Add entries to begin this discussion')).toBeTruthy();
+    expect(await screen.findByText('Discussion unavailable')).toBeTruthy();
     expect(
-      screen.getByText('This session is still staging only. Add entries via the Context button so the discussion has live entry-backed authority.')
+      screen.getByText('This discussion has no entry-backed authority and is no longer supported.')
     ).toBeTruthy();
-    expect(screen.getByText('Staging: add entries first')).toBeTruthy();
-    expect(screen.queryByText('Find in notes mode active')).toBeNull();
-
-    const input = screen.getByPlaceholderText('Add entries via Context to begin this discussion');
-    expect((input as HTMLTextAreaElement).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Back to discussions' })).toBeTruthy();
+    expect(screen.queryByText('Add entries to begin this discussion')).toBeNull();
+    expect(screen.queryByText('Staging: add entries first')).toBeNull();
+    expect(screen.queryByText('discussion.context')).toBeNull();
   });
 
-  it('does not allow zero-authority sessions to send or persist turns', async () => {
+  it('lets the user exit invalid legacy state back to discussions', async () => {
     render(<DiscussionChatPage />);
 
-    const input = await screen.findByPlaceholderText('Add entries via Context to begin this discussion');
-    const buttons = screen.getAllByRole('button');
-    const sendButton = buttons[buttons.length - 1];
+    fireEvent.click(await screen.findByRole('button', { name: 'Back to discussions' }));
 
-    fireEvent.change(input, { target: { value: 'Can you continue?' } });
-    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
-    fireEvent.click(sendButton);
-
-    await waitFor(() => {
-      expect(mocks.addDiscussionMessage).not.toHaveBeenCalled();
-    });
-
-    expect(mocks.buildContextPack).not.toHaveBeenCalled();
-    expect(mocks.sendDiscussionMessage).not.toHaveBeenCalled();
-    expect(mocks.toastInfo).toHaveBeenCalledWith('Add entries to the context first to begin this discussion.');
-    expect((sendButton as HTMLButtonElement).disabled).toBe(true);
+    expect(mocks.navigate).toHaveBeenCalledWith('/discussions');
   });
 
   it('does not force staging onboarding when entry-backed live authority exists', async () => {
@@ -227,6 +213,21 @@ describe('DiscussionChatPage live authority gating', () => {
       expect(
         screen.getByRole('button', { name: 'discussion.findInNotes' }).getAttribute('aria-pressed')
       ).toBe('false');
+    });
+  });
+
+  it('cleans up an empty invalid legacy discussion on unmount', async () => {
+    const { unmount } = render(<DiscussionChatPage />);
+
+    await screen.findByText('Discussion unavailable');
+    unmount();
+
+    await waitFor(() => {
+      expect(mocks.getMessagesBySessionId).toHaveBeenCalledWith(42);
+    });
+
+    await waitFor(() => {
+      expect(mocks.deleteDiscussionSession).toHaveBeenCalledWith(42);
     });
   });
 

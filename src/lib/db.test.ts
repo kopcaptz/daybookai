@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createDiscussionSession, db, getAllDiscussionSessions, updateDiscussionSession } from './db';
 
-describe('getAllDiscussionSessions', () => {
+describe('discussion birth contract', () => {
   beforeEach(async () => {
     await db.discussionMessages.clear();
     await db.discussionSessions.clear();
@@ -13,9 +13,23 @@ describe('getAllDiscussionSessions', () => {
     await db.discussionSessions.clear();
   });
 
+  it('rejects zero-entry discussion birth', async () => {
+    await expect(
+      createDiscussionSession({
+        title: 'Invalid discussion',
+        scope: { entryIds: [], docIds: [9] },
+        modeDefault: 'discuss',
+      })
+    ).rejects.toThrow('Discussion sessions require at least one entry ID.');
+  });
+
   it('returns only entry-backed sessions in the continuity surface', async () => {
-    const zeroAuthorityId = await createDiscussionSession({
-      title: 'Staging only',
+    const now = Date.now();
+    await db.discussionSessions.add({
+      title: 'Legacy invalid discussion',
+      createdAt: now,
+      updatedAt: now,
+      lastMessageAt: 10,
       scope: { entryIds: [], docIds: [9] },
       modeDefault: 'discuss',
     });
@@ -25,7 +39,6 @@ describe('getAllDiscussionSessions', () => {
       modeDefault: 'discuss',
     });
 
-    await updateDiscussionSession(zeroAuthorityId, { lastMessageAt: 10 });
     await updateDiscussionSession(entryBackedId, { lastMessageAt: 20 });
 
     const sessions = await getAllDiscussionSessions();
