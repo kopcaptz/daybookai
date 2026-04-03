@@ -54,9 +54,9 @@ export function BottomNav() {
                 navigator.vibrate(15);
               }
               
-              // On discussions page — create new discussion directly
-              if (routeSurface.centerActionPolicy === 'new-discussion-on-discussions-list') {
-                window.dispatchEvent(new CustomEvent('create-new-discussion'));
+              // On discussions page — route into entry selection before birth.
+              if (routeSurface.centerActionPolicy === 'select-entries-for-discussion') {
+                startTransition(centerButtonRef.current, '/?selectMode=true');
                 return;
               }
               

@@ -1,13 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { MessageSquare, Loader2, Plus } from 'lucide-react';
+import { MessageSquare, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getAllDiscussionSessions, toggleDiscussionSessionPin, deleteDiscussionSession, createDiscussionSession } from '@/lib/db';
+import { getAllDiscussionSessions, toggleDiscussionSessionPin, deleteDiscussionSession } from '@/lib/db';
 import { SessionCard } from '@/components/discussions/SessionCard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useI18n } from '@/lib/i18n';
-import { trackUsageEvent } from '@/lib/usageTracker';
 import { SealGlyph } from '@/components/icons/SigilIcon';
 import {
   AlertDialog,
@@ -21,22 +20,11 @@ import {
 } from '@/components/ui/alert-dialog';
 
 function DiscussionsListContent() {
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const navigate = useNavigate();
   
   const sessions = useLiveQuery(() => getAllDiscussionSessions(), []);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [creating, setCreating] = useState(false);
-  
-  // Listen for center button event to create new discussion
-  useEffect(() => {
-    const handleCreateDiscussion = () => {
-      handleNewDiscussion();
-    };
-    
-    window.addEventListener('create-new-discussion', handleCreateDiscussion);
-    return () => window.removeEventListener('create-new-discussion', handleCreateDiscussion);
-  }, []);
   
   const handlePin = async (id: number) => {
     await toggleDiscussionSessionPin(id);
@@ -49,19 +37,8 @@ function DiscussionsListContent() {
     }
   };
   
-  const handleNewDiscussion = async () => {
-    setCreating(true);
-    try {
-      const id = await createDiscussionSession({
-        title: t('discussions.newTitle'),
-        scope: { entryIds: [], docIds: [] },
-        modeDefault: 'discuss',
-      });
-      trackUsageEvent('discussionSessionsStarted');
-      navigate(`/discussions/${id}`);
-    } finally {
-      setCreating(false);
-    }
+  const handleNewDiscussion = () => {
+    navigate('/?selectMode=true');
   };
   
   if (!sessions) {
@@ -96,14 +73,9 @@ function DiscussionsListContent() {
             variant="ghost"
             size="sm"
             onClick={handleNewDiscussion}
-            disabled={creating}
             className="gap-1.5 w-20 justify-end"
           >
-            {creating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Plus className="h-4 w-4" />
-            )}
+            <Plus className="h-4 w-4" />
             <span>{t('discussions.new')}</span>
           </Button>
         </div>

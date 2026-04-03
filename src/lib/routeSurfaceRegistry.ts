@@ -1,7 +1,7 @@
 import { matchPath } from 'react-router-dom';
 
 export type SurfaceClass = 'gateway' | 'core' | 'secondary' | 'operational' | 'hidden' | 'fallback';
-export type CenterActionPolicy = 'new-entry-default' | 'new-discussion-on-discussions-list';
+export type CenterActionPolicy = 'new-entry-default' | 'select-entries-for-discussion';
 
 export type RouteSurfaceSpec = {
   id: string;
@@ -282,7 +282,7 @@ export const ROUTE_SURFACE_REGISTRY: RouteSurfaceSpec[] = [
     showBottomNav: true,
     showFloatingChatButton: true,
     showFeedbackTrigger: true,
-    centerActionPolicy: 'new-discussion-on-discussions-list',
+    centerActionPolicy: 'select-entries-for-discussion',
   },
   {
     id: 'settings',
