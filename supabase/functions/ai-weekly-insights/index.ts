@@ -74,7 +74,6 @@ function getProviderConfig(provider: string, model: string, providerKey?: string
 interface WeeklyEntryData {
   date: string;
   mood: number;
-  semanticTags: string[];
   title?: string;
   text: string;
 }
@@ -137,9 +136,8 @@ function buildUserPrompt(entries: WeeklyEntryData[], language: 'ru' | 'en'): str
 
   const entryLines = entries.map(e => {
     const mood = `[Mood: ${e.mood}/5]`;
-    const tags = e.semanticTags.length > 0 ? `[Tags: ${e.semanticTags.join(', ')}]` : '';
     const title = e.title ? `"${e.title}"` : '';
-    return `${e.date} ${mood} ${tags} ${title}`.trim();
+    return `${e.date} ${mood} ${title}`.trim();
   }).join('\n');
 
   return `${header}\n\n${entryLines}`;
