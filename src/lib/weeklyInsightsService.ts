@@ -86,7 +86,6 @@ export async function generateWeeklyInsight(
     const base: Record<string, unknown> = {
       date: e.date,
       mood: e.mood,
-      semanticTags: e.semanticTags || [],
       title: e.title || undefined,
     };
     if (!aiSettings.strictPrivacy) {
