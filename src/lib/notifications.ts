@@ -208,7 +208,7 @@ export async function showBiographyNotification(
     ? 'Нажмите, чтобы просмотреть историю дня'
     : 'Tap to view your day story';
   
-  const deepLink = `/chat?bio=${date}`;
+  const deepLink = `/day/${date}`;
   
   // Try native notification first for Capacitor
   if (isCapacitorNative()) {

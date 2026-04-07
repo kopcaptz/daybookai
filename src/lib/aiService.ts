@@ -1,4 +1,3 @@
-import { db } from './db';
 import { 
   AIProfile, 
   AI_PROFILES, 
@@ -27,114 +26,10 @@ export interface StreamCallbacks {
   onError: (error: Error) => void;
 }
 
-// Paraphrase text to avoid verbatim quotes (used for chat context only)
-function paraphraseText(text: string): string {
-  if (!text || text.length < 20) {
-    return 'Краткая запись без деталей.';
-  }
-  
-  const words = text.toLowerCase().split(/\s+/);
-  const themes: string[] = [];
-  
-  const themeKeywords = {
-    'работа': ['работа', 'офис', 'проект', 'задача', 'встреча', 'коллега'],
-    'семья': ['семья', 'дом', 'родители', 'дети', 'муж', 'жена'],
-    'здоровье': ['здоровье', 'спорт', 'врач', 'самочувствие', 'усталость'],
-    'отдых': ['отдых', 'выходные', 'прогулка', 'фильм', 'книга'],
-    'эмоции': ['радость', 'грусть', 'волнение', 'спокойствие', 'стресс'],
-  };
-  
-  for (const [theme, keywords] of Object.entries(themeKeywords)) {
-    if (keywords.some(kw => words.some(w => w.includes(kw)))) {
-      themes.push(theme);
-    }
-  }
-  
-  if (themes.length === 0) {
-    return `Запись содержит ${text.length > 200 ? 'подробные' : 'краткие'} размышления.`;
-  }
-  
-  return `Запись затрагивает темы: ${themes.join(', ')}.`;
-}
-
-// Prepare entry context with paraphrasing (for chat, not biography)
-function prepareEntryContext(entry: { date: string; mood: number; tags: string[]; text: string }, strictPrivacy: boolean): string {
-  const date = new Date(entry.date).toLocaleDateString('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-  
-  const moodLabels = ['очень плохое', 'плохое', 'нормальное', 'хорошее', 'отличное'];
-  const mood = moodLabels[entry.mood - 1] || 'неизвестное';
-  
-  const tags = entry.tags.length > 0 ? entry.tags.join(', ') : 'без тегов';
-  
-  let content: string;
-  if (strictPrivacy) {
-    content = paraphraseText(entry.text);
-  } else {
-    content = entry.text.length > 100 
-      ? entry.text.substring(0, 100) + '...' 
-      : entry.text;
-  }
-  
-  return `[${date}] Настроение: ${mood}. Теги: ${tags}. ${content}`;
-}
-
-// Retrieve relevant entries for chat context
-export async function retrieveRelevantEntries(
-  query: string,
-  limit: number = 5,
-  strictPrivacy: boolean = true
-): Promise<string[]> {
-  const settings = loadAISettings();
-  const effectiveStrictPrivacy = strictPrivacy || settings.strictPrivacy;
-  
-  const allEntries = await db.entries
-    .filter(entry => !entry.isPrivate && entry.aiAllowed !== false)
-    .toArray();
-  
-  if (allEntries.length === 0) {
-    return [];
-  }
-  
-  const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-  
-  const scored = allEntries.map(entry => {
-    let score = 0;
-    const entryText = (entry.text + ' ' + entry.tags.join(' ')).toLowerCase();
-    
-    for (const word of queryWords) {
-      if (entryText.includes(word)) {
-        score += 1;
-      }
-    }
-    
-    const daysSinceEntry = (Date.now() - entry.createdAt) / (1000 * 60 * 60 * 24);
-    if (daysSinceEntry < 7) score += 0.5;
-    if (daysSinceEntry < 1) score += 0.5;
-    
-    return { entry, score };
-  });
-  
-  scored.sort((a, b) => b.score - a.score);
-  const relevant = scored.slice(0, limit).filter(s => s.score > 0);
-  
-  if (relevant.length === 0) {
-    const recent = allEntries
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(0, Math.min(3, limit));
-    return recent.map(e => prepareEntryContext(e, effectiveStrictPrivacy));
-  }
-  
-  return relevant.map(r => prepareEntryContext(r.entry, effectiveStrictPrivacy));
-}
-
 // Build system prompt for chat - multilingual with vision support
-function buildChatSystemPrompt(contexts: string[]): string {
+function buildChatSystemPrompt(): string {
   let prompt = `You are a friendly AI assistant named Sigil for the personal diary app "Magic Notebook".
-You help users analyze their entries, find patterns, and give recommendations.
+You help users with the current conversation and any attached images.
 
 CRITICAL LANGUAGE RULE:
 - ALWAYS respond in the SAME LANGUAGE the user writes to you
@@ -144,11 +39,10 @@ CRITICAL LANGUAGE RULE:
 - Match the user's language exactly, do not switch languages
 
 IMPORTANT RULES:
-1. NEVER quote diary entries verbatim — only paraphrase and summarize
-2. Do not reveal personal details directly
-3. Talk about themes and patterns, not specific content
-4. Be empathetic and supportive
-5. Keep responses concise but helpful
+1. Use only the information shared in this chat and any attached images
+2. Do not claim access to diary entries, biography, or other hidden personal context
+3. Be empathetic and supportive
+4. Keep responses concise but helpful
 
 VISION CAPABILITY:
 - If user sends an image, analyze it and describe what you see
@@ -157,13 +51,7 @@ VISION CAPABILITY:
 - If no image is provided, work with text only
 
 `;
-  
-  if (contexts.length > 0) {
-    prompt += `DIARY CONTEXT (summarized):\n${contexts.join('\n')}\n\n`;
-  } else {
-    prompt += `No diary entries available for analysis yet.\n\n`;
-  }
-  
+
   return prompt;
 }
 
@@ -174,25 +62,7 @@ export async function streamChatCompletion(
   callbacks: StreamCallbacks,
 ): Promise<void> {
   const profileConfig = AI_PROFILES[profile];
-  const settings = loadAISettings();
-  
-  // Extract text from last user message for context retrieval
-  const lastUserMessage = messages.filter(m => m.role === 'user').pop();
-  let queryText = '';
-  if (lastUserMessage) {
-    if (typeof lastUserMessage.content === 'string') {
-      queryText = lastUserMessage.content;
-    } else if (Array.isArray(lastUserMessage.content)) {
-      const textPart = lastUserMessage.content.find(p => p.type === 'text');
-      queryText = textPart?.type === 'text' ? textPart.text : '';
-    }
-  }
-  
-  const contexts = queryText 
-    ? await retrieveRelevantEntries(queryText, 5, settings.strictPrivacy)
-    : [];
-  
-  const systemPrompt = buildChatSystemPrompt(contexts);
+  const systemPrompt = buildChatSystemPrompt();
   
   const requestMessages: ChatMessage[] = [
     { role: 'system' as const, content: systemPrompt },

@@ -1,11 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, User, Loader2, AlertCircle, Settings, Copy, ExternalLink, X, Image as ImageIcon, KeyRound } from 'lucide-react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { format, parseISO } from 'date-fns';
-import { ru, enUS } from 'date-fns/locale';
+import { Send, User, Loader2, AlertCircle, Settings, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { loadAISettings } from '@/lib/aiConfig';
 import { streamChatCompletion, ChatMessage, MessageContentPart } from '@/lib/aiService';
-import { getBiography } from '@/lib/biographyService';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -32,21 +29,15 @@ interface DisplayMessage {
   imageUrl?: string;
   imageUrls?: string[]; // Multiple images support
   isStreaming?: boolean;
-  isBiography?: boolean;
-  biographyDate?: string;
 }
 
 function ChatContent() {
   const { t, language } = useI18n();
-  const locale = language === 'ru' ? ru : enUS;
-  const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [settings, setSettings] = useState(() => loadAISettings());
-  const [loadedBioDate, setLoadedBioDate] = useState<string | null>(null);
   
   // Image attachment state - now supports multiple
   const [pendingImages, setPendingImages] = useState<ConfirmedImage[]>([]);
@@ -84,39 +75,6 @@ function ChatContent() {
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, []);
-
-  // Handle deep link for biography
-  useEffect(() => {
-    const bioDate = searchParams.get('bio');
-    if (bioDate && bioDate !== loadedBioDate) {
-      setLoadedBioDate(bioDate);
-      
-      getBiography(bioDate).then((bio) => {
-        if (bio?.status === 'complete' && bio.biography) {
-          const formattedDate = format(parseISO(bioDate), 'd MMMM yyyy', { locale });
-          const content = `**${bio.biography.title}**\n\n${bio.biography.narrative}\n\n` +
-            (bio.biography.highlights.length > 0 
-              ? `**${t('misc.highlights')}:**\n${bio.biography.highlights.map(h => `• ${h}`).join('\n')}`
-              : '');
-          
-          const bioMessage: DisplayMessage = {
-            id: `bio-${bioDate}`,
-            role: 'assistant',
-            content,
-            isBiography: true,
-            biographyDate: bioDate,
-          };
-          
-          setMessages(prev => {
-            if (prev.some(m => m.id === bioMessage.id)) return prev;
-            return [bioMessage, ...prev];
-          });
-        }
-      });
-      
-      setSearchParams({});
-    }
-  }, [searchParams, loadedBioDate, locale, language, setSearchParams, t]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -512,8 +470,7 @@ function ChatContent() {
                   'max-w-[80%] rounded-lg px-4 py-3',
                   message.role === 'user'
                     ? 'bg-primary text-primary-foreground rounded-tr-sm'
-                    : 'panel-glass rounded-tl-sm',
-                  message.isBiography && 'bg-gradient-to-br from-cyber-glow/5 to-cyber-glow-secondary/5 border-cyber-glow/20'
+                    : 'panel-glass rounded-tl-sm'
                 )}
               >
                 {/* User images preview - supports multiple */}
@@ -542,33 +499,6 @@ function ChatContent() {
                 </p>
                 {message.isStreaming && (
                   <span className="mt-1 inline-block h-4 w-1 animate-pulse bg-cyber-sigil" />
-                )}
-                
-                {/* Biography actions */}
-                {message.isBiography && message.biographyDate && (
-                  <div className="mt-3 flex gap-2 border-t border-border/50 pt-3">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1 h-7 text-xs hover:bg-cyber-glow/10"
-                      onClick={() => {
-                        navigator.clipboard.writeText(message.content);
-                        toast.success(t('misc.copied'));
-                      }}
-                    >
-                      <Copy className="h-3 w-3" />
-                      {t('misc.copy')}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1 h-7 text-xs hover:bg-cyber-glow/10"
-                      onClick={() => navigate(`/day/${message.biographyDate}`)}
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      {t('misc.openDay')}
-                    </Button>
-                  </div>
                 )}
               </div>
             </div>
