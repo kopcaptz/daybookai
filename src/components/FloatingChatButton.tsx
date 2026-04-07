@@ -12,7 +12,7 @@ interface FloatingChatButtonProps {
 }
 
 export function FloatingChatButton({ className }: FloatingChatButtonProps) {
-  const { t, language } = useI18n();
+  const { language } = useI18n();
   const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -114,7 +114,7 @@ export function FloatingChatButton({ className }: FloatingChatButtonProps) {
           isOpen && "scale-0 opacity-0",
           className
         )}
-        aria-label={language === 'ru' ? 'Открыть чат' : 'Open chat'}
+        aria-label={language === 'ru' ? 'Открыть помощника' : 'Open helper'}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
       >
@@ -158,10 +158,10 @@ export function FloatingChatButton({ className }: FloatingChatButtonProps) {
               </div>
               <div>
                 <SheetTitle className="text-base font-medium">
-                  {language === 'ru' ? 'Чат' : 'Chat'}
+                  {language === 'ru' ? 'Помощник по экрану' : 'Screen Helper'}
                 </SheetTitle>
                 <SheetDescription id="chat-description" className="text-xs text-muted-foreground">
-                  {language === 'ru' ? 'AI-ассистент' : 'AI Assistant'}
+                  {language === 'ru' ? 'Локальная помощь по текущему экрану' : 'Local help for the current screen'}
                 </SheetDescription>
               </div>
             </div>
@@ -175,7 +175,7 @@ export function FloatingChatButton({ className }: FloatingChatButtonProps) {
                 "transition-colors duration-200",
                 "focus:outline-none focus:ring-2 focus:ring-ring"
               )}
-              aria-label={language === 'ru' ? 'Закрыть чат' : 'Close chat'}
+              aria-label={language === 'ru' ? 'Закрыть помощника' : 'Close helper'}
             >
               <X className="h-4 w-4 text-muted-foreground" />
             </button>
@@ -204,8 +204,8 @@ export function FloatingChatButton({ className }: FloatingChatButtonProps) {
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {language === 'ru' 
-                      ? 'Не удалось загрузить чат. Попробуйте позже.' 
-                      : 'Failed to load chat. Please try again later.'}
+                      ? 'Не удалось загрузить помощника. Попробуйте позже.' 
+                      : 'Failed to load helper. Please try again later.'}
                   </p>
                   <button
                     onClick={() => {
@@ -231,7 +231,7 @@ export function FloatingChatButton({ className }: FloatingChatButtonProps) {
               )}
               onLoad={handleIframeLoad}
               onError={handleIframeError}
-              title={language === 'ru' ? 'Чат' : 'Chat'}
+              title={language === 'ru' ? 'Помощник по экрану' : 'Screen Helper'}
               allow="microphone"
               sandbox="allow-scripts allow-same-origin allow-forms"
             />
