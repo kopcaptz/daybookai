@@ -280,7 +280,7 @@ export const ROUTE_SURFACE_REGISTRY: RouteSurfaceSpec[] = [
     path: '/discussions',
     surfaceClass: 'secondary',
     showBottomNav: true,
-    showFloatingChatButton: true,
+    showFloatingChatButton: false,
     showFeedbackTrigger: true,
     centerActionPolicy: 'select-entries-for-discussion',
   },
