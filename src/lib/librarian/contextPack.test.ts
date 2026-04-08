@@ -402,6 +402,206 @@ describe('buildContextPack', () => {
   });
 });
 
+describe('semanticTags authority enforcement', () => {
+  beforeEach(() => {
+    mockState.entries.clear();
+    mockState.biographies.clear();
+    mockState.attachmentCounts.clear();
+  });
+
+  it('T1: semanticTags-only match returns zero score — not included via keyword path', async () => {
+    mockState.entries.set(1, makeEntry({
+      id: 1,
+      date: '2026-04-01',
+      text: 'Unrelated daily note about weather',
+      createdAt: 100,
+      semanticTags: ['productivity'],
+    }));
+    mockState.entries.set(2, makeEntry({
+      id: 2,
+      date: '2026-04-02',
+      text: 'Productivity review for the week',
+      createdAt: 200,
+    }));
+
+    const result = await buildContextPack({
+      sessionScope: { entryIds: [], docIds: [] },
+      userQuery: 'productivity',
+      mode: 'discuss',
+      findMode: true,
+    });
+
+    const entryIds = result.evidence
+      .filter(e => e.type === 'entry')
+      .map(e => e.entityId);
+
+    // Entry 2 found via text match; Entry 1 must NOT be found via semanticTags alone
+    expect(entryIds).toContain(2);
+    expect(entryIds).not.toContain(1);
+  });
+
+  it('T2: semanticTags boost ranking when text already matches', async () => {
+    mockState.entries.set(1, makeEntry({
+      id: 1,
+      date: '2026-04-01',
+      text: 'Alpha topic discussed today',
+      createdAt: 100,
+      semanticTags: ['alpha'],
+    }));
+    mockState.entries.set(2, makeEntry({
+      id: 2,
+      date: '2026-04-02',
+      text: 'Alpha topic discussed yesterday',
+      createdAt: 200,
+      semanticTags: [],
+    }));
+
+    const result = await buildContextPack({
+      sessionScope: { entryIds: [], docIds: [] },
+      userQuery: 'alpha',
+      mode: 'discuss',
+      findMode: true,
+    });
+
+    const entryIds = result.evidence
+      .filter(e => e.type === 'entry')
+      .map(e => e.entityId);
+
+    // Both found via text match; Entry 1 ranked higher due to semantic tie-breaker
+    expect(entryIds.length).toBeGreaterThanOrEqual(2);
+    expect(entryIds[0]).toBe(1);
+  });
+
+  it('T3: semanticTags weight is less than text weight', async () => {
+    mockState.entries.set(1, makeEntry({
+      id: 1,
+      date: '2026-04-01',
+      text: 'Nice moonlight evening walk outside',
+      createdAt: 100,
+      tags: ['moonlight'],
+      semanticTags: [],
+    }));
+    mockState.entries.set(2, makeEntry({
+      id: 2,
+      date: '2026-04-02',
+      text: 'Nice moonlight evening at home',
+      createdAt: 200,
+      tags: [],
+      semanticTags: ['moonlight', 'glow', 'night'],
+    }));
+
+    const result = await buildContextPack({
+      sessionScope: { entryIds: [], docIds: [] },
+      userQuery: 'moonlight',
+      mode: 'discuss',
+      findMode: true,
+    });
+
+    const entryIds = result.evidence
+      .filter(e => e.type === 'entry')
+      .map(e => e.entityId);
+
+    // Entry 1: text(1.5) + userTag(1.5) = 3.0
+    // Entry 2: text(1.5) + semantic(0.3) = 1.8
+    // Entry 1 must rank higher
+    expect(entryIds[0]).toBe(1);
+  });
+
+  it('T4: userTags match outweighs semanticTags match', async () => {
+    mockState.entries.set(1, makeEntry({
+      id: 1,
+      date: '2026-04-01',
+      text: 'General note about the day',
+      createdAt: 100,
+      tags: ['focus'],
+      semanticTags: [],
+    }));
+    mockState.entries.set(2, makeEntry({
+      id: 2,
+      date: '2026-04-02',
+      text: 'General note about the day',
+      createdAt: 200,
+      tags: [],
+      semanticTags: ['focus'],
+    }));
+
+    const result = await buildContextPack({
+      sessionScope: { entryIds: [], docIds: [] },
+      userQuery: 'general focus',
+      mode: 'discuss',
+      findMode: true,
+    });
+
+    const entryIds = result.evidence
+      .filter(e => e.type === 'entry')
+      .map(e => e.entityId);
+
+    // Entry 1: text 'general'(1.5) + userTag 'focus'(1.5) = 3.0
+    // Entry 2: text 'general'(1.5) + semantic 'focus'(0.3) = 1.8
+    // Entry 1 must rank higher
+    expect(entryIds[0]).toBe(1);
+  });
+
+  it('T5: empty query returns no entries via scoring (regression)', async () => {
+    mockState.entries.set(1, makeEntry({
+      id: 1,
+      date: '2026-04-01',
+      text: 'Some content',
+      createdAt: 100,
+      tags: ['tag'],
+      semanticTags: ['semantic'],
+    }));
+
+    const result = await buildContextPack({
+      sessionScope: { entryIds: [], docIds: [] },
+      userQuery: '',
+      mode: 'discuss',
+      findMode: true,
+    });
+
+    const entryIds = result.evidence
+      .filter(e => e.type === 'entry')
+      .map(e => e.entityId);
+
+    // Empty query — fallback to recent entries, not keyword scoring
+    // Entry should appear via recent fallback, not via score
+    expect(entryIds).toEqual([1]);
+  });
+
+  it('T6: scoped mode includes all entries regardless of score', async () => {
+    mockState.entries.set(1, makeEntry({
+      id: 1,
+      date: '2026-04-01',
+      text: 'No keyword match here',
+      createdAt: 100,
+      semanticTags: ['unrelated'],
+    }));
+    mockState.entries.set(2, makeEntry({
+      id: 2,
+      date: '2026-04-02',
+      text: 'Also no keyword match',
+      createdAt: 200,
+      semanticTags: [],
+    }));
+
+    const result = await buildContextPack({
+      sessionScope: { entryIds: [1, 2], docIds: [] },
+      userQuery: 'completely-different-keyword',
+      mode: 'discuss',
+      findMode: false,
+    });
+
+    const entryIds = result.evidence
+      .filter(e => e.type === 'entry')
+      .map(e => e.entityId);
+
+    // Both entries must be included — scoped mode never filters by score
+    expect(entryIds).toHaveLength(2);
+    expect(entryIds).toContain(1);
+    expect(entryIds).toContain(2);
+  });
+});
+
 describe('deriveStableEvidenceHandle', () => {
   it('derives deterministic stable handles from persisted identity ingredients', () => {
     expect(deriveStableEvidenceHandle({

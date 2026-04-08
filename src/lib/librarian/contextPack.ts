@@ -141,12 +141,13 @@ function calculateEnhancedRelevanceScore(entry: DiaryEntry, query: string): numb
     }
   }
   
-  // 3. Semantic tags match (weight: 2.0) - AI-generated, high precision
-  if (entry.semanticTags && entry.semanticTags.length > 0) {
+  // 3. Semantic tags — tie-breaker only (weight: 0.3), requires base match from text or tags
+  // DOCTRINE: hidden AI-derived tags must not be primary selector for evidence inclusion
+  if (score > 0 && entry.semanticTags && entry.semanticTags.length > 0) {
     for (const stag of entry.semanticTags) {
       const lowerStag = stag.toLowerCase();
       if (keywords.some(k => lowerStag.includes(k))) {
-        score += 2.0;
+        score += 0.3;
       }
     }
   }
