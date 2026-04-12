@@ -223,7 +223,7 @@ export function FloatingChatButton({ className }: FloatingChatButtonProps) {
             {/* Chat iframe */}
             <iframe
               ref={iframeRef}
-              src="/chat"
+              src="/chat?surface=helper"
               className={cn(
                 "w-full h-full border-0",
                 "transition-opacity duration-300",

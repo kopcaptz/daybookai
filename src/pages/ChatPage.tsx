@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, User, Loader2, AlertCircle, Settings, X } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { loadAISettings } from '@/lib/aiConfig';
 import { streamChatCompletion, ChatMessage, MessageContentPart } from '@/lib/aiService';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,8 @@ interface DisplayMessage {
 
 function ChatContent() {
   const { t, language } = useI18n();
+  const [searchParams] = useSearchParams();
+  const isHelperSurface = searchParams.get('surface') === 'helper';
   
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState('');
@@ -334,22 +336,24 @@ function ChatContent() {
 
   if (!settings.enabled) {
     return (
-      <div className="flex min-h-screen flex-col pb-24 cyber-noise rune-grid">
-        <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <SigilIcon className="h-6 w-6 text-cyber-sigil" />
+      <div className={cn("flex min-h-screen flex-col cyber-noise rune-grid", isHelperSurface ? "pb-0" : "pb-24")}>
+        {!isHelperSurface && (
+          <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-6 border-b border-border/50">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <SigilIcon className="h-6 w-6 text-cyber-sigil" />
+              </div>
+              <div>
+                <h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
+                  {t('app.name')}
+                </h1>
+                <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
+                  {t('app.subtitle')}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
-                {t('app.name')}
-              </h1>
-              <p className="text-xs text-cyber-sigil/60 tracking-widest uppercase">
-                {t('app.subtitle')}
-              </p>
-            </div>
-          </div>
-        </header>
+          </header>
+        )}
 
         <main className="flex flex-1 items-center justify-center px-4">
           <div className="flex flex-col items-center text-center">
@@ -358,17 +362,19 @@ function ChatContent() {
               <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-cyber-sigil/50 animate-sigil-pulse" />
             </div>
             
-            <h3 className="mb-2 text-xl font-serif font-medium">{t('ai.chatDisabled')}</h3>
+            <h3 className="mb-2 text-xl font-serif font-medium">{isHelperSurface ? t('ai.helperTitle') : t('ai.chatDisabled')}</h3>
             <p className="mb-6 max-w-xs text-sm text-muted-foreground">
-              {t('ai.chatDisabledHint')}
+              {isHelperSurface ? t('ai.helperDisabledHint') : t('ai.chatDisabledHint')}
             </p>
 
-            <Link to="/settings">
-              <Button className="gap-2 btn-cyber">
-                <Settings className="h-4 w-4" />
-                {t('common.settings')}
-              </Button>
-            </Link>
+            {!isHelperSurface && (
+              <Link to="/settings">
+                <Button className="gap-2 btn-cyber">
+                  <Settings className="h-4 w-4" />
+                  {t('common.settings')}
+                </Button>
+              </Link>
+            )}
           </div>
         </main>
       </div>
@@ -376,32 +382,34 @@ function ChatContent() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col pb-24 cyber-noise rune-grid">
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-4 border-b border-border/50">
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyber-glow/30 to-transparent" />
-        
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <SigilIcon className="h-6 w-6 text-cyber-sigil" animated />
-              <div className="absolute -bottom-1 -right-1 w-2 h-2 rounded-full bg-cyber-glow animate-pulse-glow" />
+    <div className={cn("flex min-h-screen flex-col cyber-noise rune-grid", isHelperSurface ? "pb-0" : "pb-24")}>
+      {!isHelperSurface && (
+        <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-4 border-b border-border/50">
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyber-glow/30 to-transparent" />
+          
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <SigilIcon className="h-6 w-6 text-cyber-sigil" animated />
+                <div className="absolute -bottom-1 -right-1 w-2 h-2 rounded-full bg-cyber-glow animate-pulse-glow" />
+              </div>
+              <div>
+                <h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
+                  {t('app.name')}
+                </h1>
+                <p className="text-xs text-muted-foreground/80 tracking-widest">
+                  {t('ai.profile')}: {t(`ai.profile.${settings.chatProfile}` as any)}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-serif font-medium text-foreground tracking-wide" dir="ltr">
-                {t('app.name')}
-              </h1>
-              <p className="text-xs text-muted-foreground/80 tracking-widest">
-                {t('ai.profile')}: {t(`ai.profile.${settings.chatProfile}` as any)}
-              </p>
-            </div>
+            <Link to="/settings">
+              <Button variant="ghost" size="icon" className="hover:bg-cyber-glow/10">
+                <Settings className="h-5 w-5" />
+              </Button>
+            </Link>
           </div>
-          <Link to="/settings">
-            <Button variant="ghost" size="icon" className="hover:bg-cyber-glow/10">
-              <Settings className="h-5 w-5" />
-            </Button>
-          </Link>
-        </div>
-      </header>
+        </header>
+      )}
 
       {/* Auto-screenshot preview */}
       {pendingAutoScreenshot && (
@@ -425,16 +433,18 @@ function ChatContent() {
               </div>
             </div>
             <h3 className="mb-2 font-serif font-medium text-lg">
-              {t('ai.startConversation')}
+              {isHelperSurface ? t('ai.helperStartConversation') : t('ai.startConversation')}
             </h3>
             <p className="max-w-xs text-sm text-muted-foreground leading-relaxed">
-              {t('ai.startConversationHint')}
+              {isHelperSurface ? t('ai.helperStartConversationHint') : t('ai.startConversationHint')}
             </p>
-            <p className="mt-2 max-w-xs text-xs text-muted-foreground/60">
-              {language === 'ru' 
-                ? 'Можно отправить до 4 фото' 
-                : 'You can send up to 4 photos'}
-            </p>
+            {!isHelperSurface && (
+              <p className="mt-2 max-w-xs text-xs text-muted-foreground/60">
+                {language === 'ru' 
+                  ? 'Можно отправить до 4 фото' 
+                  : 'You can send up to 4 photos'}
+              </p>
+            )}
             <div className="mt-4 flex items-center gap-3 text-cyber-sigil/30">
               <SealGlyph size={10} />
               <div className="w-12 h-px bg-gradient-to-r from-transparent via-cyber-glow/30 to-transparent" />
@@ -508,7 +518,7 @@ function ChatContent() {
       </main>
 
       {/* Input */}
-      <div className="sticky bottom-16 border-t border-border/60 bg-background/90 backdrop-blur-xl p-4 safe-bottom">
+      <div className={cn("sticky border-t border-border/60 bg-background/90 backdrop-blur-xl p-4 safe-bottom", isHelperSurface ? "bottom-0" : "bottom-16")}>
         {/* Attached images preview - multiple support */}
         {confirmedImages.length > 0 && (
           <div className="mb-2 flex flex-wrap items-start gap-2 p-2 rounded-lg bg-muted/30 border border-border/50">
@@ -565,7 +575,7 @@ function ChatContent() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={t('ai.chatPlaceholder')}
+              placeholder={isHelperSurface ? t('ai.helperPlaceholder') : t('ai.chatPlaceholder')}
               className="min-h-[44px] max-h-32 resize-none border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/70"
               disabled={isLoading}
             />

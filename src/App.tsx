@@ -87,6 +87,7 @@ function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const [showEtherealPin, setShowEtherealPin] = useState(false);
+  const isHelperChatSurface = location.pathname === '/chat' && new URLSearchParams(location.search).get('surface') === 'helper';
   
   // Initialize notification listeners and navigation callback on mount
   useEffect(() => {
@@ -171,10 +172,10 @@ function AppContent() {
               </Routes>
             </Suspense>
           </PageTransition>
-          {routeSurface.showBottomNav && <BottomNav />}
+          {routeSurface.showBottomNav && !isHelperChatSurface && <BottomNav />}
           {routeSurface.showFloatingChatButton && <FloatingChatButton />}
           
-          {routeSurface.showFeedbackTrigger && <FeedbackModal onSecretUnlock={() => setShowEtherealPin(true)} />}
+          {routeSurface.showFeedbackTrigger && !isHelperChatSurface && <FeedbackModal onSecretUnlock={() => setShowEtherealPin(true)} />}
           <InstallPrompt />
           
           {/* Ethereal PIN Modal - global */}
