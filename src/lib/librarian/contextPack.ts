@@ -112,7 +112,7 @@ function calculateRelevanceScore(text: string, query: string): number {
 }
 
 /**
- * Calculate enhanced relevance score including semantic tags
+ * Calculate relevance score from text and user-visible tags
  */
 function calculateEnhancedRelevanceScore(entry: DiaryEntry, query: string): number {
   if (!query.trim()) return 0;
@@ -197,7 +197,6 @@ async function buildFromScope(
     const entry = await db.entries.get(id);
     if (entry && !entry.isPrivate && entry.aiAllowed !== false) {
       entries.push(entry);
-      // Use enhanced scoring with semantic tags
       const score = calculateEnhancedRelevanceScore(entry, query);
       scores.set(entry.id!, score);
     }
@@ -234,7 +233,7 @@ async function buildFromSearch(
   const hasSearchTerms = searchTerms.length > 0;
   
   if (hasSearchTerms) {
-    // Score and filter entries using enhanced scoring (includes semantic tags)
+    // Score and filter entries
     const matchedEntries = eligibleEntries
       .map(entry => {
         const score = calculateEnhancedRelevanceScore(entry, query);
