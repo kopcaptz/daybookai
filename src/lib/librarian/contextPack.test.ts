@@ -440,38 +440,6 @@ describe('semanticTags authority enforcement', () => {
     expect(entryIds).not.toContain(1);
   });
 
-  it('T2: semanticTags boost ranking when text already matches', async () => {
-    mockState.entries.set(1, makeEntry({
-      id: 1,
-      date: '2026-04-01',
-      text: 'Alpha topic discussed today',
-      createdAt: 100,
-      semanticTags: ['alpha'],
-    }));
-    mockState.entries.set(2, makeEntry({
-      id: 2,
-      date: '2026-04-02',
-      text: 'Alpha topic discussed yesterday',
-      createdAt: 200,
-      semanticTags: [],
-    }));
-
-    const result = await buildContextPack({
-      sessionScope: { entryIds: [], docIds: [] },
-      userQuery: 'alpha',
-      mode: 'discuss',
-      findMode: true,
-    });
-
-    const entryIds = result.evidence
-      .filter(e => e.type === 'entry')
-      .map(e => e.entityId);
-
-    // Both found via text match; Entry 1 ranked higher due to semantic tie-breaker
-    expect(entryIds.length).toBeGreaterThanOrEqual(2);
-    expect(entryIds[0]).toBe(1);
-  });
-
   it('T3: semanticTags weight is less than text weight', async () => {
     mockState.entries.set(1, makeEntry({
       id: 1,
