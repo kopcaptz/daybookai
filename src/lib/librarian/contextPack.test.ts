@@ -400,6 +400,26 @@ describe('buildContextPack', () => {
     expect(biographyEvidence?.knownSourceEntryCount).toBe(9);
     expect(result.contextText).toContain('partial: 8/9 source entries visible in this packet');
   });
+
+  it('excludes mood from entry context text until provenance rule lands', async () => {
+    mockState.entries.set(1, makeEntry({
+      id: 1,
+      date: '2026-04-01',
+      text: 'Concrete authored fact from the diary entry.',
+      createdAt: 100,
+      mood: 5,
+      moodSource: 'user',
+    }));
+
+    const result = await buildContextPack({
+      sessionScope: { entryIds: [1], docIds: [] },
+      userQuery: 'fact',
+      mode: 'discuss',
+      findMode: false,
+    });
+
+    expect(result.contextText).not.toMatch(/mood/i);
+  });
 });
 
 describe('semanticTags authority enforcement', () => {
