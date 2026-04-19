@@ -350,8 +350,7 @@ function EntryEditorContent() {
 
       // Trigger background AI analysis for non-private entries
       if (!isPrivate && savedEntry.aiAllowed !== false) {
-        // User explicitly set mood if they changed it OR if mood is not default (3)
-        const userSetMood = userChangedMood || mood !== 3;
+        const userSetMood = userChangedMood;
         analyzeEntryInBackground(
           entryId!,
           text,

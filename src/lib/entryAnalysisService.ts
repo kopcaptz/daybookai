@@ -320,7 +320,7 @@ export async function reanalyzeEntry(
       return false;
     }
 
-    const userSetMood = entry.moodSource === 'user' || (entry.mood !== 3 && !entry.moodSource);
+    const userSetMood = entry.moodSource === 'user';
 
     await analyzeEntryInBackground(
       entryId,

@@ -433,7 +433,7 @@ export async function buildContextPack(options: ContextPackOptions): Promise<Con
       entityId: entryId,
     });
     
-    // Build context text
+    // Build context text — mood intentionally excluded until provenance/classification rule lands
     const contextEntry = `[${refId}] CLASS: PRIMARY_AUTHORED_ENTRY\nSTABLE_HANDLE: ${stableHandle}\n${title}${subtitle ? ` | Tags: ${subtitle}` : ''}\n${snippet}${attachmentNote}`;
     
     // Check total char limit

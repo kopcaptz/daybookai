@@ -72,8 +72,11 @@ export function EntryCard({ entry, showDate = false, selectable = false, selecte
         )}
         
         {/* Mood indicator */}
-        <div className="shrink-0 pt-0.5">
+        <div className="shrink-0 pt-0.5 flex items-center gap-0.5">
           <MoodBadge mood={entry.mood} />
+          {entry.moodSource === 'ai' && (
+            <span className="text-xs text-cyber-glow/60" aria-label="AI-derived">✨</span>
+          )}
         </div>
         
         {/* Content */}
