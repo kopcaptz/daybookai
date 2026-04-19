@@ -144,7 +144,6 @@ export type Database = {
           local_id: number
           mood: number
           mood_source: string | null
-          semantic_tags: string[]
           tags: string[]
           text: string
           title: string | null
@@ -162,7 +161,6 @@ export type Database = {
           local_id: number
           mood?: number
           mood_source?: string | null
-          semantic_tags?: string[]
           tags?: string[]
           text?: string
           title?: string | null
@@ -180,7 +178,6 @@ export type Database = {
           local_id?: number
           mood?: number
           mood_source?: string | null
-          semantic_tags?: string[]
           tags?: string[]
           text?: string
           title?: string | null

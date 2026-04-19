@@ -1,11 +1,8 @@
 /**
  * Post-Save AI Analysis Service
- * 
- * Analyzes diary entries after saving to:
- * 1. Determine mood (if user didn't set it)
- * 2. Generate hidden semantic tags for improved search
- * 
- * Includes queue system for offline retry
+ *
+ * Analyzes diary entries after saving to determine mood (if user didn't
+ * set it) and suggest a title. Includes queue system for offline retry.
  */
 
 import { db, updateEntry, type DiaryEntry, type AnalysisQueueItem } from '@/lib/db';
@@ -16,7 +13,6 @@ import { getAITokenHeader } from '@/lib/aiUtils';
 interface AnalysisResult {
   mood: number;
   confidence: number;
-  semanticTags: string[];
   titleSuggestion?: string;
   requestId: string;
 }
@@ -174,7 +170,6 @@ async function processQueueItem(item: AnalysisQueueItem): Promise<void> {
     const result = await callAnalyzeEdgeFunction(entry.text, entry.tags, item.language);
 
     const updates: Partial<DiaryEntry> = {
-      semanticTags: result.semanticTags,
       aiAnalyzedAt: Date.now(),
     };
 
@@ -271,12 +266,11 @@ export async function analyzeEntryInBackground(
   try {
     const result = await callAnalyzeEdgeFunction(text, tags, language);
 
-    console.log(`[EntryAnalysis] Result: mood=${result.mood}, confidence=${result.confidence}, semanticTags=[${result.semanticTags.join(', ')}], title=${result.titleSuggestion || 'none'}`);
+    console.log(`[EntryAnalysis] Result: mood=${result.mood}, confidence=${result.confidence}, title=${result.titleSuggestion || 'none'}`);
 
     const currentEntry = await db.entries.get(entryId);
 
     const updates: Partial<DiaryEntry> = {
-      semanticTags: result.semanticTags,
       aiAnalyzedAt: Date.now(),
     };
 

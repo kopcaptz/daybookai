@@ -41,7 +41,6 @@ function makeEntry(overrides: Partial<DiaryEntry> & Pick<DiaryEntry, 'id' | 'dat
     aiAllowed: overrides.aiAllowed ?? true,
     createdAt: overrides.createdAt,
     updatedAt: overrides.updatedAt ?? overrides.createdAt,
-    semanticTags: overrides.semanticTags ?? [],
     attachmentCounts: overrides.attachmentCounts,
     moodSource: overrides.moodSource,
     aiAnalyzedAt: overrides.aiAnalyzedAt,
@@ -158,7 +157,6 @@ describe('buildContextPack', () => {
       date: '2026-04-02',
       text: 'Moonlight discovery note',
       createdAt: 300,
-      semanticTags: ['moonlight'],
     }));
 
     const result = await buildContextPack({
@@ -181,7 +179,6 @@ describe('buildContextPack', () => {
       date: '2026-04-02',
       text: 'Moonlight discovery note',
       createdAt: 300,
-      semanticTags: ['moonlight'],
     }));
 
     const result = await buildContextPack({
@@ -415,7 +412,6 @@ describe('semanticTags authority enforcement', () => {
       date: '2026-04-01',
       text: 'Unrelated daily note about weather',
       createdAt: 100,
-      semanticTags: ['productivity'],
     }));
     mockState.entries.set(2, makeEntry({
       id: 2,
@@ -440,38 +436,6 @@ describe('semanticTags authority enforcement', () => {
     expect(entryIds).not.toContain(1);
   });
 
-  it('T2: semanticTags boost ranking when text already matches', async () => {
-    mockState.entries.set(1, makeEntry({
-      id: 1,
-      date: '2026-04-01',
-      text: 'Alpha topic discussed today',
-      createdAt: 100,
-      semanticTags: ['alpha'],
-    }));
-    mockState.entries.set(2, makeEntry({
-      id: 2,
-      date: '2026-04-02',
-      text: 'Alpha topic discussed yesterday',
-      createdAt: 200,
-      semanticTags: [],
-    }));
-
-    const result = await buildContextPack({
-      sessionScope: { entryIds: [], docIds: [] },
-      userQuery: 'alpha',
-      mode: 'discuss',
-      findMode: true,
-    });
-
-    const entryIds = result.evidence
-      .filter(e => e.type === 'entry')
-      .map(e => e.entityId);
-
-    // Both found via text match; Entry 1 ranked higher due to semantic tie-breaker
-    expect(entryIds.length).toBeGreaterThanOrEqual(2);
-    expect(entryIds[0]).toBe(1);
-  });
-
   it('T3: semanticTags weight is less than text weight', async () => {
     mockState.entries.set(1, makeEntry({
       id: 1,
@@ -479,7 +443,6 @@ describe('semanticTags authority enforcement', () => {
       text: 'Nice moonlight evening walk outside',
       createdAt: 100,
       tags: ['moonlight'],
-      semanticTags: [],
     }));
     mockState.entries.set(2, makeEntry({
       id: 2,
@@ -487,7 +450,6 @@ describe('semanticTags authority enforcement', () => {
       text: 'Nice moonlight evening at home',
       createdAt: 200,
       tags: [],
-      semanticTags: ['moonlight', 'glow', 'night'],
     }));
 
     const result = await buildContextPack({
@@ -514,7 +476,6 @@ describe('semanticTags authority enforcement', () => {
       text: 'General note about the day',
       createdAt: 100,
       tags: ['focus'],
-      semanticTags: [],
     }));
     mockState.entries.set(2, makeEntry({
       id: 2,
@@ -522,7 +483,6 @@ describe('semanticTags authority enforcement', () => {
       text: 'General note about the day',
       createdAt: 200,
       tags: [],
-      semanticTags: ['focus'],
     }));
 
     const result = await buildContextPack({
@@ -549,7 +509,6 @@ describe('semanticTags authority enforcement', () => {
       text: 'Some content',
       createdAt: 100,
       tags: ['tag'],
-      semanticTags: ['semantic'],
     }));
 
     const result = await buildContextPack({
@@ -574,14 +533,12 @@ describe('semanticTags authority enforcement', () => {
       date: '2026-04-01',
       text: 'No keyword match here',
       createdAt: 100,
-      semanticTags: ['unrelated'],
     }));
     mockState.entries.set(2, makeEntry({
       id: 2,
       date: '2026-04-02',
       text: 'Also no keyword match',
       createdAt: 200,
-      semanticTags: [],
     }));
 
     const result = await buildContextPack({

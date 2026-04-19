@@ -21,7 +21,6 @@ export interface DiaryEntry {
   attachmentCounts?: AttachmentCounts; // Aggregated counts for calendar (optional for backward compat)
   // AI Analysis fields (v11)
   moodSource?: 'user' | 'ai';      // Who set the mood
-  semanticTags?: string[];          // AI-generated hidden tags for search
   aiAnalyzedAt?: number;            // Timestamp of last AI analysis
   // Smart Titles (v13)
   title?: string;                   // AI-generated or user-set title
@@ -613,6 +612,28 @@ class DaybookDatabase extends Dexie {
         if (entry.syncStatus === undefined) {
           entry.syncStatus = 'pending';
         }
+      });
+    });
+
+    // Version 17: Drop semanticTags field and its multi-entry index from entries
+    this.version(17).stores({
+      entries: '++id, date, mood, *tags, isPrivate, aiAllowed, createdAt, updatedAt, aiAnalyzedAt, syncStatus',
+      attachments: '++id, entryId, kind, createdAt',
+      drafts: 'id, updatedAt',
+      biographies: 'date, status, generatedAt',
+      attachmentInsights: 'attachmentId, createdAt',
+      receipts: '++id, entryId, date, storeName, createdAt, updatedAt',
+      receiptItems: '++id, receiptId, category',
+      scanLogs: '++id, timestamp',
+      reminders: '++id, entryId, status, dueAt, createdAt',
+      discussionSessions: '++id, updatedAt, lastMessageAt, pinned',
+      discussionMessages: '++id, sessionId, [sessionId+createdAt]',
+      analysisQueue: '++id, entryId, status, createdAt',
+      weeklyInsights: 'weekStart, generatedAt',
+      audioTranscripts: 'attachmentId, status, createdAt',
+    }).upgrade(tx => {
+      return tx.table('entries').toCollection().modify(entry => {
+        delete entry.semanticTags;
       });
     });
   }

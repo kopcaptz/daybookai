@@ -84,7 +84,6 @@ interface AnalyzeRequest {
 interface AnalyzeResponse {
   mood: number;
   confidence: number;
-  semanticTags: string[];
   titleSuggestion?: string;
   requestId: string;
 }
@@ -232,13 +231,7 @@ async function handleFullMode(
    4 = позитивный/радостный/довольный
    5 = очень позитивный/воодушевлённый/благодарный
 
-2. semanticTags (3-8 тегов): скрытые ключевые слова для поиска:
-   - Темы (работа, семья, здоровье, хобби, путешествия, финансы, отношения)
-   - Действия (встреча, тренировка, готовка, чтение, покупки, отдых)
-   - Эмоции (стресс, радость, тревога, покой, энтузиазм, усталость)
-   - Паттерны времени (утренняя рутина, выходной, праздник, будни)
-
-3. titleSuggestion: короткий заголовок (3-6 слов) в духе кибер-мистицизма
+2. titleSuggestion: короткий заголовок (3-6 слов) в духе кибер-мистицизма
    - Используй термины: "контур", "сектор", "резонанс", "импульс", "сигнал"
    - Примеры: "Импульс в секторе Работа", "Контур семейного резонанса"
    - Если текст про рутину: "Дневной контур: [тема]"
@@ -259,13 +252,7 @@ Analyze the text and return:
    4 = positive/happy/satisfied
    5 = very positive/excited/grateful
 
-2. semanticTags (3-8 tags): hidden search keywords that capture:
-   - Main topics (work, family, health, hobby, travel, finances, relationships)
-   - Activities (meeting, exercise, cooking, reading, shopping, relaxation)
-   - Emotions (stress, joy, anxiety, peace, enthusiasm, fatigue)
-   - Time patterns (morning routine, weekend, holiday, weekday)
-
-3. titleSuggestion: short title (3-6 words) in cyber-mysticism style
+2. titleSuggestion: short title (3-6 words) in cyber-mysticism style
    - Use terms: "contour", "sector", "resonance", "impulse", "signal"
    - Examples: "Work Sector Impulse", "Family Resonance Contour"
    - For routine: "Daily Contour: [topic]"
@@ -288,7 +275,6 @@ Return ONLY valid JSON:
 {
   "mood": <number 1-5>,
   "confidence": <number 0-1>,
-  "semanticTags": ["tag1", "tag2", ...],
   "titleSuggestion": "..."
 }`;
 
@@ -315,7 +301,7 @@ Return ONLY valid JSON:
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content || "";
 
-  let parsed: { mood: number; confidence: number; semanticTags: string[]; titleSuggestion?: string };
+  let parsed: { mood: number; confidence: number; titleSuggestion?: string };
   try {
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON found in response");
@@ -330,17 +316,14 @@ Return ONLY valid JSON:
 
   const mood = Math.max(1, Math.min(5, Math.round(parsed.mood || 3)));
   const confidence = Math.max(0, Math.min(1, parsed.confidence || 0.5));
-  const semanticTags = Array.isArray(parsed.semanticTags) 
-    ? parsed.semanticTags.slice(0, 8).map((t: unknown) => String(t).toLowerCase().trim())
-    : [];
-  const titleSuggestion = typeof parsed.titleSuggestion === 'string' 
-    ? parsed.titleSuggestion.slice(0, 80).trim() 
+  const titleSuggestion = typeof parsed.titleSuggestion === 'string'
+    ? parsed.titleSuggestion.slice(0, 80).trim()
     : undefined;
 
   const durationMs = Date.now() - startTime;
-  console.log(`[${requestId}] Full done: mood=${mood}, confidence=${confidence.toFixed(2)}, tags=${semanticTags.length}, title="${titleSuggestion || 'none'}", duration=${durationMs}ms`);
+  console.log(`[${requestId}] Full done: mood=${mood}, confidence=${confidence.toFixed(2)}, title="${titleSuggestion || 'none'}", duration=${durationMs}ms`);
 
-  const result: AnalyzeResponse = { mood, confidence, semanticTags, titleSuggestion, requestId };
+  const result: AnalyzeResponse = { mood, confidence, titleSuggestion, requestId };
 
   return new Response(JSON.stringify(result), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
