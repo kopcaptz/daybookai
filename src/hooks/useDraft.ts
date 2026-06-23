@@ -7,6 +7,7 @@ const AUTOSAVE_INTERVAL = 3000; // 3 seconds
 interface DraftData {
   text: string;
   mood: number;
+  userChangedMood?: boolean;
   tags: string[];
   isPrivate: boolean;
   attachments: AttachmentPreview[];
@@ -26,6 +27,7 @@ export function useDraft({ draftId, data, enabled = true }: UseDraftOptions) {
     const serialized = JSON.stringify({
       text: data.text,
       mood: data.mood,
+      userChangedMood: data.userChangedMood,
       tags: data.tags,
       isPrivate: data.isPrivate,
       attachmentsCount: data.attachments.length,
@@ -39,6 +41,7 @@ export function useDraft({ draftId, data, enabled = true }: UseDraftOptions) {
         id: draftId,
         text: data.text,
         mood: data.mood,
+        userChangedMood: data.userChangedMood,
         tags: data.tags,
         isPrivate: data.isPrivate,
         attachments: data.attachments.map(a => ({
@@ -93,6 +96,7 @@ export async function loadDraft(draftId: string): Promise<DraftData | null> {
     return {
       text: draft.text,
       mood: draft.mood,
+      userChangedMood: draft.userChangedMood,
       tags: draft.tags,
       isPrivate: draft.isPrivate,
       attachments: draft.attachments.map(a => ({
@@ -124,6 +128,6 @@ export function hasDraftContent(data: DraftData): boolean {
     data.text.trim().length > 0 ||
     data.attachments.length > 0 ||
     data.tags.length > 0 ||
-    data.mood !== 3
+    data.userChangedMood === true
   );
 }

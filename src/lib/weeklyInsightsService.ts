@@ -19,6 +19,17 @@ export interface WeeklyInsight {
   sourceEntryCount: number;
 }
 
+type FieldSource = 'user' | 'ai' | 'unknown';
+
+interface WeeklyEntryPayload {
+  date: string;
+  mood: number;
+  moodSource: FieldSource;
+  title?: string;
+  titleSource?: FieldSource;
+  text?: string;
+}
+
 // Cache TTL: 24 hours
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -69,6 +80,29 @@ async function saveWeeklyInsight(insight: WeeklyInsight): Promise<void> {
   }
 }
 
+function normalizeFieldSource(source: 'user' | 'ai' | undefined): FieldSource {
+  return source ?? 'unknown';
+}
+
+function buildWeeklyEntryPayload(entry: DiaryEntry, includeText: boolean): WeeklyEntryPayload {
+  const base: WeeklyEntryPayload = {
+    date: entry.date,
+    mood: entry.mood,
+    moodSource: normalizeFieldSource(entry.moodSource),
+  };
+
+  if (entry.title) {
+    base.title = entry.title;
+    base.titleSource = normalizeFieldSource(entry.titleSource);
+  }
+
+  if (includeText) {
+    base.text = entry.text.slice(0, 100);
+  }
+
+  return base;
+}
+
 export async function generateWeeklyInsight(
   language: Language
 ): Promise<{ success: true; insight: WeeklyInsight } | { success: false; error: string }> {
@@ -82,17 +116,7 @@ export async function generateWeeklyInsight(
 
   // Prepare data for API (privacy-safe)
   const aiSettings = loadAISettings();
-  const entryData = entries.map(e => {
-    const base: Record<string, unknown> = {
-      date: e.date,
-      mood: e.mood,
-      title: e.title || undefined,
-    };
-    if (!aiSettings.strictPrivacy) {
-      base.text = e.text.slice(0, 100);
-    }
-    return base;
-  });
+  const entryData = entries.map(e => buildWeeklyEntryPayload(e, !aiSettings.strictPrivacy));
 
   try {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;

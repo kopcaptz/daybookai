@@ -181,6 +181,8 @@ async function processQueueItem(item: AnalysisQueueItem): Promise<void> {
     if (!item.userSetMood) {
       updates.mood = result.mood;
       updates.moodSource = 'ai';
+    } else {
+      updates.moodSource = 'user';
     }
 
     if (result.titleSuggestion && !entry.title) {
@@ -320,7 +322,7 @@ export async function reanalyzeEntry(
       return false;
     }
 
-    const userSetMood = entry.moodSource === 'user' || (entry.mood !== 3 && !entry.moodSource);
+    const userSetMood = entry.moodSource === 'user';
 
     await analyzeEntryInBackground(
       entryId,

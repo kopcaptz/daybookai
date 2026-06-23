@@ -12,6 +12,7 @@ import {
   createEntry, 
   updateEntry, 
   getEntryById, 
+  type DiaryEntry,
   getAllTags, 
   deleteEntry,
   addAttachment,
@@ -78,6 +79,7 @@ function EntryEditorContent() {
   const [text, setText] = useState('');
   const [mood, setMood] = useState(3);
   const [userChangedMood, setUserChangedMood] = useState(false); // Track if user explicitly set mood
+  const [loadedMoodSource, setLoadedMoodSource] = useState<DiaryEntry['moodSource']>(undefined);
   const [tags, setTags] = useState<string[]>([]);
   const [isPrivate, setIsPrivate] = useState(false);
   const [attachments, setAttachments] = useState<AttachmentPreview[]>([]);
@@ -130,7 +132,7 @@ function EntryEditorContent() {
   // Draft autosave
   useDraft({
     draftId,
-    data: { text, mood, tags, isPrivate, attachments },
+    data: { text, mood, userChangedMood, tags, isPrivate, attachments },
     enabled: isLoaded && !isSaving,
   });
 
@@ -143,6 +145,8 @@ function EntryEditorContent() {
           if (entry) {
             setText(entry.text);
             setMood(entry.mood);
+            setLoadedMoodSource(entry.moodSource);
+            setUserChangedMood(false);
             setTags(entry.tags);
             setIsPrivate(entry.isPrivate);
             
@@ -186,6 +190,8 @@ function EntryEditorContent() {
     if (pendingDraft) {
       setText(pendingDraft.text);
       setMood(pendingDraft.mood);
+      setUserChangedMood(Boolean(pendingDraft.userChangedMood));
+      setLoadedMoodSource(undefined);
       setTags(pendingDraft.tags);
       setIsPrivate(pendingDraft.isPrivate);
       setAttachments(pendingDraft.attachments);
@@ -268,12 +274,15 @@ function EntryEditorContent() {
       
       log('TX_BEGIN');
       
+      const moodSourceUpdate = userChangedMood ? { moodSource: 'user' as const } : {};
+
       await db.transaction('rw', [db.entries, db.attachments, db.attachmentInsights], async () => {
         if (isEditing && id) {
           entryId = Number(id);
           await updateEntry(entryId, {
             text,
             mood,
+            ...moodSourceUpdate,
             tags,
             isPrivate,
           });
@@ -289,6 +298,7 @@ function EntryEditorContent() {
             date: saveDate,
             text,
             mood,
+            ...moodSourceUpdate,
             tags,
             isPrivate,
           });
@@ -350,8 +360,7 @@ function EntryEditorContent() {
 
       // Trigger background AI analysis for non-private entries
       if (!isPrivate && savedEntry.aiAllowed !== false) {
-        // User explicitly set mood if they changed it OR if mood is not default (3)
-        const userSetMood = userChangedMood || mood !== 3;
+        const userSetMood = userChangedMood || loadedMoodSource === 'user';
         analyzeEntryInBackground(
           entryId!,
           text,

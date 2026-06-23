@@ -102,6 +102,11 @@ async function getUserId(): Promise<string | null> {
   return session?.user?.id ?? null;
 }
 
+function toLocalMoodSource(source: unknown): DiaryEntry['moodSource'] {
+  if (source === 'user' || source === 'ai') return source;
+  return undefined;
+}
+
 /**
  * Sync entries: bidirectional with Last-Write-Wins strategy
  */
@@ -160,7 +165,7 @@ export async function syncEntries(): Promise<{ uploaded: number; downloaded: num
           is_private: local.isPrivate,
           title: local.title || null,
           title_source: local.titleSource || null,
-          mood_source: local.moodSource || 'user',
+          mood_source: local.moodSource || null,
           semantic_tags: local.semanticTags || [],
           attachment_counts: (local.attachmentCounts || { image: 0, video: 0, audio: 0 }) as unknown as Json,
           created_at: new Date(local.createdAt).toISOString(),
@@ -188,7 +193,7 @@ export async function syncEntries(): Promise<{ uploaded: number; downloaded: num
               is_private: local.isPrivate,
               title: local.title || null,
               title_source: local.titleSource || null,
-              mood_source: local.moodSource || 'user',
+              mood_source: local.moodSource || null,
               semantic_tags: local.semanticTags || [],
               attachment_counts: (local.attachmentCounts || { image: 0, video: 0, audio: 0 }) as unknown as Json,
               updated_at: new Date(local.updatedAt).toISOString(),
@@ -210,7 +215,7 @@ export async function syncEntries(): Promise<{ uploaded: number; downloaded: num
             aiAllowed: !server.is_private,
             title: server.title,
             titleSource: server.title_source,
-            moodSource: server.mood_source,
+            moodSource: toLocalMoodSource(server.mood_source),
             semanticTags: server.semantic_tags || [],
             attachmentCounts: server.attachment_counts || { image: 0, video: 0, audio: 0 },
             updatedAt: serverTime,
@@ -256,7 +261,7 @@ export async function syncEntries(): Promise<{ uploaded: number; downloaded: num
               aiAllowed: !se.is_private,
               title: se.title,
               titleSource: se.title_source as 'ai' | 'user' | undefined,
-              moodSource: se.mood_source as 'user' | 'ai' | undefined,
+              moodSource: toLocalMoodSource(se.mood_source),
               semanticTags: se.semantic_tags || [],
               attachmentCounts: se.attachment_counts as any,
               createdAt: new Date(se.created_at).getTime(),
@@ -429,7 +434,7 @@ export async function migrateLegacyData(
         is_private: entry.isPrivate,
         title: entry.title || null,
         title_source: entry.titleSource || null,
-        mood_source: entry.moodSource || 'user',
+        mood_source: entry.moodSource || null,
         semantic_tags: entry.semanticTags || [],
         attachment_counts: (entry.attachmentCounts || { image: 0, video: 0, audio: 0 }) as unknown as Json,
         created_at: new Date(entry.createdAt).toISOString(),

@@ -50,6 +50,7 @@ export interface Draft {
   id: string; // 'new' or entry id
   text: string;
   mood: number;
+  userChangedMood?: boolean;
   tags: string[];
   isPrivate: boolean;
   attachments: DraftAttachment[];

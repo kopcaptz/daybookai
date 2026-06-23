@@ -74,8 +74,10 @@ function getProviderConfig(provider: string, model: string, providerKey?: string
 interface WeeklyEntryData {
   date: string;
   mood: number;
+  moodSource?: "user" | "ai" | "unknown";
   title?: string;
-  text: string;
+  titleSource?: "user" | "ai" | "unknown";
+  text?: string;
 }
 
 interface WeeklyRequest {
@@ -96,6 +98,13 @@ interface WeeklyInsightResult {
 const SYSTEM_PROMPT_RU = `Ты — аналитик личного дневника «Магический блокнот».
 Проанализируй недельные данные и выяви паттерны настроения и активности.
 
+ПРАВИЛА ИСТОЧНИКОВ:
+- moodSource=user означает выбранное пользователем настроение.
+- moodSource=ai означает производную AI-оценку, не пользовательское утверждение.
+- moodSource=unknown означает неизвестное/legacy происхождение.
+- titleSource=ai означает AI-сгенерированный заголовок; не трактуй его как авторский факт.
+- Используй производные поля как подсказки о паттернах, а не как первичные дневниковые свидетельства.
+
 СТИЛЬ ОТВЕТА:
 - Используй метафоры "контуров", "резонансов", "сигналов", "энергетических потоков"
 - Будь конкретен, но не цитируй записи дословно
@@ -113,6 +122,13 @@ const SYSTEM_PROMPT_RU = `Ты — аналитик личного дневни�
 
 const SYSTEM_PROMPT_EN = `You are a personal diary analyst in the "cyber-grimoire" style.
 Analyze the weekly data and identify mood and activity patterns.
+
+SOURCE RULES:
+- moodSource=user means the mood was selected by the user.
+- moodSource=ai means the mood is an AI-derived estimate, not a user-authored claim.
+- moodSource=unknown means unknown or legacy provenance.
+- titleSource=ai means the title was AI-generated; do not treat it as an authored fact.
+- Use derived fields as pattern hints, not primary diary evidence.
 
 RESPONSE STYLE:
 - Use metaphors of "circuits", "resonances", "signals", "energy flows"
@@ -135,8 +151,10 @@ function buildUserPrompt(entries: WeeklyEntryData[], language: 'ru' | 'en'): str
     : `Data from the last 7 days (${entries.length} entries):`;
 
   const entryLines = entries.map(e => {
-    const mood = `[Mood: ${e.mood}/5]`;
-    const title = e.title ? `"${e.title}"` : '';
+    const moodSource = e.moodSource ? `, source: ${e.moodSource}` : '';
+    const mood = `[Mood: ${e.mood}/5${moodSource}]`;
+    const titleSource = e.titleSource ? ` (title source: ${e.titleSource})` : '';
+    const title = e.title ? `"${e.title}"${titleSource}` : '';
     return `${e.date} ${mood} ${title}`.trim();
   }).join('\n');
 

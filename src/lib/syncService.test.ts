@@ -206,4 +206,110 @@ describe('syncService', () => {
     expect(mockUpsert.mock.calls[0][0]).toEqual(expect.objectContaining({ local_id: 1 }));
     expect(localStorage.getItem('daybook-sync-owner-user-id')).toBe('user-123');
   });
+
+  it('uploads missing moodSource as null instead of stamping it as user-authored', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: { id: 'user-123' } } },
+    });
+
+    mockEntriesToArray.mockResolvedValue([
+      {
+        id: 1,
+        date: '2026-02-07',
+        text: 'Unsourced mood entry',
+        mood: 4,
+        tags: [],
+        isPrivate: false,
+        aiAllowed: true,
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ]);
+
+    await syncEntries();
+
+    expect(mockUpsert).toHaveBeenCalledTimes(1);
+    expect(mockUpsert.mock.calls[0][0]).toEqual(expect.objectContaining({
+      local_id: 1,
+      mood_source: null,
+    }));
+  });
+
+  it('normalizes pulled null moodSource to undefined when server entry is newer', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: { id: 'user-123' } } },
+    });
+
+    mockEntriesToArray.mockResolvedValue([
+      {
+        id: 1,
+        date: '2026-02-07',
+        text: 'Local entry',
+        mood: 3,
+        tags: [],
+        isPrivate: false,
+        aiAllowed: true,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ]);
+
+    mockSelect.mockImplementation(() => makeQuery([
+      {
+        id: 'cloud-1',
+        local_id: 1,
+        date: '2026-02-07',
+        text: 'Server entry',
+        mood: 4,
+        mood_source: null,
+        tags: [],
+        is_private: false,
+        title: null,
+        title_source: null,
+        semantic_tags: [],
+        attachment_counts: { image: 0, video: 0, audio: 0 },
+        created_at: new Date(1).toISOString(),
+        updated_at: new Date(2).toISOString(),
+        deleted_at: null,
+      },
+    ]));
+
+    await syncEntries();
+
+    expect(mockEntriesUpdate).toHaveBeenCalledWith(1, expect.objectContaining({
+      moodSource: undefined,
+    }));
+  });
+
+  it('normalizes first-sync null moodSource to undefined for entries from other devices', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: { id: 'user-123' } } },
+    });
+
+    mockSelect.mockImplementation(() => makeQuery([
+      {
+        id: 'cloud-1',
+        local_id: 42,
+        date: '2026-02-07',
+        text: 'Server-only entry',
+        mood: 4,
+        mood_source: null,
+        tags: [],
+        is_private: false,
+        title: null,
+        title_source: null,
+        semantic_tags: [],
+        attachment_counts: { image: 0, video: 0, audio: 0 },
+        created_at: new Date(1).toISOString(),
+        updated_at: new Date(2).toISOString(),
+        deleted_at: null,
+      },
+    ]));
+
+    await syncEntries();
+
+    expect(mockEntriesAdd).toHaveBeenCalledWith(expect.objectContaining({
+      moodSource: undefined,
+    }));
+  });
 });
