@@ -1,6 +1,7 @@
 # DaybookAI Security Audit — HIGH/CRITICAL Findings
 
-Scope: AI edge functions (`verify_jwt=false`), public ingest endpoints, client secrets, diary sync/RLS/storage.
+- **Part A** — AI edge functions (`verify_jwt=false`), public ingest endpoints, client secrets, diary sync/RLS/storage.
+- **Part B** — Admin PIN / auth edge functions and admin client token handling.
 
 ---
 
@@ -161,4 +162,74 @@ No auth/secret on these three. CORS `Access-Control-Allow-Origin: *`.
 
 ## Related note (orphaned AI PIN)
 
-`ai-pin-verify` + UI copy imply a 4-digit AI PIN gate, but AI handlers never validate issued tokens. Treat as a broken control contributing to findings #1–#2, not a separate exploitable PIN oracle beyond online guessing of the PIN endpoint itself (rate-limited).
+`ai-pin-verify` + UI copy imply a 4-digit AI PIN gate, but AI handlers never validate issued tokens. Treat as a broken control contributing to findings #1–#2. The PIN verify endpoint’s rate limit is also broken (see Admin finding A1); do not treat it as effective anti-bruteforce.
+
+---
+
+# Part B — Admin PIN / auth edge functions
+
+Scope: `admin-pin-verify`, `admin-ai-pin-manage`, `admin-analytics-summary`, `admin-crashes-list`, `admin-crashes-update`, `admin-feedback-list`, `admin-feedback-update`, `admin-system-health`, plus `src/lib/adminTokenService.ts`, `src/hooks/useAdminAccess.ts`, `src/pages/Admin*.tsx`. All listed admin functions have `verify_jwt = false` in `supabase/config.toml` (lines 30–58).
+
+## Auth model confirmation (not a finding)
+
+| Control | Status | Evidence |
+| --- | --- | --- |
+| Admin token generation | HMAC-SHA256 over `btoa(JSON.stringify({iat, exp, type:"admin"}))` using `AI_TOKEN_SECRET`; 24h TTL | `admin-pin-verify/index.ts:140-161,283-285` |
+| Admin token validation | Signature verify + `exp` + `type === "admin"` on every admin data plane function | e.g. `admin-feedback-list/index.ts:34-62,98-114`; same pattern in crashes/analytics/system-health/ai-pin-manage |
+| AI → admin escalation | Blocked: AI tokens omit `type:"admin"` (`ai-pin-verify/index.ts:171`); admin verifiers require it | type check fails closed |
+| Token forgery without secret | Not feasible: unsigned / wrong-HMAC / expired tokens rejected | `crypto.subtle.verify` then expiry |
+| Missing auth on admin list/update | Not confirmed: all seven non-login admin functions require `x-admin-token` | see each handler’s early 401 path |
+| Hardcoded ADMIN_PIN | Not found in sources; loaded via `Deno.env.get("ADMIN_PIN")` | `admin-pin-verify/index.ts:233` |
+| Feedback/crash IDOR (unauth) | Not confirmed: service_role access only after admin token; RLS denies direct client access | migrations + handler token gates |
+| Client route guards | UI-only (`useAdminAccess` / localStorage); server still enforces HMAC | `adminTokenService.ts:8-26` |
+
+---
+
+## A1. Admin PIN rate limit race clears blocks (unbounded brute force)
+
+| Field | Value |
+| --- | --- |
+| **Severity** | CRITICAL |
+| **Location** | `supabase/functions/admin-pin-verify/index.ts` |
+| **Impact** | The only server-side anti-bruteforce control on `ADMIN_PIN` can be defeated with concurrent requests. A correct guess yields a 24h `type:"admin"` HMAC token usable on every admin endpoint (feedback + signed image URLs, crashes, analytics, system health, AI PIN rotate/disclose). Admin login UI allows PINs up to 10 characters (`AdminLoginPage.tsx:78`), so the secret is a low-entropy PIN by design. |
+
+### Attack path
+
+1. Discover project URL + anon/publishable key from the shipped client (or committed `.env` — Part A finding #3).
+2. `POST /functions/v1/admin-pin-verify` with `verify_jwt = false` (`config.toml:30-31`). Omit `Origin` → origin check allows (`isAllowedOrigin`: null origin returns `true`, lines 15–16).
+3. Flood parallel guesses. `recordFailedAttempt` does non-atomic read → increment → upsert (lines 95–118). A worker that observed a stale `fail_count < 4` upserts `blocked_until: null`, **clearing** a block another worker just wrote when `newCount >= 5`.
+4. `checkRateLimit` only denies when `blocked_until` is in the future (lines 70–75); it never treats a high `fail_count` alone as blocked (line 86 always `allowed: true` otherwise). Cleared / never-stuck blocks ⇒ unlimited attempts.
+5. On match, handler issues admin token (lines 283–297). Caller sets `x-admin-token` and reads/updates `feedback`, `crash_reports`, `usage_analytics`, regenerates AI PIN in plaintext (`admin-ai-pin-manage` POST returns `pin`).
+
+### Evidence lines
+
+- `admin-pin-verify/index.ts:34-37` — `MAX_ATTEMPTS: 5`, 15-minute block
+- `admin-pin-verify/index.ts:70-86` — gate is only `blocked_until`; otherwise allow
+- `admin-pin-verify/index.ts:95-118` — TOCTOU increment; `blocked_until` set to **`null`** whenever local `newCount < 5` (overwrites peer’s block)
+- `admin-pin-verify/index.ts:15-16,187-194` — missing Origin allowed; JWT not required
+- `admin-pin-verify/index.ts:140-161,283-297` — success → HMAC admin token 24h
+- `AdminLoginPage.tsx:78` — `maxLength={10}` (PIN-sized secret)
+- Downstream auth is real but useless once PIN is guessed: `admin-feedback-list/index.ts:98-114`, `admin-crashes-update/index.ts:96-112`, `admin-ai-pin-manage/index.ts:114-132`
+
+### Remediation
+
+1. Replace read/upsert with a single atomic SQL function (e.g. `INSERT … ON CONFLICT DO UPDATE … RETURNING` that increments and sets `blocked_until` only via `GREATEST`/conditional SQL so concurrent writers cannot null out an existing block).
+2. In `checkRateLimit`, also deny when `fail_count >= MAX_ATTEMPTS` even if `blocked_until` is null; never upsert `blocked_until: null` unless explicitly unblocking after success or expiry.
+3. Prefer a stronger admin secret (not a short PIN), progressive delays, and/or CAPTCHA; bind tokens to a server-side session row that can be revoked.
+4. Optionally use platform-trusted client IP (`X-Real-IP` or rightmost `X-Forwarded-For`) — code currently takes leftmost XFF (`getClientIdentifier` lines 48–51), which is unsafe if the gateway appends rather than overwrites.
+
+---
+
+## A2. (Not confirmed as separate HIGH) Leftmost X-Forwarded-For identifier
+
+| Field | Value |
+| --- | --- |
+| **Severity** | N/A — not confirmed exploitable on managed Supabase alone |
+| **Location** | `supabase/functions/admin-pin-verify/index.ts:48-51` |
+| **Notes** | Identifier = first hop of `X-Forwarded-For`. That pattern is a classic spoof sink when proxies **append**. Live behavior on Supabase has conflicting reports (append vs overwrite). Without a confirmed spoof on this project’s ingress, not filed as a standalone HIGH; still fix per A1 remediation #4. Same helper exists in `ai-pin-verify`. |
+
+---
+
+## A3. (Not confirmed) Admin feedback/crash IDOR
+
+After a valid admin token, list/update operate globally via service_role by design (single-tenant admin portal). Unauthenticated callers receive 401. No cross-user IDOR without first obtaining an admin token (A1).
